@@ -10,7 +10,7 @@ export default function Login() {
     email: "", 
     password: "", 
     confirmPassword: "", 
-    role: "doctor",
+    role: "administrator",
     fullName: "" 
   });
   const [error, setError] = useState("");

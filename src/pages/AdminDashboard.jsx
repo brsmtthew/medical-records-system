@@ -1,5 +1,6 @@
 import React from "react";
 import DashboardLayout from "../components/DashboardLayout";
+import { motion as Motion } from "framer-motion";
 import {
   LineChart,
   Line,
@@ -14,8 +15,9 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { Users, UserPlus, Stethoscope, FileWarning } from "lucide-react"; // Install lucide-react for icons
 
-// SAMPLE DATA (you will later replace with Firebase data)
+/* DATA */
 const patientFlow = [
   { name: "Mon", patients: 30 },
   { name: "Tue", patients: 45 },
@@ -30,119 +32,154 @@ const chartUsage = [
   { name: "Available", value: 68 },
 ];
 
-const COLORS = ["#16a34a", "#dc2626"];
+const COLORS = ["#16a34a", "#e2e8f0"]; // Professional green and soft slate
 
 export default function AdminDashboard() {
   return (
     <DashboardLayout>
+      {/* HEADER SECTION */}
+      <Motion.div 
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4"
+      >
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
+            Admin <span className="text-green-700">Overview</span>
+          </h1>
+          <p className="text-slate-500 font-medium">
+            System status: <span className="text-green-600">Operational</span> • Real-time medical records tracking
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button className="bg-white border-2 border-black px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all">
+            Download Report
+          </button>
+          <button className="bg-green-700 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-green-800 transition-all shadow-lg shadow-green-200">
+            System Settings
+          </button>
+        </div>
+      </Motion.div>
 
-      {/* HEADER */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-green-700">
-          Hospital Admin Dashboard
-        </h1>
-        <p className="text-gray-500">
-          Real-time system overview of charts and patient records
-        </p>
+      {/* STAT CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {[
+          { label: "Total Patients", value: "1,240", icon: Users, color: "green" },
+          { label: "Doctors", value: "48", icon: Stethoscope, color: "green" },
+          { label: "Nurses", value: "120", icon: UserPlus, color: "green" },
+          { label: "Borrowed Charts", value: "32", icon: FileWarning, color: "red" },
+        ].map((item, i) => (
+          <Motion.div
+            key={i}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="bg-white p-6 rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all"
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">{item.label}</p>
+                <h2 className={`text-3xl font-black mt-1 ${item.color === 'red' ? 'text-red-600' : 'text-slate-800'}`}>
+                  {item.value}
+                </h2>
+              </div>
+              <div className={`p-2 rounded-lg ${item.color === 'red' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+                <item.icon size={20} />
+              </div>
+            </div>
+          </Motion.div>
+        ))}
       </div>
 
-      {/* STATS CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-
-        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-green-600">
-          <p className="text-gray-500 text-sm">Total Patients</p>
-          <h2 className="text-2xl font-bold">1,240</h2>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-green-600">
-          <p className="text-gray-500 text-sm">Doctors</p>
-          <h2 className="text-2xl font-bold">48</h2>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-green-600">
-          <p className="text-gray-500 text-sm">Nurses</p>
-          <h2 className="text-2xl font-bold">120</h2>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-red-500">
-          <p className="text-gray-500 text-sm">Borrowed Charts</p>
-          <h2 className="text-2xl font-bold text-red-500">32</h2>
-        </div>
-
-      </div>
-
-      {/* CHART SECTION */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* LINE CHART - PATIENT FLOW */}
-        <div className="bg-white p-4 rounded-xl shadow">
-          <h3 className="text-green-700 font-bold mb-4">
-            Weekly Patient Flow
-          </h3>
-
-          <ResponsiveContainer width="100%" height={250}>
+      {/* CHARTS GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* WEEKLY FLOW (Line) */}
+        <Motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="lg:col-span-2 bg-white p-6 rounded-3xl border-2 border-black shadow-sm"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold text-slate-800">Weekly Patient Intake</h3>
+            <select className="text-xs font-bold border-2 border-black rounded-lg px-2 py-1">
+              <option>Last 7 Days</option>
+              <option>Last 30 Days</option>
+            </select>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
             <LineChart data={patientFlow}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="patients" stroke="#16a34a" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+              <Tooltip 
+                contentStyle={{ borderRadius: '12px', border: '2px solid black', boxShadow: '4px 4px 0px rgba(0,0,0,1)' }} 
+              />
+              <Line 
+                type="monotone" 
+                dataKey="patients" 
+                stroke="#16a34a" 
+                strokeWidth={4} 
+                dot={{ r: 6, fill: '#16a34a', strokeWidth: 2, stroke: '#fff' }} 
+                activeDot={{ r: 8 }}
+              />
             </LineChart>
           </ResponsiveContainer>
-        </div>
+        </Motion.div>
 
-        {/* BAR CHART - ACTIVITY */}
-        <div className="bg-white p-4 rounded-xl shadow">
-          <h3 className="text-green-700 font-bold mb-4">
-            Chart Borrowing Activity
-          </h3>
-
+        {/* STATUS (Pie) */}
+        <Motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white p-6 rounded-3xl border-2 border-black shadow-sm flex flex-col items-center justify-center"
+        >
+          <h3 className="text-lg font-bold text-slate-800 mb-2 self-start">Records Status</h3>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={patientFlow}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
+            <PieChart>
+              <Pie
+                data={chartUsage}
+                innerRadius={60}
+                outerRadius={80}
+                paddingAngle={5}
+                dataKey="value"
+              >
+                {chartUsage.map((entry, index) => (
+                  <Cell key={index} fill={COLORS[index]} stroke="none" />
+                ))}
+              </Pie>
               <Tooltip />
-              <Bar dataKey="patients" fill="#16a34a" />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="w-full space-y-2 mt-4">
+            {chartUsage.map((item, i) => (
+              <div key={i} className="flex justify-between items-center text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i] }}></div>
+                  <span className="text-slate-500 font-medium">{item.name}</span>
+                </div>
+                <span className="font-bold text-slate-800">{item.value}%</span>
+              </div>
+            ))}
+          </div>
+        </Motion.div>
+
+        {/* ACTIVITY (Bar) - Full Width on Bottom */}
+        <Motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="lg:col-span-3 bg-white p-6 rounded-3xl border-2 border-black shadow-sm"
+        >
+          <h3 className="text-lg font-bold text-slate-800 mb-6">Activity Volume</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={patientFlow}>
+              <XAxis dataKey="name" axisLine={false} tickLine={false} />
+              <Tooltip cursor={{fill: '#f8fafc'}} />
+              <Bar dataKey="patients" fill="#16a34a" radius={[6, 6, 0, 0]} barSize={40} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
-
+        </Motion.div>
       </div>
-
-      {/* PIE CHART */}
-      <div className="bg-white p-6 rounded-xl shadow mt-6">
-
-        <h3 className="text-green-700 font-bold mb-4">
-          Chart Status Overview
-        </h3>
-
-        <div className="flex justify-center">
-          <PieChart width={300} height={250}>
-            <Pie
-              data={chartUsage}
-              cx="50%"
-              cy="50%"
-              outerRadius={90}
-              dataKey="value"
-              label
-            >
-              {chartUsage.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index]} />
-              ))}
-            </Pie>
-            <Tooltip />
-          </PieChart>
-        </div>
-
-        {/* LEGEND */}
-        <div className="flex justify-center gap-6 text-sm mt-2">
-          <span className="text-green-600 font-bold">● Available</span>
-          <span className="text-red-600 font-bold">● Borrowed</span>
-        </div>
-
-      </div>
-
     </DashboardLayout>
   );
 }
