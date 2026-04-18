@@ -9,32 +9,34 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
 } from "recharts";
-import { Users, UserPlus, Stethoscope, FileWarning } from "lucide-react"; // Install lucide-react for icons
+import { Users, Bed, UserRound, FileScan } from "lucide-react";
 
-/* DATA */
-const patientFlow = [
-  { name: "Mon", patients: 30 },
-  { name: "Tue", patients: 45 },
-  { name: "Wed", patients: 38 },
-  { name: "Thu", patients: 60 },
-  { name: "Fri", patients: 55 },
-  { name: "Sat", patients: 70 },
+/* DATA - Refocused on Scanning and Patient Ratios */
+const scanningActivity = [
+  { name: "Mon", chartsScanned: 120 },
+  { name: "Tue", chartsScanned: 210 },
+  { name: "Wed", chartsScanned: 180 },
+  { name: "Thu", chartsScanned: 300 },
+  { name: "Fri", chartsScanned: 250 },
+  { name: "Sat", chartsScanned: 90 },
 ];
 
-const chartUsage = [
-  { name: "Borrowed", value: 32 },
-  { name: "Available", value: 68 },
+// Replaced Storage Data with Patient Type Data
+const patientRatio = [
+  { name: "Inpatient", value: 156 },
+  { name: "Outpatient", value: 3240 },
 ];
 
-const COLORS = ["#16a34a", "#e2e8f0"]; // Professional green and soft slate
+const COLORS = ["#16a34a", "#bbf7d0"]; // Solid Green for Inpatient, Mint for Outpatient
 
 export default function AdminDashboard() {
+  // Calculate percentages for the legend
+  const totalPatients = patientRatio.reduce((acc, curr) => acc + curr.value, 0);
+
   return (
     <DashboardLayout>
       {/* HEADER SECTION */}
@@ -45,18 +47,15 @@ export default function AdminDashboard() {
       >
         <div>
           <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
-            Admin <span className="text-green-700">Overview</span>
+            Admin <span className="text-green-700">Analytics</span>
           </h1>
           <p className="text-slate-500 font-medium">
-            System status: <span className="text-green-600">Operational</span> • Real-time medical records tracking
+            TGMCI Medical Records System • <span className="text-green-600 font-bold">Real-time Data</span>
           </p>
         </div>
-        <div className="flex gap-2">
-          <button className="bg-white border-2 border-black px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all">
-            Download Report
-          </button>
-          <button className="bg-green-700 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-green-800 transition-all shadow-lg shadow-green-200">
-            System Settings
+        <div className="flex gap-3">
+          <button className="bg-white border-2 border-black px-5 py-2.5 rounded-xl font-black text-xs uppercase hover:bg-slate-50 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1">
+            Export Audit Log
           </button>
         </div>
       </Motion.div>
@@ -64,27 +63,27 @@ export default function AdminDashboard() {
       {/* STAT CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {[
-          { label: "Total Patients", value: "1,240", icon: Users, color: "green" },
-          { label: "Doctors", value: "48", icon: Stethoscope, color: "green" },
-          { label: "Nurses", value: "120", icon: UserPlus, color: "green" },
-          { label: "Borrowed Charts", value: "32", icon: FileWarning, color: "red" },
+          { label: "Total Registered", value: "4,829", icon: Users, color: "green" },
+          { label: "Inpatients", value: "156", icon: Bed, color: "green" },
+          { label: "Outpatients", value: "3,240", icon: UserRound, color: "green" },
+          { label: "Pending Scans", value: "18", icon: FileScan, color: "amber" },
         ].map((item, i) => (
           <Motion.div
             key={i}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className="bg-white p-6 rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all"
+            className="bg-white p-6 rounded-2xl border-2 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all"
           >
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">{item.label}</p>
-                <h2 className={`text-3xl font-black mt-1 ${item.color === 'red' ? 'text-red-600' : 'text-slate-800'}`}>
+                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{item.label}</p>
+                <h2 className="text-3xl font-black mt-1 text-slate-800">
                   {item.value}
                 </h2>
               </div>
-              <div className={`p-2 rounded-lg ${item.color === 'red' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
-                <item.icon size={20} />
+              <div className={`p-2.5 rounded-xl border-2 border-black ${item.color === 'amber' ? 'bg-amber-100' : 'bg-green-100'}`}>
+                <item.icon size={22} className="text-slate-900" />
               </div>
             </div>
           </Motion.div>
@@ -94,91 +93,86 @@ export default function AdminDashboard() {
       {/* CHARTS GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* WEEKLY FLOW (Line) */}
+        {/* CHART SCANNING ACTIVITY (Line Chart - Expanded to fill more space) */}
         <Motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
+          initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="lg:col-span-2 bg-white p-6 rounded-3xl border-2 border-black shadow-sm"
+          className="lg:col-span-2 bg-white p-6 rounded-3xl border-2 border-black"
         >
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-slate-800">Weekly Patient Intake</h3>
-            <select className="text-xs font-bold border-2 border-black rounded-lg px-2 py-1">
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-            </select>
+          <div className="flex items-center gap-2 mb-6">
+            <FileScan className="text-green-700" size={20} />
+            <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Digitization Progress</h3>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={patientFlow}>
+          <ResponsiveContainer width="100%" height={350}>
+            <LineChart data={scanningActivity}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontWeight: 'bold', fontSize: 12}} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
               <Tooltip 
-                contentStyle={{ borderRadius: '12px', border: '2px solid black', boxShadow: '4px 4px 0px rgba(0,0,0,1)' }} 
+                contentStyle={{ borderRadius: '12px', border: '2px solid black', boxShadow: '4px 4px 0px rgba(0,0,0,1)', fontWeight: 'bold' }} 
               />
               <Line 
-                type="monotone" 
-                dataKey="patients" 
+                name="Charts Scanned"
+                type="stepAfter" 
+                dataKey="chartsScanned" 
                 stroke="#16a34a" 
                 strokeWidth={4} 
-                dot={{ r: 6, fill: '#16a34a', strokeWidth: 2, stroke: '#fff' }} 
-                activeDot={{ r: 8 }}
+                dot={{ r: 4, fill: '#16a34a', strokeWidth: 2, stroke: '#fff' }} 
               />
             </LineChart>
           </ResponsiveContainer>
         </Motion.div>
 
-        {/* STATUS (Pie) */}
+        {/* PIE CHART - INPATIENT VS OUTPATIENT RATIO */}
         <Motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
+          initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white p-6 rounded-3xl border-2 border-black shadow-sm flex flex-col items-center justify-center"
+          className="bg-white p-6 rounded-3xl border-2 border-black flex flex-col h-full"
         >
-          <h3 className="text-lg font-bold text-slate-800 mb-2 self-start">Records Status</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={chartUsage}
-                innerRadius={60}
-                outerRadius={80}
-                paddingAngle={5}
-                dataKey="value"
-              >
-                {chartUsage.map((entry, index) => (
-                  <Cell key={index} fill={COLORS[index]} stroke="none" />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="w-full space-y-2 mt-4">
-            {chartUsage.map((item, i) => (
-              <div key={i} className="flex justify-between items-center text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i] }}></div>
-                  <span className="text-slate-500 font-medium">{item.name}</span>
+          <div className="flex items-center gap-2 mb-4">
+            <Users className="text-green-700" size={20} />
+            <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Patient Ratio</h3>
+          </div>
+          
+          <div className="flex-grow flex items-center justify-center">
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={patientRatio}
+                  innerRadius={70}
+                  outerRadius={90}
+                  paddingAngle={8}
+                  dataKey="value"
+                >
+                  {patientRatio.map((entry, index) => (
+                    <Cell key={index} fill={COLORS[index]} stroke="black" strokeWidth={1} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                   contentStyle={{ borderRadius: '12px', border: '2px solid black', fontWeight: 'bold' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {patientRatio.map((item, i) => (
+              <div key={i} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border-2 border-transparent hover:border-black transition-all group">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded border border-black" style={{ backgroundColor: COLORS[i] }}></div>
+                  <span className="text-xs font-black uppercase text-slate-600 group-hover:text-black transition-colors">{item.name}</span>
                 </div>
-                <span className="font-bold text-slate-800">{item.value}%</span>
+                <div className="text-right">
+                  <p className="font-black text-slate-800 leading-none">{item.value}</p>
+                  <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
+                    {((item.value / totalPatients) * 100).toFixed(1)}%
+                  </p>
+                </div>
               </div>
             ))}
           </div>
         </Motion.div>
 
-        {/* ACTIVITY (Bar) - Full Width on Bottom */}
-        <Motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="lg:col-span-3 bg-white p-6 rounded-3xl border-2 border-black shadow-sm"
-        >
-          <h3 className="text-lg font-bold text-slate-800 mb-6">Activity Volume</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={patientFlow}>
-              <XAxis dataKey="name" axisLine={false} tickLine={false} />
-              <Tooltip cursor={{fill: '#f8fafc'}} />
-              <Bar dataKey="patients" fill="#16a34a" radius={[6, 6, 0, 0]} barSize={40} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Motion.div>
       </div>
     </DashboardLayout>
   );
