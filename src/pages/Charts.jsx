@@ -9,7 +9,7 @@ import {
   History, 
   X, 
   Clock, 
-  ChevronRight 
+  Search 
 } from "lucide-react";
 
 export default function Charts() {
@@ -36,6 +36,7 @@ export default function Charts() {
 
   const [barcodeInput, setBarcodeInput] = useState("");
   const [borrower, setBorrower] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedHistory, setSelectedHistory] = useState(null);
 
   const handleCheckout = () => {
@@ -85,14 +86,34 @@ export default function Charts() {
     setBarcodeInput("");
   };
 
+  const filteredCharts = charts.filter((chart) => 
+    chart.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    chart.caseNumber.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <DashboardLayout>
-      {/* HEADER */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
-          Chart <span className="text-green-700">Tracking</span>
-        </h1>
-        <p className="text-slate-500 font-medium">Physical record circulation management</p>
+      {/* HEADER & SEARCHBAR */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
+            Chart <span className="text-green-700">Tracking</span>
+          </h1>
+          <p className="text-slate-500 font-medium">Physical record circulation management</p>
+        </div>
+
+        <div className="relative group w-full md:w-80">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search size={18} className="text-slate-400 group-focus-within:text-black transition-colors" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search name or case #..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white border-2 border-black py-2.5 pl-10 pr-4 rounded-xl font-bold text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:translate-x-[-2px] focus:translate-y-[-2px] focus:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] outline-none transition-all placeholder:text-slate-300"
+          />
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
@@ -111,44 +132,38 @@ export default function Charts() {
             <div className="space-y-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Barcode / Case No.</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="CN-2026-XXX"
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold placeholder:text-slate-300"
-                  />
-                  <ScanLine className="absolute right-3 top-3 text-slate-300" size={20} />
-                </div>
+                <input
+                  type="text"
+                  placeholder="CN-2026-XXX"
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold"
+                />
               </div>
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Borrower Name</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="e.g. Dr. Richards"
-                    value={borrower}
-                    onChange={(e) => setBorrower(e.target.value)}
-                    className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold placeholder:text-slate-300"
-                  />
-                  <User className="absolute right-3 top-3 text-slate-300" size={20} />
-                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. Dr. Richards"
+                  value={borrower}
+                  onChange={(e) => setBorrower(e.target.value)}
+                  className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-4">
                 <button
                   onClick={handleCheckout}
-                  className="bg-red-500 text-white py-4 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_#991b1b] active:shadow-none active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                  className="bg-red-500 text-white py-4 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_#991b1b] active:shadow-none active:translate-y-1 transition-all"
                 >
-                  <ArrowUpRight size={16} strokeWidth={3}/> Out
+                  Check-Out
                 </button>
                 <button
                   onClick={handleCheckin}
-                  className="bg-green-600 text-white py-4 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_#14532d] active:shadow-none active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                  className="bg-green-600 text-white py-4 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_#14532d] active:shadow-none active:translate-y-1 transition-all"
                 >
-                  <ArrowDownLeft size={16} strokeWidth={3}/> In
+                  Check-In
                 </button>
               </div>
             </div>
@@ -167,36 +182,43 @@ export default function Charts() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {charts.map((chart) => (
-                  <tr key={chart.caseNumber} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4">
-                      <div className="font-black text-slate-800 uppercase leading-none mb-1">{chart.patientName}</div>
-                      <div className="text-[10px] font-bold text-slate-400">{chart.caseNumber}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border-2 ${
-                          chart.status === "available" 
-                          ? "bg-green-50 text-green-700 border-green-200" 
-                          : "bg-red-50 text-red-600 border-red-200"
-                        }`}>
-                          {chart.status}
-                        </span>
-                        {chart.borrower && (
-                          <span className="text-xs font-bold text-slate-600 italic">held by {chart.borrower}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-4 text-right">
-                      <button 
-                        onClick={() => setSelectedHistory(chart)}
-                        className="p-2 border-2 border-transparent hover:border-black rounded-xl transition-all inline-flex items-center gap-2 text-slate-400 hover:text-black font-bold text-xs"
-                      >
-                        <History size={18} /> View History
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {/* initial={false} prevents the "flying" glitch when the component first mounts or searching starts */}
+                <AnimatePresence initial={false}>
+                  {filteredCharts.map((chart) => (
+                    <Motion.tr 
+                      key={chart.caseNumber}
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="hover:bg-slate-50/50 transition-colors group"
+                    >
+                      <td className="p-4">
+                        <div className="font-black text-slate-800 uppercase leading-none mb-1">{chart.patientName}</div>
+                        <div className="text-[10px] font-bold text-slate-400">{chart.caseNumber}</div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border-2 ${
+                            chart.status === "available" 
+                            ? "bg-green-50 text-green-700 border-green-200" 
+                            : "bg-red-50 text-red-600 border-red-200"
+                          }`}>
+                            {chart.status}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button 
+                          onClick={() => setSelectedHistory(chart)}
+                          className="p-2 border-2 border-transparent hover:border-black rounded-xl transition-all inline-flex items-center gap-2 text-slate-400 hover:text-black font-bold text-xs"
+                        >
+                          <History size={18} /> View History
+                        </button>
+                      </td>
+                    </Motion.tr>
+                  ))}
+                </AnimatePresence>
               </tbody>
             </table>
           </div>
@@ -211,52 +233,20 @@ export default function Charts() {
               initial={{ scale: 0.9, opacity: 0 }} 
               animate={{ scale: 1, opacity: 1 }} 
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white border-4 border-black rounded-[40px] p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden"
+              className="bg-white border-4 border-black rounded-[40px] p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] relative"
             >
-              <div className="absolute top-0 left-0 w-full h-2 bg-green-600" />
-              <button 
-                onClick={() => setSelectedHistory(null)} 
-                className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full transition-colors"
-              >
-                <X size={20} strokeWidth={3} />
-              </button>
-
-              <div className="mb-6">
-                <h2 className="text-2xl font-black uppercase italic text-slate-800">Circulation History</h2>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{selectedHistory.patientName}</p>
-              </div>
-
-              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              <button onClick={() => setSelectedHistory(null)} className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} /></button>
+              <h2 className="text-2xl font-black uppercase italic text-slate-800 mb-6">Circulation History</h2>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                 {selectedHistory.history.map((log, i) => (
                   <div key={i} className="relative pl-6 border-l-2 border-slate-200 pb-2 last:pb-0">
-                    <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-[0_0_0_2px_black] ${
-                      log.action === 'checkout' ? 'bg-red-500' : 'bg-green-500'
-                    }`} />
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-sm font-black uppercase text-slate-800">
-                          {log.action === 'checkout' ? 'Borrowed' : 'Returned'}
-                        </p>
-                        <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1 mt-1 uppercase">
-                          <Clock size={10} /> {log.date}
-                        </p>
-                      </div>
-                      {log.action === 'checkout' && (
-                        <div className="text-[10px] font-black bg-slate-100 px-2 py-1 rounded border border-slate-200">
-                          {log.borrower}
-                        </div>
-                      )}
-                    </div>
+                    <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-[0_0_0_2px_black] ${log.action === 'checkout' ? 'bg-red-500' : 'bg-green-500'}`} />
+                    <p className="text-sm font-black uppercase text-slate-800">{log.action === 'checkout' ? 'Borrowed' : 'Returned'}</p>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">{log.date}</p>
                   </div>
                 ))}
               </div>
-
-              <button 
-                onClick={() => setSelectedHistory(null)}
-                className="w-full mt-8 py-3 bg-black text-white rounded-2xl font-black uppercase text-xs tracking-widest"
-              >
-                Close Log
-              </button>
+              <button onClick={() => setSelectedHistory(null)} className="w-full mt-8 py-3 bg-black text-white rounded-2xl font-black uppercase text-xs">Close Log</button>
             </Motion.div>
           </div>
         )}

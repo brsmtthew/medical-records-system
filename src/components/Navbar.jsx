@@ -1,27 +1,39 @@
 import React from "react";
 import { motion as Motion } from "framer-motion";
 import { 
-  Search, 
   Bell, 
   Calendar, 
   ChevronDown,
-  Circle
+  Circle,
+  Building2, // New Icon for branding
+  MapPin // New Icon for location
 } from "lucide-react";
 
 export default function Navbar() {
   return (
     <div className="w-full bg-white border-b-2 border-black px-8 py-4 flex justify-between items-center sticky top-0 z-50">
       
-      {/* SEARCH AREA - Crucial for Medical Records */}
-      <div className="hidden md:flex items-center relative w-96">
-        <div className="absolute left-4 text-slate-400">
-          <Search size={18} />
+      {/* HOSPITAL BRANDING - Replaced Search Bar */}
+      <div className="flex items-center gap-4">
+        {/* Logo Icon */}
+        <div className="bg-green-600 p-2.5 rounded-xl border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+          <Building2 size={22} className="text-white" />
         </div>
-        <input 
-          type="text" 
-          placeholder="Search patients, charts, or IDs..."
-          className="w-full bg-slate-50 border-2 border-black py-2 pl-12 pr-4 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none transition-all"
-        />
+        
+        <div className="flex flex-col">
+          <h1 className="text-lg font-black tracking-tight text-slate-900 leading-none">
+            TAGUM GLOBAL <span className="text-green-600">MEDICAL CENTER</span> INC.
+          </h1>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="bg-black text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest">
+              Official EMR Portal
+            </span>
+            <div className="flex items-center gap-1 text-slate-400">
+              <MapPin size={10} />
+              <span className="text-[10px] font-bold">Tagum City, PH</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* RIGHT SIDE ACTIONS */}

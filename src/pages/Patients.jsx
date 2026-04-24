@@ -15,7 +15,8 @@ import {
   X,
   AlertCircle,
   Paperclip,
-  Printer
+  Printer,
+  Search
 } from "lucide-react";
 
 export default function Patients() {
@@ -26,6 +27,7 @@ export default function Patients() {
 
   const [patients, setPatients] = useState(initialPatients);
   const [filter, setFilter] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [form, setForm] = useState({ name: "", caseNumber: "", type: "outpatient", file: null });
 
   // MODAL STATES
@@ -89,13 +91,19 @@ export default function Patients() {
   };
 
   const filteredPatients = patients.filter((p) => {
-    if (filter === "all") return true;
-    return filter === "new" ? p.isNew : filter === "old" ? !p.isNew : p.type === filter;
+    const matchesFilter = filter === "all" 
+      ? true 
+      : filter === "new" ? p.isNew : filter === "old" ? !p.isNew : p.type === filter;
+    
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         p.caseNumber.toLowerCase().includes(searchTerm.toLowerCase());
+
+    return matchesFilter && matchesSearch;
   });
 
   return (
     <DashboardLayout>
-      {/* HEADER */}
+      {/* HEADER SECTION */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
@@ -104,18 +112,31 @@ export default function Patients() {
           <p className="text-slate-500 font-medium tracking-tight">Manage medical records and digital charts</p>
         </div>
 
-        <div className="flex bg-white border-2 border-black p-1 rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          {["all", "inpatient", "outpatient", "new", "old"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase transition-all ${
-                filter === f ? "bg-green-700 text-white" : "text-slate-500 hover:text-black"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex items-center">
+            <Search className="absolute left-3 text-slate-400" size={16} />
+            <input 
+              type="text"
+              placeholder="Search name or case #..."
+              className="pl-10 pr-4 py-2 bg-white border-2 border-black rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-green-500 w-full md:w-64 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <div className="flex bg-white border-2 border-black p-1 rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            {["all", "inpatient", "outpatient", "new", "old"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase transition-all ${
+                  filter === f ? "bg-green-700 text-white" : "text-slate-500 hover:text-black"
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -241,19 +262,11 @@ export default function Patients() {
                         <td className="p-4">
                           <div className="flex items-center gap-3">
                             <div className="bg-white p-2 border border-slate-200 rounded-lg">
-                              <Barcode 
-                                id={`barcode-${p.caseNumber}`}
-                                value={p.caseNumber} 
-                                height={25} 
-                                width={1} 
-                                fontSize={10} 
-                                background="transparent" 
-                              />
+                              <Barcode id={`barcode-${p.caseNumber}`} value={p.caseNumber} height={25} width={1} fontSize={10} background="transparent" />
                             </div>
                             <button 
                               onClick={() => downloadBarcode(p.caseNumber)}
                               className="p-1.5 bg-green-100 hover:bg-green-600 text-green-700 hover:text-white border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 transition-all"
-                              title="Download Barcode"
                             >
                               <Download size={14} strokeWidth={3} />
                             </button>
@@ -285,7 +298,7 @@ export default function Patients() {
 
       {/* MODALS SECTION */}
       <AnimatePresence>
-        {/* VIEW MODAL */}
+        {/* VIEW MODAL - Uses viewPatient */}
         {viewPatient && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <Motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white border-2 border-black rounded-3xl p-8 max-w-md w-full shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] relative">
@@ -307,28 +320,17 @@ export default function Patients() {
                   </div>
                 </div>
                 <div className="p-4 bg-slate-50 rounded-2xl border-2 border-black flex flex-col items-center">
-                   <Barcode 
-                    id={`barcode-view-${viewPatient.caseNumber}`} 
-                    value={viewPatient.caseNumber} 
-                   />
-                   <button 
-                    onClick={() => downloadBarcode(`view-${viewPatient.caseNumber}`)}
-                    className="mt-3 flex items-center gap-2 text-[10px] font-black uppercase bg-white border border-black px-4 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
-                   >
-                     <Printer size={12}/> Print / Save Barcode
+                   <Barcode id={`barcode-view-${viewPatient.caseNumber}`} value={viewPatient.caseNumber} />
+                   <button onClick={() => downloadBarcode(`view-${viewPatient.caseNumber}`)} className="mt-3 flex items-center gap-2 text-[10px] font-black uppercase bg-white border border-black px-4 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+                     <Printer size={12}/> Print Barcode
                    </button>
                 </div>
-                {viewPatient.fileName && (
-                  <button className="w-full flex items-center justify-center gap-2 bg-black text-white py-3 rounded-xl font-bold uppercase text-xs">
-                    <Download size={16}/> Download {viewPatient.fileName}
-                  </button>
-                )}
               </div>
             </Motion.div>
           </div>
         )}
 
-        {/* EDIT MODAL */}
+        {/* EDIT MODAL - Uses setEditPatient */}
         {editPatient && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <Motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white border-2 border-black rounded-3xl p-8 max-w-md w-full shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
@@ -338,46 +340,16 @@ export default function Patients() {
                   <label className="text-[10px] font-black uppercase text-slate-400">Name</label>
                   <input className="w-full border-2 border-black p-3 rounded-xl font-bold" value={editPatient.name} onChange={(e) => setEditPatient({...editPatient, name: e.target.value})} />
                 </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400">Case Number</label>
-                  <input className="w-full border-2 border-black p-3 rounded-xl font-bold" value={editPatient.caseNumber} onChange={(e) => setEditPatient({...editPatient, caseNumber: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400">Type</label>
-                  <select className="w-full border-2 border-black p-3 rounded-xl font-bold bg-white" value={editPatient.type} onChange={(e) => setEditPatient({...editPatient, type: e.target.value})}>
-                    <option value="inpatient">Inpatient</option>
-                    <option value="outpatient">Outpatient</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400">Update Scanned File</label>
-                  <div className="mt-1 relative border-2 border-black rounded-xl p-3 bg-slate-50 flex items-center gap-3">
-                    <Paperclip size={18} className="text-slate-400" />
-                    <div className="flex-1 overflow-hidden">
-                       <p className="text-[11px] font-bold text-slate-800 truncate">
-                         {editPatient.fileName || "No file attached"}
-                       </p>
-                    </div>
-                    <input 
-                      type="file" 
-                      className="absolute inset-0 opacity-0 cursor-pointer" 
-                      onChange={(e) => setEditPatient({...editPatient, fileName: e.target.files[0].name})}
-                    />
-                    <span className="text-[9px] font-black bg-white border border-black px-2 py-1 rounded uppercase">Change</span>
-                  </div>
-                </div>
-
                 <div className="flex gap-3 pt-4">
                   <button type="button" onClick={() => setEditPatient(null)} className="flex-1 py-3 border-2 border-black rounded-xl font-bold uppercase text-xs">Cancel</button>
-                  <button type="submit" className="flex-1 py-3 bg-green-700 text-white rounded-xl font-black uppercase text-xs shadow-[0_4px_0_0_#14532d] active:shadow-none active:translate-y-1">Update Record</button>
+                  <button type="submit" className="flex-1 py-3 bg-green-700 text-white rounded-xl font-black uppercase text-xs shadow-[0_4px_0_0_#14532d]">Update</button>
                 </div>
               </form>
             </Motion.div>
           </div>
         )}
 
-        {/* DELETE CONFIRMATION */}
+        {/* DELETE CONFIRMATION - Uses deletePatient & handleDelete */}
         {deletePatient && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <Motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }} className="bg-white border-2 border-black rounded-3xl p-8 max-w-sm w-full text-center">
@@ -385,7 +357,7 @@ export default function Patients() {
                 <AlertCircle size={32}/>
               </div>
               <h2 className="text-xl font-black uppercase mb-2">Delete Record?</h2>
-              <p className="text-slate-500 text-sm mb-6">This action is permanent for <span className="font-black text-black italic">"{deletePatient.name}"</span>.</p>
+              <p className="text-slate-500 text-sm mb-6">Action is permanent for "{deletePatient.name}".</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeletePatient(null)} className="flex-1 py-3 border-2 border-black rounded-xl font-black uppercase text-xs">Cancel</button>
                 <button onClick={() => handleDelete(deletePatient.id)} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-black uppercase text-xs shadow-[0_4px_0_0_#991b1b]">Delete</button>
