@@ -47,10 +47,10 @@ export default function AdminDashboard() {
       >
         <div>
           <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
-            Admin <span className="text-green-700">Analytics</span>
+            Chart <span className="text-green-700">Dashboard</span>
           </h1>
           <p className="text-slate-500 font-medium">
-            TGMCI Medical Records System • <span className="text-green-600 font-bold">Real-time Data</span>
+            TGMCI Medical Records System • <span className="text-green-600 font-bold">Chart Management</span>
           </p>
         </div>
         <div className="flex gap-3">
@@ -63,7 +63,7 @@ export default function AdminDashboard() {
       {/* STAT CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {[
-          { label: "Total Registered", value: "4,829", icon: Users, color: "green" },
+          { label: "Total Registered Patients", value: "4,829", icon: Users, color: "green" },
           { label: "Inpatients", value: "156", icon: Bed, color: "green" },
           { label: "Outpatients", value: "3,240", icon: UserRound, color: "green" },
           { label: "Pending Scans", value: "18", icon: FileScan, color: "amber" },

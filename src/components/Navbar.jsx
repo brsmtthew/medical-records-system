@@ -26,7 +26,7 @@ export default function Navbar() {
           </h1>
           <div className="flex items-center gap-2 mt-1">
             <span className="bg-black text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest">
-              Official EMR Portal
+              MEDICAL RECORDS MANAGEMENT SYSTEM
             </span>
             <div className="flex items-center gap-1 text-slate-400">
               <MapPin size={10} />

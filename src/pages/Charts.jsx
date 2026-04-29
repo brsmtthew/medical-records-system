@@ -1,15 +1,11 @@
 import React, { useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { 
-  ScanLine, 
-  User, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  History, 
-  X, 
-  Clock, 
-  Search 
+import {
+  ScanLine,
+  History,
+  X,
+  Search,
 } from "lucide-react";
 
 export default function Charts() {
@@ -20,7 +16,7 @@ export default function Charts() {
       status: "available",
       borrower: "",
       history: [
-        { action: "checkin", date: "4/15/2026, 10:30 AM", borrower: "System" }
+        { action: "checkin", date: "4/15/2026, 10:30 AM", borrower: "System" },
       ],
     },
     {
@@ -29,7 +25,7 @@ export default function Charts() {
       status: "borrowed",
       borrower: "Dr. Smith",
       history: [
-        { action: "checkout", date: "4/18/2026, 09:15 AM", borrower: "Dr. Smith" }
+        { action: "checkout", date: "4/18/2026, 09:15 AM", borrower: "Dr. Smith" },
       ],
     },
   ]);
@@ -41,23 +37,31 @@ export default function Charts() {
 
   const handleCheckout = () => {
     if (!barcodeInput.trim() || !borrower.trim()) return;
+
     let found = false;
     const updated = charts.map((chart) => {
       if (chart.caseNumber === barcodeInput.trim()) {
         found = true;
         if (chart.status === "borrowed") return chart;
+
         return {
           ...chart,
           status: "borrowed",
           borrower: borrower.trim(),
           history: [
-            { action: "checkout", borrower: borrower.trim(), date: new Date().toLocaleString() },
+            {
+              action: "checkout",
+              borrower: borrower.trim(),
+              date: new Date().toLocaleString(),
+            },
             ...chart.history,
           ],
         };
       }
+
       return chart;
     });
+
     if (found) setCharts(updated);
     setBarcodeInput("");
     setBorrower("");
@@ -65,35 +69,42 @@ export default function Charts() {
 
   const handleCheckin = () => {
     if (!barcodeInput.trim()) return;
+
     let found = false;
     const updated = charts.map((chart) => {
       if (chart.caseNumber === barcodeInput.trim()) {
         found = true;
         if (chart.status === "available") return chart;
+
         return {
           ...chart,
           status: "available",
           borrower: "",
           history: [
-            { action: "checkin", date: new Date().toLocaleString(), borrower: "N/A" },
+            {
+              action: "checkin",
+              date: new Date().toLocaleString(),
+              borrower: chart.borrower || "N/A",
+            },
             ...chart.history,
           ],
         };
       }
+
       return chart;
     });
+
     if (found) setCharts(updated);
     setBarcodeInput("");
   };
 
-  const filteredCharts = charts.filter((chart) => 
+  const filteredCharts = charts.filter((chart) =>
     chart.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     chart.caseNumber.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <DashboardLayout>
-      {/* HEADER & SEARCHBAR */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
@@ -117,9 +128,8 @@ export default function Charts() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* SCANNING STATION */}
         <div className="lg:col-span-1">
-          <Motion.div 
+          <Motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-white p-6 rounded-3xl border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sticky top-24"
@@ -170,7 +180,6 @@ export default function Charts() {
           </Motion.div>
         </div>
 
-        {/* STATUS TABLE */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-3xl border-2 border-black overflow-hidden shadow-sm">
             <table className="w-full text-left">
@@ -182,10 +191,9 @@ export default function Charts() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {/* initial={false} prevents the "flying" glitch when the component first mounts or searching starts */}
                 <AnimatePresence initial={false}>
                   {filteredCharts.map((chart) => (
-                    <Motion.tr 
+                    <Motion.tr
                       key={chart.caseNumber}
                       layout
                       initial={{ opacity: 0 }}
@@ -200,16 +208,16 @@ export default function Charts() {
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border-2 ${
-                            chart.status === "available" 
-                            ? "bg-green-50 text-green-700 border-green-200" 
-                            : "bg-red-50 text-red-600 border-red-200"
+                            chart.status === "available"
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-red-50 text-red-600 border-red-200"
                           }`}>
                             {chart.status}
                           </span>
                         </div>
                       </td>
                       <td className="p-4 text-right">
-                        <button 
+                        <button
                           onClick={() => setSelectedHistory(chart)}
                           className="p-2 border-2 border-transparent hover:border-black rounded-xl transition-all inline-flex items-center gap-2 text-slate-400 hover:text-black font-bold text-xs"
                         >
@@ -225,23 +233,30 @@ export default function Charts() {
         </div>
       </div>
 
-      {/* HISTORY MODAL */}
       <AnimatePresence>
         {selectedHistory && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <Motion.div 
-              initial={{ scale: 0.9, opacity: 0 }} 
-              animate={{ scale: 1, opacity: 1 }} 
+            <Motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               className="bg-white border-4 border-black rounded-[40px] p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] relative"
             >
-              <button onClick={() => setSelectedHistory(null)} className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} /></button>
+              <button
+                onClick={() => setSelectedHistory(null)}
+                className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
               <h2 className="text-2xl font-black uppercase italic text-slate-800 mb-6">Circulation History</h2>
               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                 {selectedHistory.history.map((log, i) => (
                   <div key={i} className="relative pl-6 border-l-2 border-slate-200 pb-2 last:pb-0">
-                    <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-[0_0_0_2px_black] ${log.action === 'checkout' ? 'bg-red-500' : 'bg-green-500'}`} />
-                    <p className="text-sm font-black uppercase text-slate-800">{log.action === 'checkout' ? 'Borrowed' : 'Returned'}</p>
+                    <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-[0_0_0_2px_black] ${log.action === "checkout" ? "bg-red-500" : "bg-green-500"}`} />
+                    <p className="text-sm font-black uppercase text-slate-800">{log.action === "checkout" ? "Borrowed" : "Returned"}</p>
+                    <p className="text-xs font-bold text-slate-700">
+                      {log.action === "checkout" ? "Borrowed By" : "Returned By"}: {log.borrower || "N/A"}
+                    </p>
                     <p className="text-[10px] font-bold text-slate-500 uppercase">{log.date}</p>
                   </div>
                 ))}
