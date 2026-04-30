@@ -1,7 +1,7 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
-import Login from "./pages/Login";
+import Login from "./pages/login";
 import AdminDashboard from "./pages/AdminDashboard";
 import Patients from "./pages/Patients";
 import Charts from "./pages/Charts";
@@ -19,6 +19,7 @@ export default function App() {
         <Route path="/charts" element={<Charts />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/chart-viewing" element={<ChartViewing />} />
         <Route path="/chartviewing" element={<ChartViewing />} />
       </Routes>
     </Router>

@@ -1,106 +1,120 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion as Motion, AnimatePresence } from "framer-motion";
+import {
+  ArrowRight,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+} from "lucide-react";
 import logo from "../assets/TGMCI_LOGO.png";
 
 export default function Login() {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true); // Toggle between Login and Signup
-  const [form, setForm] = useState({ 
-    email: "", 
-    password: "", 
-    confirmPassword: "", 
-    role: "administrator",
-    fullName: "" 
+  const [showPassword, setShowPassword] = useState(false);
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+    remember: true,
   });
   const [error, setError] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
-    if (isLogin) {
-      if (!form.email || !form.password) {
-        setError("Please fill in all fields");
-        return;
-      }
-      setError("");
-      // Logic for navigation
-      if (form.role === "admin") navigate("/admin");
-      else if (form.role === "doctor") navigate("/doctor");
-      else navigate("/nurse");
-    } else {
-      // Signup Logic
-      if (!form.email || !form.password || !form.fullName) {
-        setError("All fields are required for registration");
-        return;
-      }
-      if (form.password !== form.confirmPassword) {
-        setError("Passwords do not match");
-        return;
-      }
-      setError("");
-      alert("Registration request sent to Administrator.");
-      setIsLogin(true);
+
+    if (!form.email.trim() || !form.password) {
+      setError("Enter your department email and password to continue.");
+      return;
     }
+
+    setError("");
+    navigate("/admin");
+  };
+
+  const updateForm = (key, value) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setError("");
   };
 
   return (
     <div className="min-h-screen flex bg-slate-50 font-sans">
-      {/* LEFT SIDE - BRANDING */}
       <Motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.8 }}
-        className="hidden lg:flex w-1/2 bg-gradient-to-br from-green-700 to-green-900 text-white flex-col justify-center items-center p-12 relative"
+        transition={{ duration: 0.6 }}
+        className="hidden lg:flex w-1/2 bg-green-900 text-white flex-col justify-between p-12 relative overflow-hidden"
       >
-        <Motion.div 
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3, duration: 0.6 }}
-          className="z-10 text-center"
-        >
-          <div className="bg-white p-6 rounded-2xl shadow-2xl mb-8 mx-auto w-48 h-32 flex items-center justify-center">
-            <img
-              src={logo}
-              className="max-w-full max-h-full object-contain"
-              alt="TGMCI Logo"
-            />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(34,197,94,0.28),transparent_36%),radial-gradient(circle_at_80%_75%,rgba(74,222,128,0.18),transparent_30%)]" />
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="bg-white p-3 rounded-2xl border-2 border-black">
+            <img src={logo} className="w-16 h-12 object-contain" alt="TGMCI Logo" />
           </div>
-          
-          <h1 className="text-4xl font-black tracking-tight uppercase">
-            Medical Records System
+          <div>
+            <p className="font-black uppercase tracking-widest">TGMCI MRS</p>
+            <p className="text-xs font-bold text-green-200 uppercase">Protected Records Access</p>
+          </div>
+        </div>
+
+        <div className="relative z-10 max-w-lg">
+          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-2 mb-6">
+            <ShieldCheck size={16} className="text-green-300" />
+            <span className="text-xs font-black uppercase tracking-widest">Secure Local Workflow</span>
+          </div>
+          <h1 className="text-5xl font-black tracking-tight uppercase leading-none">
+            Medical Records Management System
           </h1>
-          <p className="mt-4 text-green-100 font-medium max-w-sm mx-auto leading-relaxed">
-            Securely access and manage patient data, clinical notes, and historical medical records.
+          <p className="mt-5 text-green-100 font-medium leading-relaxed">
+            Access patient registry, chart circulation, reports, and local scanned chart viewing from one protected workspace.
           </p>
-        </Motion.div>
+        </div>
+
+        <div className="relative z-10 grid grid-cols-3 gap-3">
+          {[
+            ["Audit Logs", "Enabled"],
+            ["Department", "Medical Records"],
+            ["Session", "Monitored"],
+          ].map(([label, value]) => (
+            <div key={label} className="bg-white/10 border border-white/15 rounded-2xl p-4">
+              <p className="text-[10px] font-black uppercase text-green-200">{label}</p>
+              <p className="text-sm font-black mt-1">{value}</p>
+            </div>
+          ))}
+        </div>
       </Motion.div>
 
-      {/* RIGHT SIDE - FORM CONTAINER */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center p-6 bg-white lg:bg-transparent">
+      <div className="flex w-full lg:w-1/2 items-center justify-center p-5 sm:p-8 bg-white lg:bg-transparent">
         <Motion.div
-          layout // Smoothly animates size changes when switching forms
-          initial={{ scale: 0.95, opacity: 0 }}
+          layout
+          initial={{ scale: 0.96, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="bg-white p-10 rounded-3xl w-full max-w-md border-2 border-green-500/30 shadow-[0_20px_60px_-15px_rgba(34,197,94,0.2)]"
+          transition={{ duration: 0.35 }}
+          className="bg-white p-6 sm:p-8 rounded-3xl w-full max-w-md border-2 border-black shadow-[8px_8px_0_0_rgba(0,0,0,1)]"
         >
-          <div className="mb-8 text-center lg:text-left">
-            <h2 className="text-3xl font-bold text-slate-800">
-              {isLogin ? "Welcome Back" : "Create Account"}
+          <div className="mb-6">
+            <div className="lg:hidden mb-5 flex items-center gap-3">
+              <img src={logo} className="w-12 h-10 object-contain" alt="TGMCI Logo" />
+              <div>
+                <p className="font-black uppercase text-slate-800">TGMCI MRS</p>
+                <p className="text-[10px] font-bold uppercase text-slate-400">Medical Records</p>
+              </div>
+            </div>
+            <h2 className="text-3xl font-black text-slate-800 uppercase">
+              Department Sign In
             </h2>
-            <p className="text-slate-500 mt-2">
-              {isLogin ? "Please enter your details to sign in." : "Fill in the details to request access."}
+            <p className="text-slate-500 mt-1 font-medium">
+              Medical Records Department access only.
             </p>
           </div>
 
           <AnimatePresence mode="wait">
             {error && (
-              <Motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded mb-6 text-sm font-medium overflow-hidden"
+              <Motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="border-2 rounded-xl px-4 py-3 mb-5 text-sm font-bold bg-red-50 border-red-200 text-red-700"
               >
                 {error}
               </Motion.div>
@@ -108,106 +122,63 @@ export default function Login() {
           </AnimatePresence>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
-              <Motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
-                <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">Full Name</label>
-                <input
-                  type="text"
-                  placeholder="Dr. John Doe"
-                  className="w-full border-2 border-black bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
-                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                />
-              </Motion.div>
-            )}
-
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">Email Address</label>
-              <input
-                type="email"
-                placeholder="name@hospital.com"
-                className="w-full border-2 border-black bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">Password</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  className="w-full border-2 border-black bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                />
-              </div>
-
-              {!isLogin && (
-                <Motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}>
-                  <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">Confirm Password</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    className="w-full border-2 border-black bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
-                    onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                  />
-                </Motion.div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">Assigned Role</label>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Department Email</label>
               <div className="relative">
-                <select
-                  className="w-full border-2 border-black bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 outline-none appearance-none transition-all cursor-pointer"
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  value={form.role}
-                >
-                  <option value="doctor">Doctor</option>
-                  <option value="nurse">Nurse</option>
-                  <option value="admin">Administrator</option>
-                </select>
-                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-                  <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
+                <Mail size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="email"
+                  placeholder="name@hospital.com"
+                  className="w-full border-2 border-black bg-white pl-11 pr-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 outline-none font-bold"
+                  value={form.email}
+                  onChange={(e) => updateForm("email", e.target.value)}
+                />
               </div>
             </div>
 
-            {isLogin && (
-              <div className="flex items-center justify-between text-sm px-1">
-                <label className="flex items-center text-slate-600 cursor-pointer">
-                  <input type="checkbox" className="mr-2 rounded border-black text-green-600 focus:ring-green-500" />
-                  Keep me logged in
-                </label>
-                <a href="#" className="text-green-700 font-bold hover:text-green-800 transition-colors">Forgot password?</a>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Password</label>
+              <div className="relative">
+                <LockKeyhole size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  className="w-full border-2 border-black bg-white pl-11 pr-12 py-3 rounded-xl focus:ring-2 focus:ring-green-600 outline-none font-bold"
+                  value={form.password}
+                  onChange={(e) => updateForm("password", e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-slate-100"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
               </div>
-            )}
+            </div>
+
+            <div className="flex items-center justify-between text-sm px-1 gap-3">
+              <label className="flex items-center text-slate-600 cursor-pointer font-semibold">
+                <input
+                  type="checkbox"
+                  checked={form.remember}
+                  onChange={(e) => updateForm("remember", e.target.checked)}
+                  className="mr-2 rounded border-black text-green-600 focus:ring-green-500"
+                />
+                Keep signed in
+              </label>
+            </div>
 
             <Motion.button
-              whileHover={{ scale: 1.02, backgroundColor: "#15803d" }}
+              whileHover={{ y: -1 }}
               whileTap={{ scale: 0.98 }}
-              className="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-200 transition-all text-lg mt-2"
+              className="w-full bg-green-700 text-white font-black py-4 rounded-xl border-2 border-black shadow-[4px_4px_0_0_#052e16] active:shadow-none active:translate-y-1 transition-all uppercase flex items-center justify-center gap-2"
             >
-              {isLogin ? "Sign In" : "Register Now"}
+              Enter Department System
+              <ArrowRight size={18} />
             </Motion.button>
           </form>
-
-          {/* TOGGLE LINK */}
-          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-            <p className="text-slate-600 text-sm">
-              {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-              <button 
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setError("");
-                }} 
-                className="text-green-700 font-bold hover:text-green-900 transition-colors underline-offset-4 hover:underline"
-              >
-                {isLogin ? "Request Access / Sign Up" : "Back to Login"}
-              </button>
-            </p>
-          </div>
         </Motion.div>
       </div>
     </div>

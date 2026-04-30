@@ -1,33 +1,60 @@
 import React from "react";
+import { motion as Motion } from "framer-motion";
+import { AlertTriangle, Trash2, X } from "lucide-react";
 
-export default function ConfirmDeleteModal({
-  patient,
-  onConfirm,
-  onClose,
-}) {
+export default function ConfirmDeleteModal({ patient, onConfirm, onClose }) {
+  if (!patient) return null;
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-      <div className="bg-white p-6 rounded-xl w-80 text-center">
-        <p className="mb-4">
-          Delete <b>{patient.name}</b>?
-        </p>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <Motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <Motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 18 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 18 }}
+        className="relative bg-white w-full max-w-sm rounded-3xl border-4 border-black shadow-[12px_12px_0_0_rgba(0,0,0,1)] overflow-hidden text-center"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 rounded-xl hover:bg-slate-100 transition-colors"
+          aria-label="Close modal"
+        >
+          <X size={18} />
+        </button>
 
-        <div className="flex gap-2 justify-center">
-          <button
-            onClick={onConfirm}
-            className="bg-red-600 text-white px-4 py-2"
-          >
-            Delete
-          </button>
+        <div className="p-8">
+          <div className="size-18 bg-red-100 border-2 border-black text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-5">
+            <AlertTriangle size={34} />
+          </div>
+          <h2 className="text-2xl font-black text-slate-800 uppercase">Delete Record?</h2>
+          <p className="text-sm font-semibold text-slate-500 mt-3 leading-relaxed">
+            This will remove <span className="font-black text-slate-900">{patient.name}</span> from
+            the current patient list.
+          </p>
+        </div>
 
+        <div className="px-6 pb-6 grid grid-cols-2 gap-3">
           <button
             onClick={onClose}
-            className="bg-gray-300 px-4 py-2"
+            className="py-3 rounded-xl font-black uppercase text-xs text-slate-500 hover:bg-slate-50"
           >
             Cancel
           </button>
+          <button
+            onClick={onConfirm}
+            className="inline-flex items-center justify-center gap-2 bg-red-600 text-white border-2 border-black py-3 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_rgba(0,0,0,1)] active:shadow-none active:translate-y-1"
+          >
+            <Trash2 size={16} />
+            Delete
+          </button>
         </div>
-      </div>
+      </Motion.div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import Barcode from "react-barcode";
 import { v4 as uuidv4 } from "uuid";
@@ -12,8 +12,42 @@ import {
   Download,
   ClipboardList,
   Save,
-  ArrowRight
+  ArrowRight,
+  Users,
+  Bed,
+  UserRound,
+  Activity,
+  X
 } from "lucide-react";
+
+function normalizeCaseNumber(value) {
+  return value.trim().toUpperCase();
+}
+
+function exportPatientsCsv(patients) {
+  const headers = ["Patient Name", "Case Number", "Type", "Admission Date", "Discharge Date", "Status"];
+  const rows = patients.map((patient) =>
+    [
+      patient.name,
+      patient.caseNumber,
+      patient.type,
+      patient.admissionDate || "",
+      patient.dischargeDate || "",
+      patient.dischargeDate ? "discharged" : "active",
+    ]
+      .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+      .join(",")
+  );
+  const blob = new Blob([[headers.join(","), ...rows].join("\n")], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "patient-registry.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function Patients() {
   const initialPatients = [
@@ -37,6 +71,10 @@ export default function Patients() {
 
   const [patients, setPatients] = useState(initialPatients);
   const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [formError, setFormError] = useState("");
+  const [editError, setEditError] = useState("");
   const [form, setForm] = useState({ 
     name: "", caseNumber: "", type: "outpatient", admissionDate: "", dischargeDate: "" 
   });
@@ -47,16 +85,42 @@ export default function Patients() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name || !form.caseNumber) return;
-    const newPatient = { ...form, id: uuidv4() };
+    const caseNumber = normalizeCaseNumber(form.caseNumber);
+    if (!form.name.trim() || !caseNumber) return;
+    if (patients.some((p) => normalizeCaseNumber(p.caseNumber) === caseNumber)) {
+      setFormError("A patient with this case number already exists.");
+      return;
+    }
+
+    const newPatient = {
+      ...form,
+      name: form.name.trim(),
+      caseNumber,
+      id: uuidv4(),
+    };
     setPatients([newPatient, ...patients]);
     setForm({ name: "", caseNumber: "", type: "outpatient", admissionDate: "", dischargeDate: "" });
+    setFormError("");
   };
 
   const handleUpdate = (e) => {
     e.preventDefault();
-    setPatients(patients.map((p) => (p.id === editPatient.id ? editPatient : p)));
+    const caseNumber = normalizeCaseNumber(editPatient.caseNumber);
+    const duplicateCase = patients.some(
+      (p) => p.id !== editPatient.id && normalizeCaseNumber(p.caseNumber) === caseNumber
+    );
+    if (duplicateCase) {
+      setEditError("Another patient already uses this case number.");
+      return;
+    }
+
+    setPatients(patients.map((p) => (
+      p.id === editPatient.id
+        ? { ...editPatient, name: editPatient.name.trim(), caseNumber }
+        : p
+    )));
     setEditPatient(null);
+    setEditError("");
   };
 
   const handleDelete = (id) => {
@@ -87,15 +151,39 @@ export default function Patients() {
     img.src = image64;
   };
 
-  const filteredPatients = patients.filter((p) => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.caseNumber.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPatients = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+
+    return patients.filter((p) => {
+      const patientStatus = p.dischargeDate ? "discharged" : "active";
+      const matchesSearch =
+        !search ||
+        p.name.toLowerCase().includes(search) ||
+        p.caseNumber.toLowerCase().includes(search);
+      const matchesType = typeFilter === "all" || p.type === typeFilter;
+      const matchesStatus = statusFilter === "all" || patientStatus === statusFilter;
+
+      return matchesSearch && matchesType && matchesStatus;
+    });
+  }, [patients, searchTerm, typeFilter, statusFilter]);
+
+  const stats = [
+    { label: "Total Patients", value: patients.length, icon: Users, color: "bg-green-100 text-green-700" },
+    { label: "Inpatients", value: patients.filter((p) => p.type === "inpatient").length, icon: Bed, color: "bg-emerald-100 text-emerald-700" },
+    { label: "Outpatients", value: patients.filter((p) => p.type === "outpatient").length, icon: UserRound, color: "bg-blue-100 text-blue-700" },
+    { label: "Active Records", value: patients.filter((p) => !p.dischargeDate).length, icon: Activity, color: "bg-amber-100 text-amber-700" },
+  ];
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setTypeFilter("all");
+    setStatusFilter("all");
+  };
 
   return (
     <DashboardLayout>
       {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-10 px-2">
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4 mb-6 px-2">
         <div>
           <h1 className="text-4xl font-black tracking-tight text-gray-900">
             Patient <span className="text-green-600">Registry</span>
@@ -103,14 +191,77 @@ export default function Patients() {
           <p className="text-gray-400 text-sm font-medium mt-1">Hospital Records & Management</p>
         </div>
 
-        <div className="relative w-full md:w-96 group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 size-5" />
-          <input
-            placeholder="Search records..."
-            className="w-full border-2 border-black bg-white pl-12 pr-4 py-3.5 rounded-2xl focus:ring-4 focus:ring-green-100 transition-all outline-none text-sm font-bold shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+          <button
+            onClick={() => exportPatientsCsv(filteredPatients)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-green-700 text-white text-xs font-black uppercase shadow-[4px_4px_0_0_#052e16] active:translate-y-1 active:shadow-none transition-all"
+          >
+            <Download size={17} />
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        {stats.map((item) => (
+          <div
+            key={item.label}
+            className="bg-white p-5 rounded-2xl border-2 border-black shadow-[5px_5px_0_0_rgba(0,0,0,1)]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {item.label}
+                </p>
+                <p className="text-3xl font-black text-slate-800 mt-1">{item.value}</p>
+              </div>
+              <div className={`p-2.5 rounded-xl border-2 border-black ${item.color}`}>
+                <item.icon size={21} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white border-2 border-black rounded-2xl p-4 mb-8 shadow-sm">
+        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 size-5" />
+            <input
+              placeholder="Search patient name or case number..."
+              className="w-full border-2 border-black bg-white pl-12 pr-4 py-3 rounded-xl focus:ring-4 focus:ring-green-100 transition-all outline-none text-sm font-bold"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="border-2 border-black rounded-xl px-4 py-3 text-sm font-black outline-none bg-white"
+          >
+            <option value="all">All Types</option>
+            <option value="inpatient">Inpatients</option>
+            <option value="outpatient">Outpatients</option>
+          </select>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="border-2 border-black rounded-xl px-4 py-3 text-sm font-black outline-none bg-white"
+          >
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="discharged">Discharged</option>
+          </select>
+
+          <button
+            onClick={resetFilters}
+            className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-slate-200 text-xs font-black uppercase text-slate-500 hover:border-black hover:text-black transition-colors"
+          >
+            <X size={16} />
+            Reset
+          </button>
         </div>
       </div>
 
@@ -131,7 +282,10 @@ export default function Patients() {
                 <input
                   className="w-full border-2 border-black p-4 rounded-xl bg-gray-50 focus:bg-white transition-all outline-none text-sm font-bold"
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) => {
+                    setForm({ ...form, name: e.target.value });
+                    setFormError("");
+                  }}
                   placeholder="Full Name"
                   required
                 />
@@ -142,11 +296,20 @@ export default function Patients() {
                 <input
                   className="w-full border-2 border-black p-4 rounded-xl bg-gray-50 focus:bg-white transition-all outline-none font-mono text-sm font-bold"
                   value={form.caseNumber}
-                  onChange={(e) => setForm({ ...form, caseNumber: e.target.value })}
+                  onChange={(e) => {
+                    setForm({ ...form, caseNumber: e.target.value.toUpperCase() });
+                    setFormError("");
+                  }}
                   placeholder="CN-2026-000"
                   required
                 />
               </div>
+
+              {formError && (
+                <div className="border-2 border-red-200 bg-red-50 text-red-700 rounded-xl px-4 py-3 text-xs font-black">
+                  {formError}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -190,6 +353,15 @@ export default function Patients() {
 
         {/* RIGHT: TABLE WITH BLACK BORDERS ON ROWS */}
         <div className="lg:col-span-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 px-2">
+            <div>
+              <h2 className="font-black text-slate-800 uppercase">Registered Patients</h2>
+              <p className="text-xs font-bold text-slate-400">
+                Showing {filteredPatients.length} of {patients.length} records
+              </p>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full border-separate border-spacing-y-4">
               <thead>
@@ -223,7 +395,7 @@ export default function Patients() {
                         <button onClick={() => setViewPatient(p)} className="p-2 border-2 border-transparent hover:border-black hover:bg-gray-50 rounded-xl transition-all">
                           <Eye size={18} />
                         </button>
-                        <button onClick={() => setEditPatient(p)} className="p-2 border-2 border-transparent hover:border-black hover:bg-gray-50 rounded-xl transition-all">
+                        <button onClick={() => { setEditPatient(p); setEditError(""); }} className="p-2 border-2 border-transparent hover:border-black hover:bg-gray-50 rounded-xl transition-all">
                           <Edit size={18} />
                         </button>
                         <button onClick={() => setDeletePatient(p)} className="p-2 border-2 border-transparent hover:border-black hover:bg-red-50 text-red-500 rounded-xl transition-all">
@@ -233,6 +405,18 @@ export default function Patients() {
                     </td>
                   </tr>
                 ))}
+
+                {filteredPatients.length === 0 && (
+                  <tr>
+                    <td colSpan="4" className="bg-white rounded-2xl border-2 border-black p-10 text-center">
+                      <ClipboardList size={40} className="mx-auto text-slate-300 mb-3" />
+                      <p className="font-black text-slate-700 uppercase">No patients found</p>
+                      <p className="text-sm text-slate-400 font-semibold mt-1">
+                        Try changing the search, type, or status filter.
+                      </p>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -257,8 +441,13 @@ export default function Patients() {
                   </div>
                   <div className="space-y-1 col-span-2">
                     <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Case Number</label>
-                    <input className="w-full border-2 border-black p-4 rounded-xl font-mono font-bold outline-none focus:bg-gray-50" value={editPatient.caseNumber} onChange={(e) => setEditPatient({ ...editPatient, caseNumber: e.target.value })} required />
+                    <input className="w-full border-2 border-black p-4 rounded-xl font-mono font-bold outline-none focus:bg-gray-50" value={editPatient.caseNumber} onChange={(e) => { setEditPatient({ ...editPatient, caseNumber: e.target.value.toUpperCase() }); setEditError(""); }} required />
                   </div>
+                  {editError && (
+                    <div className="col-span-2 border-2 border-red-200 bg-red-50 text-red-700 rounded-xl px-4 py-3 text-xs font-black">
+                      {editError}
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Admission</label>
                     <input type="date" className="w-full border-2 border-black p-3 rounded-xl font-bold" value={editPatient.admissionDate} onChange={(e) => setEditPatient({ ...editPatient, admissionDate: e.target.value })} />
@@ -305,6 +494,14 @@ export default function Patients() {
                   <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
                     <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Discharge</p>
                     <p className="font-black text-gray-900">{viewPatient.dischargeDate || "Ongoing"}</p>
+                  </div>
+                  <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
+                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Type</p>
+                    <p className="font-black text-gray-900 capitalize">{viewPatient.type}</p>
+                  </div>
+                  <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
+                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Status</p>
+                    <p className="font-black text-gray-900">{viewPatient.dischargeDate ? "Discharged" : "Active"}</p>
                   </div>
                 </div>
 

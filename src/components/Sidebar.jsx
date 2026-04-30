@@ -9,9 +9,10 @@ import {
   Settings,
   LogOut,
   UserCircle,
+  X,
 } from "lucide-react";
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate, onClose, showCloseButton = false }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -28,13 +29,25 @@ export default function Sidebar() {
     <div className="w-72 min-h-screen bg-green-900 text-white p-6 flex flex-col border-r border-green-800 shadow-xl">
 
       {/* BRANDING */}
-      <div className="mb-10 px-2">
-        <h1 className="text-xl font-black tracking-widest uppercase text-white">
-          TGMCI <span className="text-green-400">MRS</span>
-        </h1>
-        <p className="text-[10px] text-green-300/60 font-bold uppercase tracking-tighter">
-          Medical Records System
-        </p>
+      <div className="mb-10 px-2 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-black tracking-widest uppercase text-white">
+            TGMCI <span className="text-green-400">MRS</span>
+          </h1>
+          <p className="text-[10px] text-green-300/60 font-bold uppercase tracking-tighter">
+            Medical Records System
+          </p>
+        </div>
+
+        {showCloseButton && (
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl bg-green-800/70 text-green-100 hover:bg-green-700 transition-colors"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       {/* NAVIGATION */}
@@ -45,7 +58,10 @@ export default function Sidebar() {
           return (
             <Motion.div
               key={item.name}
-              onClick={() => navigate(item.path)}
+              onClick={() => {
+                navigate(item.path);
+                onNavigate?.();
+              }}
               whileHover={{ x: 4 }}
               whileTap={{ scale: 0.98 }}
               className={`

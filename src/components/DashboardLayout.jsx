@@ -1,19 +1,50 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 
 export default function DashboardLayout({ children }) {
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
       {/* SIDEBAR - Fixed width, non-scrolling */}
-      <Sidebar />
+      <aside className="hidden lg:block shrink-0">
+        <Sidebar />
+      </aside>
+
+      <AnimatePresence>
+        {isMobileSidebarOpen && (
+          <div className="fixed inset-0 z-[80] lg:hidden">
+            <Motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            />
+            <Motion.aside
+              initial={{ x: -320 }}
+              animate={{ x: 0 }}
+              exit={{ x: -320 }}
+              transition={{ type: "spring", stiffness: 320, damping: 34 }}
+              className="relative z-10 h-full"
+            >
+              <Sidebar
+                showCloseButton
+                onClose={() => setIsMobileSidebarOpen(false)}
+                onNavigate={() => setIsMobileSidebarOpen(false)}
+              />
+            </Motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* MAIN CONTENT WRAPPER */}
       <div className="flex-1 flex flex-col relative overflow-hidden">
         
         {/* NAVBAR - Sticky at the top */}
-        <Navbar />
+        <Navbar onMenuClick={() => setIsMobileSidebarOpen(true)} />
 
         {/* SCROLLABLE CONTENT AREA */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden relative bg-[#F8FAFC]">
