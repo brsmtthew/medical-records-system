@@ -1,9 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { motion as Motion } from "framer-motion";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -20,45 +18,47 @@ import {
   Archive,
   Bed,
   ClipboardCheck,
-  FileScan,
   UserRound,
   Users,
 } from "lucide-react";
+import {
+  fallbackDepartments,
+  subscribeToChartLogs,
+  subscribeToCharts,
+  subscribeToDepartments,
+  subscribeToPatients,
+} from "../services/firebaseRecords";
 
-const scanningActivity = [
-  { name: "Mon", scanned: 42, pending: 18 },
-  { name: "Tue", scanned: 58, pending: 14 },
-  { name: "Wed", scanned: 51, pending: 16 },
-  { name: "Thu", scanned: 76, pending: 9 },
-  { name: "Fri", scanned: 64, pending: 12 },
-  { name: "Sat", scanned: 31, pending: 7 },
+const periodOptions = [
+  { id: "today", label: "Today" },
+  { id: "monthly", label: "Monthly" },
+  { id: "yearly", label: "Yearly" },
 ];
 
-const chartMovement = [
-  { name: "ER", borrowed: 12, returned: 8 },
-  { name: "Billing", borrowed: 9, returned: 11 },
-  { name: "Surgery", borrowed: 7, returned: 5 },
-  { name: "IM", borrowed: 14, returned: 13 },
-  { name: "Records", borrowed: 4, returned: 10 },
-];
+function toDateInputValue(date) {
+  return date.toISOString().slice(0, 10);
+}
 
-const patientRatio = [
-  { name: "Inpatient", value: 156, color: "#16a34a" },
-  { name: "Outpatient", value: 3240, color: "#60a5fa" },
-];
+function toMonthInputValue(date) {
+  return date.toISOString().slice(0, 7);
+}
 
-const recentActivity = [
-  { action: "Borrowed", chart: "CN-2026-004", person: "Dr. Santos", time: "8:45 AM", tone: "red" },
-  { action: "Returned", chart: "CN-2026-005", person: "Records Staff", time: "4:05 PM", tone: "green" },
-  { action: "Scanned", chart: "CN-2026-009", person: "Digitization Desk", time: "3:30 PM", tone: "blue" },
-  { action: "Registered", chart: "CN-2026-010", person: "Front Desk", time: "2:10 PM", tone: "green" },
-];
+function isLogInPeriod(log, period, selectedDate, selectedMonth, selectedYear) {
+  const value = log.borrowedAt || log.timestamp;
+  if (!value) return false;
 
-const alerts = [
-  { label: "Overdue borrowed charts", value: "2", detail: "Needs follow-up today" },
-  { label: "Pending scan queue", value: "18", detail: "Awaiting digitization" },
-  { label: "Records without barcode", value: "6", detail: "Print labels required" },
-];
+  const logDate = new Date(value);
+
+  if (period === "today") {
+    return toDateInputValue(logDate) === selectedDate;
+  }
+
+  if (period === "monthly") {
+    return toMonthInputValue(logDate) === selectedMonth;
+  }
+
+  return String(logDate.getFullYear()) === String(selectedYear);
+}
 
 function StatCard({ item, index }) {
   return (
@@ -66,14 +66,14 @@ function StatCard({ item, index }) {
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06 }}
-      className="bg-white p-5 rounded-2xl border-2 border-black shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]"
+      className="bg-white p-4 rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
     >
       <div className="flex justify-between items-start gap-4">
         <div>
           <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
             {item.label}
           </p>
-          <h2 className="text-3xl font-black mt-1 text-slate-800">{item.value}</h2>
+          <h2 className="text-2xl font-black mt-1 text-slate-800">{item.value}</h2>
           <p className={`text-[10px] font-black uppercase mt-2 ${item.trendColor}`}>
             {item.trend}
           </p>
@@ -87,119 +87,198 @@ function StatCard({ item, index }) {
 }
 
 export default function AdminDashboard() {
+  const [patients, setPatients] = useState([]);
+  const [charts, setCharts] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [selectedPeriod, setSelectedPeriod] = useState("monthly");
+  const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
+  const [selectedMonth, setSelectedMonth] = useState(() => toMonthInputValue(new Date()));
+  const [selectedYear, setSelectedYear] = useState(() => String(new Date().getFullYear()));
+
+  useEffect(() => {
+    const unsubscribePatients = subscribeToPatients(setPatients, console.error);
+    const unsubscribeCharts = subscribeToCharts(setCharts, console.error);
+    const unsubscribeLogs = subscribeToChartLogs(setLogs, console.error);
+    const unsubscribeDepartments = subscribeToDepartments(setDepartments, console.error);
+
+    return () => {
+      unsubscribePatients();
+      unsubscribeCharts();
+      unsubscribeLogs();
+      unsubscribeDepartments();
+    };
+  }, []);
+
+  const today = new Date();
+  const inpatientCount = patients.filter((patient) => patient.type === "inpatient").length;
+  const outpatientCount = patients.filter((patient) => patient.type === "outpatient").length;
+  const borrowedCharts = charts.filter((chart) => chart.status === "borrowed");
+  const overdueCharts = borrowedCharts.filter((chart) => chart.dueDate && new Date(chart.dueDate) < today);
+  const patientRatio = [
+    { name: "Inpatient", value: inpatientCount, color: "#16a34a" },
+    { name: "Outpatient", value: outpatientCount, color: "#60a5fa" },
+  ];
   const totalPatients = patientRatio.reduce((acc, curr) => acc + curr.value, 0);
+  const configuredDepartments = departments.length > 0
+    ? departments.map((department) => department.name)
+    : fallbackDepartments;
+  const periodLogs = logs.filter((log) => isLogInPeriod(log, selectedPeriod, selectedDate, selectedMonth, selectedYear));
+  const logDepartments = periodLogs.map((log) => log.department).filter(Boolean);
+  const chartDepartmentNames = [...new Set([...configuredDepartments, ...logDepartments])];
+  const chartMovementRows = chartDepartmentNames.map((department) => {
+    const departmentLogs = periodLogs.filter((log) => (log.department || "Unassigned") === department);
+    return {
+      name: department,
+      borrowed: departmentLogs.filter((log) => log.action === "borrowed").length,
+      returned: departmentLogs.filter((log) => log.action === "returned").length,
+    };
+  });
+  const chartMovementData = chartMovementRows.some((row) => row.borrowed > 0 || row.returned > 0)
+    ? chartMovementRows
+    : [{ name: "No Logs", borrowed: 0, returned: 0 }];
+  const recentActivity = logs.slice(0, 4).map((log) => ({
+    action: log.action === "borrowed" ? "Borrowed" : "Returned",
+    chart: log.caseNumber,
+    person: log.borrowedBy || "N/A",
+    time: log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+    tone: log.action === "borrowed" ? "red" : "green",
+  }));
+  const alerts = [
+    { label: "Overdue borrowed charts", value: String(overdueCharts.length), detail: "Needs follow-up today" },
+    { label: "Currently borrowed charts", value: String(borrowedCharts.length), detail: "Active circulation records" },
+    { label: "Registered patient charts", value: String(charts.length), detail: "Synced from patient registry" },
+  ];
+
   const stats = [
     {
       label: "Registered Patients",
-      value: "3,396",
+      value: patients.length,
       icon: Users,
       color: "bg-green-100",
-      trend: "+42 this week",
+      trend: "Synced from Firebase",
       trendColor: "text-green-700",
     },
     {
       label: "Inpatients",
-      value: "156",
+      value: inpatientCount,
       icon: Bed,
       color: "bg-emerald-100",
-      trend: "4.6% of registry",
+      trend: `${totalPatients ? ((inpatientCount / totalPatients) * 100).toFixed(1) : "0.0"}% of registry`,
       trendColor: "text-slate-500",
     },
     {
       label: "Outpatients",
-      value: "3,240",
+      value: outpatientCount,
       icon: UserRound,
       color: "bg-blue-100",
-      trend: "95.4% of registry",
+      trend: `${totalPatients ? ((outpatientCount / totalPatients) * 100).toFixed(1) : "0.0"}% of registry`,
       trendColor: "text-slate-500",
     },
     {
-      label: "Pending Scans",
-      value: "18",
-      icon: FileScan,
+      label: "Borrowed Charts",
+      value: borrowedCharts.length,
+      icon: Archive,
       color: "bg-amber-100",
-      trend: "7 urgent",
+      trend: `${overdueCharts.length} overdue`,
       trendColor: "text-amber-700",
     },
   ];
+
+  const periodLabel = selectedPeriod === "today"
+    ? selectedDate
+    : selectedPeriod === "monthly"
+      ? selectedMonth
+      : selectedYear;
 
   return (
     <DashboardLayout>
       <Motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8 flex flex-col xl:flex-row xl:items-end justify-between gap-4"
+        className="mb-5 flex flex-col xl:flex-row xl:items-end justify-between gap-4"
       >
         <div>
-          <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
+          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
             Records <span className="text-green-700">Command Center</span>
           </h1>
           <p className="text-slate-500 font-medium">
-            Daily movement, scan progress, patient mix, and follow-up priorities.
+            Chart movement, patient mix, and follow-up priorities from Firebase records.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 bg-white border-2 border-black rounded-2xl p-2">
-          {["Today", "Week", "Month"].map((period, index) => (
-            <button
-              key={period}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase ${
-                index === 1 ? "bg-black text-white" : "text-slate-500 hover:bg-slate-50"
-              }`}
-            >
-              {period}
-            </button>
-          ))}
+        <div className="flex flex-col sm:flex-row gap-2 bg-white border-2 border-black rounded-2xl p-2">
+          <div className="grid grid-cols-3 gap-2">
+            {periodOptions.map((period) => (
+              <button
+                key={period.id}
+                onClick={() => setSelectedPeriod(period.id)}
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase ${
+                  selectedPeriod === period.id ? "bg-black text-white" : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                {period.label}
+              </button>
+            ))}
+          </div>
+          <div className="min-w-40">
+            {selectedPeriod === "today" && (
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-black"
+                aria-label="Select day"
+              />
+            )}
+            {selectedPeriod === "monthly" && (
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(event) => setSelectedMonth(event.target.value)}
+                className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-black"
+                aria-label="Select month"
+              />
+            )}
+            {selectedPeriod === "yearly" && (
+              <input
+                type="number"
+                min="2000"
+                max="2100"
+                value={selectedYear}
+                onChange={(event) => setSelectedYear(event.target.value)}
+                className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-black"
+                aria-label="Select year"
+              />
+            )}
+          </div>
         </div>
       </Motion.div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
         {stats.map((item, index) => (
           <StatCard key={item.label} item={item} index={index} />
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
         <Motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="xl:col-span-7 bg-white p-6 rounded-2xl border-2 border-black"
+          className="xl:col-span-8 bg-white p-4 rounded-2xl border-2 border-black"
         >
-          <div className="flex items-center justify-between gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
             <div className="flex items-center gap-2">
-              <FileScan className="text-green-700" size={20} />
+              <Archive className="text-green-700" size={20} />
               <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">
-                Digitization Progress
+                Chart Movement by Department
               </h3>
             </div>
             <span className="text-[10px] font-black uppercase text-slate-400">
-              Scanned vs pending
+              {selectedPeriod} report log departments • {periodLabel}
             </span>
           </div>
           <ResponsiveContainer width="100%" height={320}>
-            <AreaChart data={scanningActivity}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontWeight: 800, fontSize: 12 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-              <Tooltip contentStyle={{ borderRadius: "12px", border: "2px solid black", fontWeight: "bold" }} />
-              <Area type="monotone" dataKey="scanned" name="Charts Scanned" stroke="#16a34a" fill="#bbf7d0" strokeWidth={3} />
-              <Area type="monotone" dataKey="pending" name="Pending Scans" stroke="#f59e0b" fill="#fde68a" strokeWidth={3} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </Motion.div>
-
-        <Motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="xl:col-span-5 bg-white p-6 rounded-2xl border-2 border-black"
-        >
-          <div className="flex items-center gap-2 mb-6">
-            <Archive className="text-green-700" size={20} />
-            <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">
-              Chart Movement
-            </h3>
-          </div>
-          <ResponsiveContainer width="100%" height={320}>
-            <BarChart data={chartMovement}>
+            <BarChart data={chartMovementData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontWeight: 800, fontSize: 12 }} />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
@@ -213,7 +292,7 @@ export default function AdminDashboard() {
         <Motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="xl:col-span-4 bg-white p-6 rounded-2xl border-2 border-black"
+          className="xl:col-span-4 bg-white p-4 rounded-2xl border-2 border-black"
         >
           <div className="flex items-center gap-2 mb-4">
             <Users className="text-green-700" size={20} />
@@ -241,7 +320,7 @@ export default function AdminDashboard() {
                 <div className="text-right">
                   <p className="font-black text-slate-800 leading-none">{item.value}</p>
                   <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
-                    {((item.value / totalPatients) * 100).toFixed(1)}%
+                    {totalPatients ? ((item.value / totalPatients) * 100).toFixed(1) : "0.0"}%
                   </p>
                 </div>
               </div>
@@ -280,6 +359,14 @@ export default function AdminDashboard() {
                 </span>
               </div>
             ))}
+            {recentActivity.length === 0 && (
+              <div className="p-6 text-center">
+                <p className="font-black text-slate-700 uppercase">No activity yet</p>
+                <p className="text-xs font-semibold text-slate-400 mt-1">
+                  Borrow or return a chart to populate this list.
+                </p>
+              </div>
+            )}
           </div>
         </Motion.div>
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import {
@@ -13,11 +13,46 @@ import {
   Search,
   X,
 } from "lucide-react";
+import {
+  addChartLog,
+  fallbackDepartments,
+  subscribeToCharts,
+  subscribeToDepartments,
+  updateChart,
+  updateChartLog,
+} from "../services/firebaseRecords";
 
-const today = new Date("2026-04-30T00:00:00");
+const today = new Date();
 
 function normalizeCaseNumber(value) {
   return value.trim().toUpperCase();
+}
+
+function normalizePatientName(value = "") {
+  return value.trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+function chartCreatedValue(chart) {
+  if (chart.createdAt?.toMillis) return chart.createdAt.toMillis();
+  if (chart.createdAt?.seconds) return chart.createdAt.seconds * 1000;
+  if (chart.borrowedAt) return new Date(chart.borrowedAt).getTime();
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function determineChartRecordType(chart, charts) {
+  if (chart.recordType === "old") return "old";
+  if (chart.recordType === "new") return "new";
+
+  const patientName = normalizePatientName(chart.patientName);
+  const relatedCharts = charts
+    .filter((item) => normalizePatientName(item.patientName) === patientName)
+    .sort((a, b) => {
+      const createdDifference = chartCreatedValue(a) - chartCreatedValue(b);
+      if (createdDifference !== 0) return createdDifference;
+      return a.caseNumber.localeCompare(b.caseNumber);
+    });
+
+  return relatedCharts.findIndex((item) => item.caseNumber === chart.caseNumber) > 0 ? "old" : "new";
 }
 
 function daysBorrowed(date) {
@@ -32,52 +67,50 @@ function daysBorrowed(date) {
 }
 
 export default function Charts() {
-  const [charts, setCharts] = useState([
-    {
-      caseNumber: "CN-2026-001",
-      patientName: "Juan Dela Cruz",
-      status: "available",
-      borrower: "",
-      department: "",
-      borrowedAt: "",
-      dueDate: "",
-      history: [
-        { action: "checkin", date: "2026-04-15T10:30:00", borrower: "System", department: "Medical Records" },
-      ],
-    },
-    {
-      caseNumber: "CN-2026-002",
-      patientName: "Maria Santos",
-      status: "borrowed",
-      borrower: "Dr. Smith",
-      department: "Internal Medicine",
-      borrowedAt: "2026-04-28T09:15:00",
-      dueDate: "2026-05-01",
-      history: [
-        { action: "checkout", date: "2026-04-28T09:15:00", borrower: "Dr. Smith", department: "Internal Medicine" },
-      ],
-    },
-    {
-      caseNumber: "CN-2026-003",
-      patientName: "Ana Lim",
-      status: "borrowed",
-      borrower: "Dr. Santos",
-      department: "Surgery",
-      borrowedAt: "2026-04-20T08:45:00",
-      dueDate: "2026-04-23",
-      history: [
-        { action: "checkout", date: "2026-04-20T08:45:00", borrower: "Dr. Santos", department: "Surgery" },
-      ],
-    },
-  ]);
-
-  const [barcodeInput, setBarcodeInput] = useState("");
+  const [charts, setCharts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [borrowCaseNumber, setBorrowCaseNumber] = useState("");
+  const [returnCaseNumber, setReturnCaseNumber] = useState("");
   const [borrower, setBorrower] = useState("");
   const [department, setDepartment] = useState("");
+  const [returner, setReturner] = useState("");
+  const [departments, setDepartments] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedHistory, setSelectedHistory] = useState(null);
+  const [confirmTransaction, setConfirmTransaction] = useState(null);
   const [notice, setNotice] = useState(null);
+
+  const setTransactionNotice = (type, message) => {
+    setNotice({ type, message });
+  };
+
+  useEffect(() => {
+    const unsubscribeCharts = subscribeToCharts(
+      (rows) => {
+        setCharts(rows);
+        setIsLoading(false);
+      },
+      (error) => {
+        setTransactionNotice("error", error.message || "Unable to load charts from Firebase.");
+        setIsLoading(false);
+      },
+    );
+
+    const unsubscribeDepartments = subscribeToDepartments(
+      setDepartments,
+      (error) => setTransactionNotice("error", error.message || "Unable to load departments from Firebase."),
+    );
+
+    return () => {
+      unsubscribeCharts();
+      unsubscribeDepartments();
+    };
+  }, []);
+
+  const departmentOptions = departments.length > 0
+    ? departments.map((item) => item.name)
+    : fallbackDepartments;
 
   const stats = useMemo(() => {
     const borrowed = charts.filter((chart) => chart.status === "borrowed");
@@ -111,122 +144,173 @@ export default function Charts() {
     });
   }, [charts, searchQuery, statusFilter]);
 
-  const setTransactionNotice = (type, message) => {
-    setNotice({ type, message });
-  };
-
-  const handleCheckout = () => {
-    const caseNumber = normalizeCaseNumber(barcodeInput);
-    if (!caseNumber || !borrower.trim()) {
-      setTransactionNotice("error", "Enter a case number and borrower before checking out.");
+  const prepareCheckout = () => {
+    const caseNumber = normalizeCaseNumber(borrowCaseNumber);
+    if (!caseNumber || !borrower.trim() || !department) {
+      setTransactionNotice("error", "Enter a case number, borrower, and department before checking out.");
       return;
     }
 
-    let found = false;
-    let blocked = false;
-    const now = new Date();
-    const dueDate = new Date(now);
-    dueDate.setDate(dueDate.getDate() + 3);
+    const chart = charts.find((item) => item.caseNumber === caseNumber);
 
-    const updated = charts.map((chart) => {
-      if (chart.caseNumber !== caseNumber) return chart;
-      found = true;
-      if (chart.status === "borrowed") {
-        blocked = true;
-        return chart;
-      }
-
-      return {
-        ...chart,
-        status: "borrowed",
-        borrower: borrower.trim(),
-        department: department.trim() || "Unassigned",
-        borrowedAt: now.toISOString(),
-        dueDate: dueDate.toISOString().slice(0, 10),
-        history: [
-          {
-            action: "checkout",
-            borrower: borrower.trim(),
-            department: department.trim() || "Unassigned",
-            date: now.toISOString(),
-          },
-          ...chart.history,
-        ],
-      };
-    });
-
-    if (!found) {
+    if (!chart) {
       setTransactionNotice("error", "No chart found for that case number.");
       return;
     }
-    if (blocked) {
+    if (chart.status === "borrowed") {
       setTransactionNotice("error", "This chart is already borrowed.");
       return;
     }
 
-    setCharts(updated);
-    setBarcodeInput("");
-    setBorrower("");
-    setDepartment("");
-    setTransactionNotice("success", `${caseNumber} checked out successfully.`);
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 3);
+    setConfirmTransaction({
+      type: "borrow",
+      chart,
+      caseNumber,
+      borrower: borrower.trim(),
+      department,
+      dueDate: dueDate.toISOString().slice(0, 10),
+    });
   };
 
-  const handleCheckin = () => {
-    const caseNumber = normalizeCaseNumber(barcodeInput);
-    if (!caseNumber) {
-      setTransactionNotice("error", "Enter a case number before checking in.");
+  const handleCheckout = async () => {
+    if (!confirmTransaction || confirmTransaction.type !== "borrow") return;
+    const { chart, caseNumber } = confirmTransaction;
+    const now = new Date();
+    const log = {
+      action: "borrowed",
+      patientName: chart.patientName,
+      caseNumber,
+      borrowedBy: confirmTransaction.borrower,
+      returnedBy: "",
+      department: confirmTransaction.department,
+      timestamp: now.toISOString(),
+      borrowedAt: now.toISOString(),
+      returnedAt: "",
+      dueDate: confirmTransaction.dueDate,
+      remarks: "Chart checked out",
+    };
+
+    try {
+      const activeLogId = await addChartLog(log);
+      await updateChart(caseNumber, {
+        status: "borrowed",
+        borrower: confirmTransaction.borrower,
+        department: confirmTransaction.department,
+        borrowedAt: now.toISOString(),
+        dueDate: confirmTransaction.dueDate,
+        activeLogId,
+        history: [
+          {
+            action: "checkout",
+            borrower: confirmTransaction.borrower,
+            returnedBy: "",
+            department: confirmTransaction.department,
+            date: now.toISOString(),
+          },
+          ...(chart.history || []),
+        ],
+      });
+      setBorrowCaseNumber("");
+      setBorrower("");
+      setDepartment("");
+      setConfirmTransaction(null);
+      setTransactionNotice("success", `${caseNumber} checked out successfully.`);
+    } catch (error) {
+      setTransactionNotice("error", error.message || "Unable to update chart in Firebase.");
+      setConfirmTransaction(null);
+    }
+  };
+
+  const prepareCheckin = () => {
+    const caseNumber = normalizeCaseNumber(returnCaseNumber);
+    if (!caseNumber || !returner.trim()) {
+      setTransactionNotice("error", "Enter a case number and returner before checking in.");
       return;
     }
 
-    let found = false;
-    let blocked = false;
+    const chart = charts.find((item) => item.caseNumber === caseNumber);
+
+    if (!chart) {
+      setTransactionNotice("error", "No chart found for that case number.");
+      return;
+    }
+    if (chart.status === "available") {
+      setTransactionNotice("error", "This chart is already available.");
+      return;
+    }
+
+    setConfirmTransaction({
+      type: "return",
+      chart,
+      caseNumber,
+      returner: returner.trim(),
+    });
+  };
+
+  const handleCheckin = async () => {
+    if (!confirmTransaction || confirmTransaction.type !== "return") return;
+    const { chart, caseNumber } = confirmTransaction;
     const now = new Date();
-    const updated = charts.map((chart) => {
-      if (chart.caseNumber !== caseNumber) return chart;
-      found = true;
-      if (chart.status === "available") {
-        blocked = true;
-        return chart;
+    try {
+      if (chart.activeLogId) {
+        await updateChartLog(chart.activeLogId, {
+          action: "returned",
+          returnedBy: confirmTransaction.returner,
+          returnedAt: now.toISOString(),
+          dueDate: chart.dueDate || "",
+          remarks: "Chart returned",
+        });
+      } else {
+        await addChartLog({
+          action: "returned",
+          patientName: chart.patientName,
+          caseNumber,
+          borrowedBy: chart.borrower || "N/A",
+          returnedBy: confirmTransaction.returner,
+          department: chart.department || "N/A",
+          timestamp: chart.borrowedAt || now.toISOString(),
+          borrowedAt: chart.borrowedAt || now.toISOString(),
+          returnedAt: now.toISOString(),
+          dueDate: chart.dueDate || "",
+          remarks: "Chart returned",
+        });
       }
 
-      return {
-        ...chart,
+      await updateChart(caseNumber, {
         status: "available",
         borrower: "",
         department: "",
         borrowedAt: "",
         dueDate: "",
+        activeLogId: "",
         history: [
           {
             action: "checkin",
             date: now.toISOString(),
             borrower: chart.borrower || "N/A",
+            returnedBy: confirmTransaction.returner,
             department: chart.department || "N/A",
           },
-          ...chart.history,
+          ...(chart.history || []),
         ],
-      };
-    });
-
-    if (!found) {
-      setTransactionNotice("error", "No chart found for that case number.");
-      return;
+      });
+      setReturnCaseNumber("");
+      setReturner("");
+      setConfirmTransaction(null);
+      setTransactionNotice("success", `${caseNumber} checked in successfully.`);
+    } catch (error) {
+      setTransactionNotice("error", error.message || "Unable to update chart in Firebase.");
+      setConfirmTransaction(null);
     }
-    if (blocked) {
-      setTransactionNotice("error", "This chart is already available.");
-      return;
-    }
-
-    setCharts(updated);
-    setBarcodeInput("");
-    setTransactionNotice("success", `${caseNumber} checked in successfully.`);
   };
 
   return (
     <DashboardLayout>
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
+          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
             Chart <span className="text-green-700">Tracking</span>
           </h1>
           <p className="text-slate-500 font-medium">
@@ -254,7 +338,7 @@ export default function Charts() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
-                <p className="text-3xl font-black text-slate-800 mt-1">{item.value}</p>
+                <p className="text-2xl font-black text-slate-800 mt-1">{item.value}</p>
               </div>
               <div className={`p-2.5 rounded-xl border-2 border-black ${item.color}`}>
                 <item.icon size={21} />
@@ -264,85 +348,137 @@ export default function Charts() {
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1">
-          <Motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white p-6 rounded-3xl border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sticky top-24"
-          >
-            <div className="flex items-center gap-2 mb-6 text-green-700">
-              <ScanLine size={24} strokeWidth={3} />
-              <h2 className="font-black text-xl uppercase italic">Scan Station</h2>
-            </div>
-
-            {notice && (
-              <div
-                className={`mb-4 border-2 rounded-xl px-4 py-3 text-xs font-black ${
-                  notice.type === "success"
-                    ? "bg-green-50 text-green-700 border-green-200"
-                    : "bg-red-50 text-red-700 border-red-200"
-                }`}
-              >
-                {notice.message}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Barcode / Case No.</label>
-                <input
-                  type="text"
-                  placeholder="CN-2026-XXX"
-                  value={barcodeInput}
-                  onChange={(e) => setBarcodeInput(e.target.value.toUpperCase())}
-                  className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Borrower Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Dr. Richards"
-                  value={borrower}
-                  onChange={(e) => setBorrower(e.target.value)}
-                  className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Department</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Emergency Room"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-4">
-                <button
-                  onClick={handleCheckout}
-                  className="bg-red-500 text-white py-4 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_#991b1b] active:shadow-none active:translate-y-1 transition-all inline-flex items-center justify-center gap-2"
-                >
-                  <FileText size={16} />
-                  Check-Out
-                </button>
-                <button
-                  onClick={handleCheckin}
-                  className="bg-green-600 text-white py-4 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_#14532d] active:shadow-none active:translate-y-1 transition-all inline-flex items-center justify-center gap-2"
-                >
-                  <RotateCcw size={16} />
-                  Check-In
-                </button>
-              </div>
-            </div>
-          </Motion.div>
+      {notice && (
+        <div
+          className={`mb-4 border-2 rounded-xl px-4 py-3 text-xs font-black ${
+            notice.type === "success"
+              ? "bg-green-50 text-green-700 border-green-200"
+              : "bg-red-50 text-red-700 border-red-200"
+          }`}
+        >
+          {notice.message}
         </div>
+      )}
 
-        <div className="lg:col-span-2">
+      <div className="grid xl:grid-cols-2 gap-5 mb-5">
+        <Motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white border-2 border-black rounded-2xl p-5 shadow-[6px_6px_0_0_rgba(0,0,0,1)]"
+        >
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-red-50 text-red-600 border-2 border-red-100">
+                <FileText size={21} />
+              </div>
+              <div>
+                <h2 className="text-lg font-black uppercase text-slate-800">Borrow Chart</h2>
+                <p className="text-xs font-bold text-slate-400">Check out an available physical chart.</p>
+              </div>
+            </div>
+            <ScanLine size={20} className="text-slate-300" />
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Barcode / Case No.</label>
+              <input
+                type="text"
+                placeholder="CN-2026-XXX"
+                value={borrowCaseNumber}
+                onChange={(e) => setBorrowCaseNumber(e.target.value.toUpperCase())}
+                className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-red-200 outline-none font-bold bg-white"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Borrower Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Dr. Richards"
+                value={borrower}
+                onChange={(e) => setBorrower(e.target.value)}
+                className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-red-200 outline-none font-bold bg-white"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Department</label>
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-red-200 outline-none font-bold bg-white"
+              >
+                <option value="">Select department</option>
+                {departmentOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <button
+            onClick={prepareCheckout}
+            className="mt-4 w-full bg-red-500 text-white py-3 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_#991b1b] active:shadow-none active:translate-y-1 transition-all inline-flex items-center justify-center gap-2"
+          >
+            <FileText size={16} />
+            Borrow Chart
+          </button>
+        </Motion.div>
+
+        <Motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white border-2 border-black rounded-2xl p-5 shadow-[6px_6px_0_0_rgba(0,0,0,1)]"
+        >
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-green-50 text-green-700 border-2 border-green-100">
+                <RotateCcw size={21} />
+              </div>
+              <div>
+                <h2 className="text-lg font-black uppercase text-slate-800">Return Chart</h2>
+                <p className="text-xs font-bold text-slate-400">Record who returned a borrowed chart.</p>
+              </div>
+            </div>
+            <ScanLine size={20} className="text-slate-300" />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Barcode / Case No.</label>
+              <input
+                type="text"
+                placeholder="CN-2026-XXX"
+                value={returnCaseNumber}
+                onChange={(e) => setReturnCaseNumber(e.target.value.toUpperCase())}
+                className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold bg-white"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Returned By</label>
+              <input
+                type="text"
+                placeholder="Name of person returning chart"
+                value={returner}
+                onChange={(e) => setReturner(e.target.value)}
+                className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold bg-white"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={prepareCheckin}
+            className="mt-4 w-full bg-green-600 text-white py-3 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_#14532d] active:shadow-none active:translate-y-1 transition-all inline-flex items-center justify-center gap-2"
+          >
+            <RotateCcw size={16} />
+            Return Chart
+          </button>
+        </Motion.div>
+      </div>
+
+      <div>
           <div className="mb-4 flex flex-wrap gap-2">
             {["all", "available", "borrowed", "overdue"].map((filter) => (
               <button
@@ -359,20 +495,21 @@ export default function Charts() {
             ))}
           </div>
 
-          <div className="bg-white rounded-3xl border-2 border-black overflow-hidden shadow-sm">
-            <table className="w-full text-left">
+          <div className="bg-white rounded-2xl border-2 border-black overflow-hidden shadow-sm">
+            <table className="w-full table-fixed text-left">
               <thead>
                 <tr className="bg-slate-50 border-b-2 border-black">
-                  <th className="p-4 text-[10px] font-black uppercase text-slate-400">Chart Info</th>
-                  <th className="p-4 text-[10px] font-black uppercase text-slate-400">Borrower</th>
-                  <th className="p-4 text-[10px] font-black uppercase text-slate-400">Current Status</th>
-                  <th className="p-4 text-right text-[10px] font-black uppercase text-slate-400">Log</th>
+                  <th className="w-[30%] p-3 text-[10px] font-black uppercase text-slate-400">Chart Info</th>
+                  <th className="w-[27%] p-3 text-[10px] font-black uppercase text-slate-400">Borrower</th>
+                  <th className="w-[28%] p-3 text-[10px] font-black uppercase text-slate-400">Current Status</th>
+                  <th className="w-[15%] p-3 text-right text-[10px] font-black uppercase text-slate-400">Log</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 <AnimatePresence initial={false}>
                   {filteredCharts.map((chart) => {
                     const isOverdue = chart.status === "borrowed" && chart.dueDate && new Date(chart.dueDate) < today;
+                    const recordType = determineChartRecordType(chart, charts);
 
                     return (
                       <Motion.tr
@@ -383,15 +520,24 @@ export default function Charts() {
                         exit={{ opacity: 0 }}
                         className="hover:bg-slate-50/50 transition-colors group"
                       >
-                        <td className="p-4">
-                          <div className="font-black text-slate-800 uppercase leading-none mb-1">{chart.patientName}</div>
-                          <div className="text-[10px] font-bold text-slate-400">{chart.caseNumber}</div>
+                        <td className="p-3">
+                          <div className="font-black text-slate-800 uppercase leading-tight mb-1 break-words">{chart.patientName}</div>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <code className="text-xs font-mono text-green-900 font-black tracking-wide">{chart.caseNumber}</code>
+                            <span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase ${
+                              recordType === "old"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-green-50 text-green-700 border-green-200"
+                            }`}>
+                              {recordType === "old" ? "Old / Readmit" : "New"}
+                            </span>
+                          </div>
                         </td>
-                        <td className="p-4">
+                        <td className="p-3">
                           <div className="text-sm font-black text-slate-700">{chart.borrower || "Records Room"}</div>
                           <div className="text-[10px] font-bold uppercase text-slate-400">{chart.department || "Available"}</div>
                         </td>
-                        <td className="p-4">
+                        <td className="p-3">
                           <div className="flex flex-col gap-1 items-start">
                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border-2 ${
                               chart.status === "available"
@@ -409,7 +555,7 @@ export default function Charts() {
                             )}
                           </div>
                         </td>
-                        <td className="p-4 text-right">
+                        <td className="p-3 text-right">
                           <button
                             onClick={() => setSelectedHistory(chart)}
                             className="p-2 border-2 border-transparent hover:border-black rounded-xl transition-all inline-flex items-center gap-2 text-slate-400 hover:text-black font-bold text-xs"
@@ -426,9 +572,11 @@ export default function Charts() {
                   <tr>
                     <td colSpan="4" className="p-10 text-center">
                       <Archive size={40} className="mx-auto text-slate-300 mb-3" />
-                      <p className="font-black text-slate-700 uppercase">No charts found</p>
+                      <p className="font-black text-slate-700 uppercase">
+                        {isLoading ? "Loading charts..." : "No charts found"}
+                      </p>
                       <p className="text-sm text-slate-400 font-semibold mt-1">
-                        Try changing the search or status filter.
+                        {isLoading ? "Reading records from Firebase." : "Register a patient first or change the filters."}
                       </p>
                     </td>
                   </tr>
@@ -436,8 +584,106 @@ export default function Charts() {
               </tbody>
             </table>
           </div>
-        </div>
       </div>
+
+      <AnimatePresence>
+        {confirmTransaction && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <Motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/50"
+              onClick={() => setConfirmTransaction(null)}
+            />
+            <Motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              className="relative bg-white border-4 border-black rounded-2xl p-7 max-w-md w-full shadow-[10px_10px_0_0_rgba(0,0,0,1)]"
+            >
+              <div className="flex items-center gap-3 mb-5">
+                <div className={`p-3 rounded-2xl border-2 border-black ${
+                  confirmTransaction.type === "borrow"
+                    ? "bg-red-50 text-red-600"
+                    : "bg-green-50 text-green-700"
+                }`}>
+                  {confirmTransaction.type === "borrow" ? <FileText size={24} /> : <RotateCcw size={24} />}
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase">
+                    Confirm {confirmTransaction.type === "borrow" ? "Borrow" : "Return"} Chart
+                  </h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase">
+                    Review transaction details before saving
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 mb-6">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-slate-400">Chart</p>
+                  <p className="font-black text-slate-900 uppercase">{confirmTransaction.chart.patientName}</p>
+                  <p className="font-mono text-sm font-black text-green-800">{confirmTransaction.caseNumber}</p>
+                </div>
+
+                {confirmTransaction.type === "borrow" ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-400">Borrower</p>
+                      <p className="font-black text-slate-800">{confirmTransaction.borrower}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-400">Department</p>
+                      <p className="font-black text-slate-800">{confirmTransaction.department}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-[10px] font-black uppercase text-slate-400">Due Date</p>
+                      <p className="font-black text-slate-800">{confirmTransaction.dueDate}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-400">Borrowed By</p>
+                      <p className="font-black text-slate-800">{confirmTransaction.chart.borrower || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-400">Returned By</p>
+                      <p className="font-black text-slate-800">{confirmTransaction.returner}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-400">Department</p>
+                      <p className="font-black text-slate-800">{confirmTransaction.chart.department || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-400">Due Date</p>
+                      <p className="font-black text-slate-800">{confirmTransaction.chart.dueDate || "N/A"}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmTransaction(null)}
+                  className="flex-1 py-3 font-black text-slate-500 uppercase"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmTransaction.type === "borrow" ? handleCheckout : handleCheckin}
+                  className={`flex-1 py-3 text-white border-2 border-black rounded-xl font-black uppercase shadow-[4px_4px_0_0_rgba(0,0,0,1)] active:shadow-none active:translate-y-1 ${
+                    confirmTransaction.type === "borrow" ? "bg-red-500" : "bg-green-600"
+                  }`}
+                >
+                  Confirm
+                </button>
+              </div>
+            </Motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {selectedHistory && (
@@ -459,13 +705,25 @@ export default function Charts() {
                 {selectedHistory.patientName} • {selectedHistory.caseNumber}
               </p>
               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                {selectedHistory.history.map((log, i) => (
+                {(selectedHistory.history || []).filter((log) => log.borrower !== "System").length === 0 && (
+                  <div className="p-6 rounded-2xl border-2 border-slate-100 bg-slate-50 text-center">
+                    <History size={34} className="mx-auto text-slate-300 mb-3" />
+                    <p className="font-black text-slate-700 uppercase">No history of borrowing or returned</p>
+                    <p className="text-xs font-semibold text-slate-400 mt-1">
+                      This chart has not been borrowed or returned yet.
+                    </p>
+                  </div>
+                )}
+                {(selectedHistory.history || []).filter((log) => log.borrower !== "System").map((log, i) => (
                   <div key={`${log.action}-${log.date}-${i}`} className="relative pl-6 border-l-2 border-slate-200 pb-2 last:pb-0">
                     <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-[0_0_0_2px_black] ${log.action === "checkout" ? "bg-red-500" : "bg-green-500"}`} />
                     <p className="text-sm font-black uppercase text-slate-800">{log.action === "checkout" ? "Borrowed" : "Returned"}</p>
-                    <p className="text-xs font-bold text-slate-700">
-                      {log.action === "checkout" ? "Borrowed By" : "Returned By"}: {log.borrower || "N/A"}
-                    </p>
+                    <p className="text-xs font-bold text-slate-700">Borrowed By: {log.borrower || "N/A"}</p>
+                    {log.action === "checkin" && (
+                      <p className="text-xs font-bold text-slate-700">
+                        Returned By: {log.returnedBy || log.borrower || "N/A"}
+                      </p>
+                    )}
                     <p className="text-xs font-bold text-slate-700">Department: {log.department || "N/A"}</p>
                     <p className="text-[10px] font-bold text-slate-500 uppercase">
                       {new Date(log.date).toLocaleString()}

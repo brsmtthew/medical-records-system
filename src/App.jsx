@@ -1,6 +1,8 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
+import { AuthProvider } from "./context/AuthProvider";
+import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/login";
 import AdminDashboard from "./pages/AdminDashboard";
 import Patients from "./pages/Patients";
@@ -11,17 +13,68 @@ import ChartViewing from "./pages/ChartViewing";
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/patients" element={<Patients />} />
-        <Route path="/charts" element={<Charts />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/chart-viewing" element={<ChartViewing />} />
-        <Route path="/chartviewing" element={<ChartViewing />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Login />} />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patients"
+            element={
+              <ProtectedRoute>
+                <Patients />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/charts"
+            element={
+              <ProtectedRoute>
+                <Charts />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute>
+                <Reports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chart-viewing"
+            element={
+              <ProtectedRoute>
+                <ChartViewing />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chartviewing"
+            element={
+              <ProtectedRoute>
+                <ChartViewing />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }

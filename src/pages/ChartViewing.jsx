@@ -74,7 +74,7 @@ export default function ChartViewing() {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
+            <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
               Chart <span className="text-green-700">Viewing</span>
             </h1>
             <p className="text-slate-500 font-medium">

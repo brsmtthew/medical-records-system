@@ -1,76 +1,28 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import {
   AlertTriangle,
   CalendarDays,
   Download,
+  Edit,
   FileText,
   Printer,
   RotateCcw,
+  Save,
   Search,
+  Trash2,
+  X,
 } from "lucide-react";
+import {
+  deleteChartLog,
+  subscribeToChartLogs,
+  updateChartLog,
+} from "../services/firebaseRecords";
 
-const reportLogs = [
-  {
-    id: 1,
-    patientName: "Juan Dela Cruz",
-    caseNumber: "CN-2026-001",
-    borrowedBy: "Nurse Maria",
-    department: "Emergency Room",
-    action: "borrowed",
-    timestamp: "2026-04-24T09:15:00",
-    dueDate: "2026-04-27",
-    remarks: "For ER consultation",
-  },
-  {
-    id: 2,
-    patientName: "Maria Santos",
-    caseNumber: "CN-2026-002",
-    borrowedBy: "Dr. Reyes",
-    department: "Internal Medicine",
-    action: "returned",
-    timestamp: "2026-04-25T14:35:00",
-    dueDate: "2026-04-26",
-    remarks: "Returned complete",
-  },
-  {
-    id: 3,
-    patientName: "Pedro Garcia",
-    caseNumber: "CN-2026-003",
-    borrowedBy: "Billing Office",
-    department: "Billing",
-    action: "borrowed",
-    timestamp: "2026-04-28T10:20:00",
-    dueDate: "2026-05-01",
-    remarks: "For insurance processing",
-  },
-  {
-    id: 4,
-    patientName: "Ana Lim",
-    caseNumber: "CN-2026-004",
-    borrowedBy: "Dr. Santos",
-    department: "Surgery",
-    action: "borrowed",
-    timestamp: "2026-04-20T08:45:00",
-    dueDate: "2026-04-23",
-    remarks: "Pre-op review",
-  },
-  {
-    id: 5,
-    patientName: "Ramon Cruz",
-    caseNumber: "CN-2026-005",
-    borrowedBy: "Records Staff",
-    department: "Medical Records",
-    action: "returned",
-    timestamp: "2026-04-29T16:05:00",
-    dueDate: "2026-04-30",
-    remarks: "Digitization completed",
-  },
-];
-
-const today = new Date("2026-04-30T00:00:00");
+const today = new Date();
 
 function formatDateTime(value) {
+  if (!value) return "N/A";
   return new Date(value).toLocaleString([], {
     year: "numeric",
     month: "short",
@@ -94,9 +46,11 @@ function downloadCsv(rows) {
     "Patient Name",
     "Case Number",
     "Borrowed By",
+    "Returned By",
     "Department",
-    "Action",
-    "Date and Time",
+    "Status",
+    "Borrowed Date",
+    "Returned Date",
     "Due Date",
     "Remarks",
   ];
@@ -105,9 +59,11 @@ function downloadCsv(rows) {
       log.patientName,
       log.caseNumber,
       log.borrowedBy,
+      log.returnedBy || "",
       log.department,
       log.action,
-      formatDateTime(log.timestamp),
+      formatDateTime(log.borrowedAt || log.timestamp),
+      log.returnedAt ? formatDateTime(log.returnedAt) : "",
       log.dueDate,
       log.remarks,
     ]
@@ -126,16 +82,34 @@ function downloadCsv(rows) {
 }
 
 export default function Reports() {
+  const [reportLogs, setReportLogs] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [editLog, setEditLog] = useState(null);
+  const [editError, setEditError] = useState("");
+
+  useEffect(() => {
+    return subscribeToChartLogs(
+      (rows) => {
+        setReportLogs(rows);
+        setIsLoading(false);
+      },
+      (error) => {
+        setLoadError(error.message || "Unable to load reports from Firebase.");
+        setIsLoading(false);
+      },
+    );
+  }, []);
 
   const filteredLogs = useMemo(() => {
     return reportLogs.filter((log) => {
-      const logDate = log.timestamp.slice(0, 10);
+      const logDate = (log.borrowedAt || log.timestamp || "").slice(0, 10);
       const matchesAction = actionFilter === "all" || log.action === actionFilter;
-      const matchesSearch = `${log.patientName} ${log.caseNumber} ${log.borrowedBy} ${log.department}`
+      const matchesSearch = `${log.patientName} ${log.caseNumber} ${log.borrowedBy} ${log.returnedBy || ""} ${log.department}`
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
       const matchesStart = !startDate || logDate >= startDate;
@@ -143,32 +117,32 @@ export default function Reports() {
 
       return matchesAction && matchesSearch && matchesStart && matchesEnd;
     });
-  }, [actionFilter, searchTerm, startDate, endDate]);
+  }, [actionFilter, reportLogs, searchTerm, startDate, endDate]);
 
   const activeBorrowed = reportLogs.filter((log) => log.action === "borrowed");
   const overdueCharts = activeBorrowed.filter((log) => new Date(log.dueDate) < today);
 
   const stats = [
     {
-      label: "Report Records",
+      label: "Total Report Records",
       value: filteredLogs.length,
       icon: FileText,
       tone: "green",
     },
     {
-      label: "Currently Borrowed",
+      label: "Number of Borrowed Charts",
       value: activeBorrowed.length,
       icon: CalendarDays,
       tone: "blue",
     },
     {
-      label: "Returned Charts",
+      label: "Number of Returned Charts",
       value: reportLogs.filter((log) => log.action === "returned").length,
       icon: RotateCcw,
       tone: "green",
     },
     {
-      label: "Overdue Charts",
+      label: "Number of Overdue Charts",
       value: overdueCharts.length,
       icon: AlertTriangle,
       tone: "red",
@@ -182,12 +156,61 @@ export default function Reports() {
     setEndDate("");
   };
 
+  const handleEditLog = (log) => {
+    setEditLog({
+      ...log,
+      borrowedAtInput: (log.borrowedAt || log.timestamp) ? (log.borrowedAt || log.timestamp).slice(0, 16) : "",
+      returnedAtInput: log.returnedAt ? log.returnedAt.slice(0, 16) : "",
+    });
+    setEditError("");
+  };
+
+  const handleUpdateLog = async (event) => {
+    event.preventDefault();
+    if (!editLog.patientName.trim() || !editLog.caseNumber.trim()) {
+      setEditError("Patient name and case number are required.");
+      return;
+    }
+
+    try {
+      await updateChartLog(editLog.id, {
+        patientName: editLog.patientName.trim(),
+        caseNumber: editLog.caseNumber.trim().toUpperCase(),
+        borrowedBy: editLog.borrowedBy.trim(),
+        returnedBy: editLog.returnedBy?.trim() || "",
+        department: editLog.department.trim(),
+        action: editLog.action,
+        timestamp: editLog.borrowedAtInput ? new Date(editLog.borrowedAtInput).toISOString() : "",
+        borrowedAt: editLog.borrowedAtInput ? new Date(editLog.borrowedAtInput).toISOString() : "",
+        returnedAt: editLog.returnedAtInput ? new Date(editLog.returnedAtInput).toISOString() : "",
+        dueDate: editLog.dueDate || "",
+        remarks: editLog.remarks?.trim() || "",
+      });
+      setEditLog(null);
+      setEditError("");
+    } catch (error) {
+      setEditError(error.message || "Unable to update report row.");
+    }
+  };
+
+  const handleDeleteLog = async (log) => {
+    const confirmed = window.confirm(`Delete report row for ${log.caseNumber}?`);
+    if (!confirmed) return;
+
+    try {
+      await deleteChartLog(log.id);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error.message || "Unable to delete report row.");
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
+            <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
               Chart <span className="text-green-700">Reports</span>
             </h1>
             <p className="text-slate-500 font-medium">
@@ -224,7 +247,7 @@ export default function Reports() {
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     {item.label}
                   </p>
-                  <p className="text-3xl font-black text-slate-800 mt-1">{item.value}</p>
+                  <p className="text-2xl font-black text-slate-800 mt-1">{item.value}</p>
                 </div>
                 <div
                   className={`p-2.5 rounded-xl border-2 border-black ${
@@ -254,7 +277,7 @@ export default function Reports() {
                   <input
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="Search patient, case number, borrower, or department"
+                    placeholder="Search patient, case number, borrower, returner, or department"
                     className="w-full border-2 border-black rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
@@ -296,43 +319,56 @@ export default function Reports() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
+            <div className="overflow-hidden">
+              {loadError && (
+                <div className="m-4 border-2 border-red-200 bg-red-50 text-red-700 rounded-xl px-4 py-3 text-xs font-black">
+                  {loadError}
+                </div>
+              )}
+              <table className="w-full table-fixed text-left">
                 <thead>
                   <tr className="border-b-2 border-black bg-white">
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="w-[19%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Patient
                     </th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Handler
+                    <th className="w-[22%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      People
                     </th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="w-[12%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Action
                     </th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Date
+                    <th className="w-[24%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Timeline
                     </th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Remarks
+                    </th>
+                    <th className="w-[9%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4">
-                        <p className="font-black text-slate-800">{log.patientName}</p>
+                      <td className="p-3">
+                        <p className="font-black text-slate-800 break-words">{log.patientName}</p>
                         <p className="text-[10px] font-bold uppercase text-green-700">
                           {log.caseNumber}
                         </p>
                       </td>
-                      <td className="p-4">
-                        <p className="text-sm font-black text-slate-700">{log.borrowedBy}</p>
+                      <td className="p-3">
+                        <p className="text-sm font-black text-slate-700">Borrowed: {log.borrowedBy || "N/A"}</p>
+                        {log.action === "returned" && (
+                          <p className="text-sm font-black text-slate-700">
+                            Returned: {log.returnedBy || log.borrowedBy || "N/A"}
+                          </p>
+                        )}
                         <p className="text-[10px] font-bold uppercase text-slate-400">
                           {log.department}
                         </p>
                       </td>
-                      <td className="p-4">
+                      <td className="p-3">
                         <span
                           className={`inline-flex px-3 py-1 rounded-full border-2 text-[10px] font-black uppercase ${
                             log.action === "borrowed"
@@ -340,30 +376,55 @@ export default function Reports() {
                               : "bg-green-50 text-green-700 border-green-200"
                           }`}
                         >
-                          {log.action}
+                          {log.action === "borrowed" ? "borrowed" : "returned"}
                         </span>
                       </td>
-                      <td className="p-4">
+                      <td className="p-3">
                         <p className="text-sm font-bold text-slate-700">
-                          {formatDateTime(log.timestamp)}
+                          Borrowed: {formatDateTime(log.borrowedAt || log.timestamp)}
                         </p>
+                        {log.action === "returned" && (
+                          <p className="text-sm font-bold text-slate-700">
+                            Returned: {formatDateTime(log.returnedAt)}
+                          </p>
+                        )}
                         <p className="text-[10px] font-bold uppercase text-slate-400">
                           Due: {log.dueDate}
                         </p>
                       </td>
-                      <td className="p-4 text-sm font-semibold text-slate-500">
+                      <td className="p-3 text-sm font-semibold text-slate-500 break-words">
                         {log.remarks}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => handleEditLog(log)}
+                            className="p-2 rounded-xl border-2 border-transparent hover:border-black hover:bg-slate-50 text-slate-500 hover:text-black transition-colors"
+                            aria-label={`Edit report row ${log.caseNumber}`}
+                          >
+                            <Edit size={17} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLog(log)}
+                            className="p-2 rounded-xl border-2 border-transparent hover:border-red-200 hover:bg-red-50 text-red-500 transition-colors"
+                            aria-label={`Delete report row ${log.caseNumber}`}
+                          >
+                            <Trash2 size={17} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
 
                   {filteredLogs.length === 0 && (
                     <tr>
-                      <td colSpan="5" className="p-10 text-center">
+                      <td colSpan="6" className="p-10 text-center">
                         <FileText size={38} className="mx-auto text-slate-300 mb-3" />
-                        <p className="font-black text-slate-700 uppercase">No records found</p>
+                        <p className="font-black text-slate-700 uppercase">
+                          {isLoading ? "Loading reports..." : "No records found"}
+                        </p>
                         <p className="text-sm text-slate-400 font-semibold mt-1">
-                          Try changing the search, action, or date filter.
+                          {isLoading ? "Reading logs from Firebase." : "Borrow or return a chart to create report logs."}
                         </p>
                       </td>
                     </tr>
@@ -399,8 +460,13 @@ export default function Reports() {
                     </span>
                   </div>
                   <p className="text-xs font-bold text-slate-600 mt-3">
-                    Borrowed by {chart.borrowedBy}
+                    Borrowed by {chart.borrowedBy || "N/A"}
                   </p>
+                  {chart.returnedBy && (
+                    <p className="text-xs font-bold text-slate-600 mt-1">
+                      Returned by {chart.returnedBy}
+                    </p>
+                  )}
                   <p className="text-[10px] font-bold uppercase text-slate-400">
                     Due {chart.dueDate} • {chart.department}
                   </p>
@@ -419,6 +485,141 @@ export default function Reports() {
           </div>
         </div>
       </div>
+
+      {editLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setEditLog(null)} />
+          <div className="relative bg-white border-4 border-black rounded-[2rem] p-6 w-full max-w-2xl shadow-[12px_12px_0_0_rgba(0,0,0,1)]">
+            <button
+              onClick={() => setEditLog(null)}
+              className="absolute top-4 right-4 p-2 rounded-xl hover:bg-slate-100"
+              aria-label="Close edit report row"
+            >
+              <X size={20} />
+            </button>
+
+            <h2 className="text-2xl font-black text-slate-800 uppercase mb-1">Edit Report Row</h2>
+            <p className="text-xs font-bold text-slate-400 uppercase mb-5">
+              Correct audit log values without changing the current chart status.
+            </p>
+
+            <form onSubmit={handleUpdateLog} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400">Patient Name</span>
+                  <input
+                    value={editLog.patientName}
+                    onChange={(event) => setEditLog({ ...editLog, patientName: event.target.value })}
+                    className="w-full border-2 border-black rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400">Case Number</span>
+                  <input
+                    value={editLog.caseNumber}
+                    onChange={(event) => setEditLog({ ...editLog, caseNumber: event.target.value.toUpperCase() })}
+                    className="w-full border-2 border-black rounded-xl p-3 font-mono font-bold outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400">Borrowed By</span>
+                  <input
+                    value={editLog.borrowedBy || ""}
+                    onChange={(event) => setEditLog({ ...editLog, borrowedBy: event.target.value })}
+                    className="w-full border-2 border-black rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400">Returned By</span>
+                  <input
+                    value={editLog.returnedBy || ""}
+                    onChange={(event) => setEditLog({ ...editLog, returnedBy: event.target.value })}
+                    className="w-full border-2 border-black rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400">Department</span>
+                  <input
+                    value={editLog.department || ""}
+                    onChange={(event) => setEditLog({ ...editLog, department: event.target.value })}
+                    className="w-full border-2 border-black rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400">Action</span>
+                  <select
+                    value={editLog.action}
+                    onChange={(event) => setEditLog({ ...editLog, action: event.target.value })}
+                    className="w-full border-2 border-black rounded-xl p-3 font-bold bg-white outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="borrowed">Borrowed</option>
+                    <option value="returned">Returned</option>
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400">Borrowed Date and Time</span>
+                  <input
+                    type="datetime-local"
+                    value={editLog.borrowedAtInput}
+                    onChange={(event) => setEditLog({ ...editLog, borrowedAtInput: event.target.value })}
+                    className="w-full border-2 border-black rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400">Returned Date and Time</span>
+                  <input
+                    type="datetime-local"
+                    value={editLog.returnedAtInput}
+                    onChange={(event) => setEditLog({ ...editLog, returnedAtInput: event.target.value })}
+                    className="w-full border-2 border-black rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-black uppercase text-slate-400">Due Date</span>
+                  <input
+                    type="date"
+                    value={editLog.dueDate || ""}
+                    onChange={(event) => setEditLog({ ...editLog, dueDate: event.target.value })}
+                    className="w-full border-2 border-black rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </label>
+              </div>
+
+              <label className="space-y-1 block">
+                <span className="text-[10px] font-black uppercase text-slate-400">Remarks</span>
+                <textarea
+                  value={editLog.remarks || ""}
+                  onChange={(event) => setEditLog({ ...editLog, remarks: event.target.value })}
+                  className="w-full min-h-24 border-2 border-black rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </label>
+
+              {editError && (
+                <div className="border-2 border-red-200 bg-red-50 text-red-700 rounded-xl px-4 py-3 text-xs font-black">
+                  {editError}
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditLog(null)}
+                  className="px-5 py-3 rounded-xl text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-green-700 text-white text-xs font-black uppercase shadow-[4px_4px_0_0_#052e16] active:translate-y-1 active:shadow-none"
+                >
+                  <Save size={17} />
+                  Save Row
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

@@ -1,15 +1,27 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import {
   Bell,
+  Check,
+  Edit,
   FileText,
   MonitorCog,
+  Plus,
   RotateCcw,
   Save,
   Settings as SettingsIcon,
   ShieldCheck,
   SlidersHorizontal,
+  Trash2,
+  X,
 } from "lucide-react";
+import {
+  addDepartment,
+  deleteDepartment,
+  fallbackDepartments,
+  subscribeToDepartments,
+  updateDepartment,
+} from "../services/firebaseRecords";
 
 const tabs = [
   { id: "general", label: "General", icon: SettingsIcon },
@@ -83,8 +95,22 @@ function Toggle({ label, description, checked, onChange }) {
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("general");
-  const [settings, setSettings] = useState(defaultSettings);
+  const [settings, setSettings] = useState(() => {
+    const storedSettings = localStorage.getItem("mrs-settings");
+    return storedSettings ? { ...defaultSettings, ...JSON.parse(storedSettings) } : defaultSettings;
+  });
   const [savedMessage, setSavedMessage] = useState("");
+  const [departments, setDepartments] = useState([]);
+  const [departmentName, setDepartmentName] = useState("");
+  const [editingDepartment, setEditingDepartment] = useState(null);
+  const [departmentError, setDepartmentError] = useState("");
+
+  useEffect(() => {
+    return subscribeToDepartments(
+      setDepartments,
+      (error) => setDepartmentError(error.message || "Unable to load departments from Firebase."),
+    );
+  }, []);
 
   const activeTabMeta = tabs.find((tab) => tab.id === activeTab) || tabs[0];
   const ActiveIcon = activeTabMeta.icon;
@@ -108,12 +134,65 @@ export default function Settings() {
     setSavedMessage("Settings saved locally.");
   };
 
+  const departmentExists = (name, ignoredId = "") => {
+    return departments.some(
+      (department) =>
+        department.id !== ignoredId &&
+        department.name.trim().toLowerCase() === name.trim().toLowerCase(),
+    );
+  };
+
+  const handleAddDepartment = async (event) => {
+    event.preventDefault();
+    const name = departmentName.trim();
+    if (!name) return;
+    if (departmentExists(name)) {
+      setDepartmentError("That department already exists.");
+      return;
+    }
+
+    try {
+      await addDepartment(name);
+      setDepartmentName("");
+      setDepartmentError("");
+    } catch (error) {
+      setDepartmentError(error.message || "Unable to add department.");
+    }
+  };
+
+  const handleUpdateDepartment = async (event) => {
+    event.preventDefault();
+    const name = editingDepartment?.name.trim();
+    if (!name) return;
+    if (departmentExists(name, editingDepartment.id)) {
+      setDepartmentError("That department already exists.");
+      return;
+    }
+
+    try {
+      await updateDepartment(editingDepartment.id, name);
+      setEditingDepartment(null);
+      setDepartmentError("");
+    } catch (error) {
+      setDepartmentError(error.message || "Unable to update department.");
+    }
+  };
+
+  const handleDeleteDepartment = async (id) => {
+    try {
+      await deleteDepartment(id);
+      setDepartmentError("");
+    } catch (error) {
+      setDepartmentError(error.message || "Unable to delete department.");
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="max-w-7xl">
         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
+            <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
               System <span className="text-green-700">Settings</span>
             </h1>
             <p className="text-slate-500 font-medium">
@@ -184,7 +263,7 @@ export default function Settings() {
                 )}
               </div>
 
-              <div className="p-5 sm:p-6">
+              <div className="p-4 sm:p-5">
                 {activeTab === "general" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Field label="Hospital Name">
@@ -257,6 +336,98 @@ export default function Settings() {
                       checked={settings.highlightOverdue}
                       onChange={(value) => handleChange("highlightOverdue", value)}
                     />
+
+                    <div className="border-2 border-black rounded-2xl overflow-hidden">
+                      <div className="p-4 bg-slate-50 border-b-2 border-black">
+                        <h3 className="font-black uppercase text-slate-800">Hospital Areas</h3>
+                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                          These values appear in the Chart Tracking department dropdown.
+                        </p>
+                      </div>
+
+                      <div className="p-4 space-y-4">
+                        <form onSubmit={handleAddDepartment} className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                          <input
+                            value={departmentName}
+                            onChange={(event) => {
+                              setDepartmentName(event.target.value);
+                              setDepartmentError("");
+                            }}
+                            placeholder="Add hospital area"
+                            className="w-full border-2 border-black rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-green-500"
+                          />
+                          <button
+                            type="submit"
+                            className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-green-700 text-white text-xs font-black uppercase"
+                          >
+                            <Plus size={16} />
+                            Add
+                          </button>
+                        </form>
+
+                        {departmentError && (
+                          <div className="border-2 border-red-200 bg-red-50 text-red-700 rounded-xl px-4 py-3 text-xs font-black">
+                            {departmentError}
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          {departments.map((department) => (
+                            <div
+                              key={department.id}
+                              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 border-2 border-slate-100 rounded-xl p-3"
+                            >
+                              {editingDepartment?.id === department.id ? (
+                                <form onSubmit={handleUpdateDepartment} className="flex-1 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                                  <input
+                                    value={editingDepartment.name}
+                                    onChange={(event) => setEditingDepartment({ ...editingDepartment, name: event.target.value })}
+                                    className="w-full border-2 border-black rounded-xl p-2 font-bold outline-none focus:ring-2 focus:ring-green-500"
+                                  />
+                                  <button type="submit" className="inline-flex items-center justify-center p-2 rounded-xl bg-green-700 text-white">
+                                    <Check size={18} />
+                                  </button>
+                                  <button type="button" onClick={() => setEditingDepartment(null)} className="inline-flex items-center justify-center p-2 rounded-xl border-2 border-slate-200 text-slate-500">
+                                    <X size={18} />
+                                  </button>
+                                </form>
+                              ) : (
+                                <>
+                                  <p className="font-black text-slate-800">{department.name}</p>
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingDepartment(department)}
+                                      className="p-2 rounded-xl border-2 border-slate-200 text-slate-500 hover:border-black hover:text-black"
+                                      aria-label={`Edit ${department.name}`}
+                                    >
+                                      <Edit size={17} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteDepartment(department.id)}
+                                      className="p-2 rounded-xl border-2 border-red-100 text-red-500 hover:border-red-300"
+                                      aria-label={`Delete ${department.name}`}
+                                    >
+                                      <Trash2 size={17} />
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))}
+
+                          {departments.length === 0 && (
+                            <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
+                              <p className="text-sm font-black text-slate-700">No Firebase departments yet.</p>
+                              <p className="text-xs font-semibold text-slate-500 mt-1">
+                                Chart Tracking will temporarily use: {fallbackDepartments.join(", ")}.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 

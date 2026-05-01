@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import Barcode from "react-barcode";
-import { v4 as uuidv4 } from "uuid";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import {
   UserPlus,
@@ -16,24 +15,46 @@ import {
   Users,
   Bed,
   UserRound,
-  Activity,
   X
 } from "lucide-react";
+import {
+  createPatient,
+  deletePatient as deletePatientRecord,
+  subscribeToPatients,
+  updatePatient as updatePatientRecord,
+} from "../services/firebaseRecords";
 
 function normalizeCaseNumber(value) {
   return value.trim().toUpperCase();
 }
 
+function normalizePatientName(value) {
+  return value.trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+function normalizePatientDates(patient) {
+  const admissionDate = patient.admissionDate || "";
+  const dischargeDate = patient.type === "outpatient"
+    ? admissionDate
+    : patient.dischargeDate || "";
+
+  return {
+    ...patient,
+    admissionDate,
+    dischargeDate,
+  };
+}
+
 function exportPatientsCsv(patients) {
-  const headers = ["Patient Name", "Case Number", "Type", "Admission Date", "Discharge Date", "Status"];
+  const headers = ["Patient Name", "Case Number", "Record Type", "Type", "Admission Date", "Discharge Date"];
   const rows = patients.map((patient) =>
     [
       patient.name,
       patient.caseNumber,
+      patient.recordType || "new",
       patient.type,
       patient.admissionDate || "",
       patient.dischargeDate || "",
-      patient.dischargeDate ? "discharged" : "active",
     ]
       .map((value) => `"${String(value).replaceAll('"', '""')}"`)
       .join(",")
@@ -50,62 +71,95 @@ function exportPatientsCsv(patients) {
 }
 
 export default function Patients() {
-  const initialPatients = [
-    { 
-      id: uuidv4(), 
-      name: "Juan Dela Cruz", 
-      caseNumber: "CN-2026-001", 
-      type: "inpatient", 
-      admissionDate: "2026-04-01",
-      dischargeDate: "2026-04-10"
-    },
-    { 
-      id: uuidv4(), 
-      name: "Maria Santos", 
-      caseNumber: "CN-2026-002", 
-      type: "outpatient", 
-      admissionDate: "2026-04-20",
-      dischargeDate: ""
-    },
-  ];
-
-  const [patients, setPatients] = useState(initialPatients);
+  const [patients, setPatients] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [formError, setFormError] = useState("");
   const [editError, setEditError] = useState("");
   const [form, setForm] = useState({ 
-    name: "", caseNumber: "", type: "outpatient", admissionDate: "", dischargeDate: "" 
+    name: "", caseNumber: "", recordType: "new", type: "outpatient", admissionDate: "", dischargeDate: "" 
   });
 
   const [viewPatient, setViewPatient] = useState(null);
   const [editPatient, setEditPatient] = useState(null);
   const [deletePatient, setDeletePatient] = useState(null);
+  const [confirmPatient, setConfirmPatient] = useState(null);
+
+  const formNameMatchesExistingPatient = patients.some(
+    (p) => normalizePatientName(p.name) === normalizePatientName(form.name),
+  );
+
+  useEffect(() => {
+    return subscribeToPatients(
+      (rows) => {
+        setPatients(rows);
+        setIsLoading(false);
+      },
+      (error) => {
+        setFormError(error.message || "Unable to load patients from Firebase.");
+        setIsLoading(false);
+      },
+    );
+  }, []);
+
+  const buildPatientFromForm = () => {
+    const caseNumber = normalizeCaseNumber(form.caseNumber);
+    if (!form.name.trim() || !caseNumber || !form.admissionDate) {
+      setFormError("Enter the patient name, case number, and date.");
+      return null;
+    }
+    if (form.type === "inpatient" && !form.dischargeDate) {
+      setFormError("Discharge date is required for inpatient records.");
+      return null;
+    }
+    if (patients.some((p) => normalizeCaseNumber(p.caseNumber) === caseNumber)) {
+      setFormError("A patient with this case number already exists.");
+      return null;
+    }
+
+    const patientName = normalizePatientName(form.name);
+    const hasPreviousRecord = patients.some((p) => normalizePatientName(p.name) === patientName);
+
+    return normalizePatientDates({
+      ...form,
+      name: patientName,
+      recordType: hasPreviousRecord ? "old" : "new",
+      caseNumber,
+    });
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const caseNumber = normalizeCaseNumber(form.caseNumber);
-    if (!form.name.trim() || !caseNumber) return;
-    if (patients.some((p) => normalizeCaseNumber(p.caseNumber) === caseNumber)) {
-      setFormError("A patient with this case number already exists.");
-      return;
-    }
-
-    const newPatient = {
-      ...form,
-      name: form.name.trim(),
-      caseNumber,
-      id: uuidv4(),
-    };
-    setPatients([newPatient, ...patients]);
-    setForm({ name: "", caseNumber: "", type: "outpatient", admissionDate: "", dischargeDate: "" });
-    setFormError("");
+    const newPatient = buildPatientFromForm();
+    if (!newPatient) return;
+    setConfirmPatient(newPatient);
   };
 
-  const handleUpdate = (e) => {
+  const handleConfirmCreate = async () => {
+    if (!confirmPatient) return;
+    try {
+      await createPatient(confirmPatient);
+      setForm({ name: "", caseNumber: "", recordType: "new", type: "outpatient", admissionDate: "", dischargeDate: "" });
+      setFormError("");
+      setConfirmPatient(null);
+    } catch (error) {
+      setFormError(error.message || "Unable to save patient to Firebase.");
+      setConfirmPatient(null);
+    }
+  };
+
+  const handleUpdate = async (e) => {
     e.preventDefault();
     const caseNumber = normalizeCaseNumber(editPatient.caseNumber);
+    if (!editPatient.name.trim() || !caseNumber || !editPatient.admissionDate) {
+      setEditError("Patient name, case number, and date are required.");
+      return;
+    }
+    if (editPatient.type === "inpatient" && !editPatient.dischargeDate) {
+      setEditError("Discharge date is required for inpatient records.");
+      return;
+    }
     const duplicateCase = patients.some(
       (p) => p.id !== editPatient.id && normalizeCaseNumber(p.caseNumber) === caseNumber
     );
@@ -114,18 +168,34 @@ export default function Patients() {
       return;
     }
 
-    setPatients(patients.map((p) => (
-      p.id === editPatient.id
-        ? { ...editPatient, name: editPatient.name.trim(), caseNumber }
-        : p
-    )));
-    setEditPatient(null);
-    setEditError("");
+    const patientName = normalizePatientName(editPatient.name);
+    const hasPreviousRecord = patients.some(
+      (p) => p.id !== editPatient.id && normalizePatientName(p.name) === patientName,
+    );
+
+    try {
+      await updatePatientRecord(editPatient.previousCaseNumber || editPatient.id, normalizePatientDates({
+        name: patientName,
+        caseNumber,
+        recordType: hasPreviousRecord ? "old" : editPatient.recordType || "new",
+        type: editPatient.type,
+        admissionDate: editPatient.admissionDate || "",
+        dischargeDate: editPatient.dischargeDate || "",
+      }));
+      setEditPatient(null);
+      setEditError("");
+    } catch (error) {
+      setEditError(error.message || "Unable to update patient in Firebase.");
+    }
   };
 
-  const handleDelete = (id) => {
-    setPatients(patients.filter((p) => p.id !== id));
-    setDeletePatient(null);
+  const handleDelete = async (caseNumber) => {
+    try {
+      await deletePatientRecord(caseNumber);
+      setDeletePatient(null);
+    } catch (error) {
+      setFormError(error.message || "Unable to delete patient from Firebase.");
+    }
   };
 
   const downloadBarcode = (caseNumber) => {
@@ -155,29 +225,25 @@ export default function Patients() {
     const search = searchTerm.trim().toLowerCase();
 
     return patients.filter((p) => {
-      const patientStatus = p.dischargeDate ? "discharged" : "active";
       const matchesSearch =
         !search ||
         p.name.toLowerCase().includes(search) ||
         p.caseNumber.toLowerCase().includes(search);
       const matchesType = typeFilter === "all" || p.type === typeFilter;
-      const matchesStatus = statusFilter === "all" || patientStatus === statusFilter;
 
-      return matchesSearch && matchesType && matchesStatus;
+      return matchesSearch && matchesType;
     });
-  }, [patients, searchTerm, typeFilter, statusFilter]);
+  }, [patients, searchTerm, typeFilter]);
 
   const stats = [
     { label: "Total Patients", value: patients.length, icon: Users, color: "bg-green-100 text-green-700" },
     { label: "Inpatients", value: patients.filter((p) => p.type === "inpatient").length, icon: Bed, color: "bg-emerald-100 text-emerald-700" },
     { label: "Outpatients", value: patients.filter((p) => p.type === "outpatient").length, icon: UserRound, color: "bg-blue-100 text-blue-700" },
-    { label: "Active Records", value: patients.filter((p) => !p.dischargeDate).length, icon: Activity, color: "bg-amber-100 text-amber-700" },
   ];
 
   const resetFilters = () => {
     setSearchTerm("");
     setTypeFilter("all");
-    setStatusFilter("all");
   };
 
   return (
@@ -185,8 +251,8 @@ export default function Patients() {
       {/* HEADER SECTION */}
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4 mb-6 px-2">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-gray-900">
-            Patient <span className="text-green-600">Registry</span>
+          <h1 className="text-3xl font-black tracking-tight text-gray-900">
+            PATIENT <span className="text-green-600">REGISTRY</span>
           </h1>
           <p className="text-gray-400 text-sm font-medium mt-1">Hospital Records & Management</p>
         </div>
@@ -202,7 +268,7 @@ export default function Patients() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
         {stats.map((item) => (
           <div
             key={item.label}
@@ -213,7 +279,7 @@ export default function Patients() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   {item.label}
                 </p>
-                <p className="text-3xl font-black text-slate-800 mt-1">{item.value}</p>
+                <p className="text-2xl font-black text-slate-800 mt-1">{item.value}</p>
               </div>
               <div className={`p-2.5 rounded-xl border-2 border-black ${item.color}`}>
                 <item.icon size={21} />
@@ -224,7 +290,7 @@ export default function Patients() {
       </div>
 
       <div className="bg-white border-2 border-black rounded-2xl p-4 mb-8 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
+        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto]">
           <div className="relative group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 size-5" />
             <input
@@ -245,16 +311,6 @@ export default function Patients() {
             <option value="outpatient">Outpatients</option>
           </select>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border-2 border-black rounded-xl px-4 py-3 text-sm font-black outline-none bg-white"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="discharged">Discharged</option>
-          </select>
-
           <button
             onClick={resetFilters}
             className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-slate-200 text-xs font-black uppercase text-slate-500 hover:border-black hover:text-black transition-colors"
@@ -265,36 +321,45 @@ export default function Patients() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-12 gap-8">
+      <div className="grid lg:grid-cols-12 gap-5">
         {/* LEFT: REGISTRATION FORM WITH BLACK BORDER */}
         <div className="lg:col-span-4">
-          <div className="bg-white p-8 rounded-[2.5rem] border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sticky top-8">
-            <div className="flex items-center gap-3 mb-8">
+          <div className="bg-white p-5 rounded-2xl border-2 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] sticky top-5">
+            <div className="flex items-center gap-3 mb-5">
               <div className="p-3 bg-green-100 border-2 border-black text-black rounded-2xl">
                 <UserPlus size={24} />
               </div>
-              <h2 className="font-black text-xl text-gray-900 uppercase tracking-tight">Register</h2>
+              <h2 className="font-black text-xl text-gray-900 uppercase tracking-tight">Register Patient</h2>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-3">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Patient Name</label>
                 <input
-                  className="w-full border-2 border-black p-4 rounded-xl bg-gray-50 focus:bg-white transition-all outline-none text-sm font-bold"
+                  className="w-full border-2 border-black p-3 rounded-xl bg-gray-50 focus:bg-white transition-all outline-none text-sm font-bold"
                   value={form.name}
                   onChange={(e) => {
-                    setForm({ ...form, name: e.target.value });
+                    const name = e.target.value;
+                    const hasExistingRecord = patients.some(
+                      (p) => normalizePatientName(p.name) === normalizePatientName(name),
+                    );
+                    setForm({ ...form, name, recordType: hasExistingRecord ? "old" : "new" });
                     setFormError("");
                   }}
                   placeholder="Full Name"
                   required
                 />
+                {formNameMatchesExistingPatient && (
+                  <p className="text-[10px] font-black uppercase text-amber-600 px-1">
+                    Existing patient name found. This record will be marked old/readmission.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Case ID</label>
                 <input
-                  className="w-full border-2 border-black p-4 rounded-xl bg-gray-50 focus:bg-white transition-all outline-none font-mono text-sm font-bold"
+                  className="w-full border-2 border-black p-3 rounded-xl bg-gray-50 focus:bg-white transition-all outline-none font-mono text-sm font-bold"
                   value={form.caseNumber}
                   onChange={(e) => {
                     setForm({ ...form, caseNumber: e.target.value.toUpperCase() });
@@ -318,16 +383,30 @@ export default function Patients() {
                     type="date"
                     className="w-full border-2 border-black p-3 rounded-xl bg-gray-50 outline-none text-xs font-bold"
                     value={form.admissionDate}
-                    onChange={(e) => setForm({ ...form, admissionDate: e.target.value })}
+                    onChange={(e) => {
+                      const admissionDate = e.target.value;
+                      setForm({
+                        ...form,
+                        admissionDate,
+                        dischargeDate: form.type === "outpatient" ? admissionDate : form.dischargeDate,
+                      });
+                      setFormError("");
+                    }}
+                    required
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Discharge</label>
                   <input
                     type="date"
-                    className="w-full border-2 border-black p-3 rounded-xl bg-gray-50 outline-none text-xs font-bold"
+                    className="w-full border-2 border-black p-3 rounded-xl bg-gray-50 outline-none text-xs font-bold disabled:bg-slate-100 disabled:text-slate-400"
                     value={form.dischargeDate}
-                    onChange={(e) => setForm({ ...form, dischargeDate: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, dischargeDate: e.target.value });
+                      setFormError("");
+                    }}
+                    disabled={form.type === "outpatient"}
+                    required={form.type === "inpatient"}
                   />
                 </div>
               </div>
@@ -335,16 +414,24 @@ export default function Patients() {
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Care Status</label>
                 <select
-                  className="w-full border-2 border-black p-4 rounded-xl bg-gray-50 outline-none text-sm font-bold cursor-pointer"
+                  className="w-full border-2 border-black p-3 rounded-xl bg-gray-50 outline-none text-sm font-bold cursor-pointer"
                   value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  onChange={(e) => {
+                    const type = e.target.value;
+                    setForm({
+                      ...form,
+                      type,
+                      dischargeDate: type === "outpatient" ? form.admissionDate : "",
+                    });
+                    setFormError("");
+                  }}
                 >
                   <option value="outpatient">Outpatient</option>
                   <option value="inpatient">Inpatient</option>
                 </select>
               </div>
 
-              <button className="w-full bg-green-500 hover:bg-green-600 border-2 border-black text-black py-4 rounded-xl font-black transition-all active:translate-y-1 active:shadow-none shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-2 mt-4">
+              <button className="w-full bg-green-500 hover:bg-green-600 border-2 border-black text-black py-3 rounded-xl font-black transition-all active:translate-y-1 active:shadow-none shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-2 mt-2">
                 ADD RECORD <ArrowRight size={18} />
               </button>
             </form>
@@ -362,40 +449,49 @@ export default function Patients() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full border-separate border-spacing-y-4">
+          <div className="overflow-hidden">
+            <table className="w-full table-fixed border-separate border-spacing-y-2">
               <thead>
                 <tr className="text-left">
-                  <th className="px-6 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Patient Details</th>
-                  <th className="px-6 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Dates</th>
-                  <th className="px-6 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</th>
-                  <th className="px-6 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                  <th className="w-[38%] px-3 py-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Patient Details</th>
+                  <th className="w-[27%] px-3 py-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Dates</th>
+                  <th className="w-[18%] px-3 py-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</th>
+                  <th className="w-[17%] px-3 py-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredPatients.map((p) => (
                   <tr key={p.id} className="bg-white transition-all">
-                    <td className="px-6 py-5 rounded-l-2xl border-y-2 border-l-2 border-black shadow-[0px_4px_0px_0px_rgba(0,0,0,0.05)]">
-                      <div className="font-black text-gray-900 text-base">{p.name}</div>
-                      <code className="text-[10px] font-mono text-green-900 font-bold">{p.caseNumber}</code>
+                    <td className="px-3 py-3 rounded-l-xl border-y-2 border-l-2 border-black shadow-[0px_4px_0px_0px_rgba(0,0,0,0.05)]">
+                      <div className="font-black text-gray-900 text-base uppercase leading-tight break-words">{p.name}</div>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <code className="text-xs font-mono text-green-900 font-black tracking-wide">{p.caseNumber}</code>
+                        <span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase ${
+                          (p.recordType || "new") === "old"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-green-50 text-green-700 border-green-200"
+                        }`}>
+                          {(p.recordType || "new") === "old" ? "Old / Readmit" : "New"}
+                        </span>
+                      </div>
                     </td>
-                    <td className="px-6 py-5 border-y-2 border-black">
+                    <td className="px-3 py-3 border-y-2 border-black">
                       <div className="text-[11px] font-black text-700 uppercase">Admission: {p.admissionDate || "--"}</div>
                       <div className="text-[11px] font-black text-700 uppercase">Discharge: {p.dischargeDate || "Active"}</div>
                     </td>
-                    <td className="px-6 py-5 border-y-2 border-black">
+                    <td className="px-3 py-3 border-y-2 border-black">
                       <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border-2 border-black ${
                         p.type === 'inpatient' ? 'bg-green-400 text-white' : 'bg-blue-400 text-white'
                       }`}>
                         {p.type}
                       </span>
                     </td>
-                    <td className="px-6 py-5 rounded-r-2xl border-y-2 border-r-2 border-black text-right">
+                    <td className="px-3 py-3 rounded-r-xl border-y-2 border-r-2 border-black text-right">
                       <div className="flex justify-end gap-2">
                         <button onClick={() => setViewPatient(p)} className="p-2 border-2 border-transparent hover:border-black hover:bg-gray-50 rounded-xl transition-all">
                           <Eye size={18} />
                         </button>
-                        <button onClick={() => { setEditPatient(p); setEditError(""); }} className="p-2 border-2 border-transparent hover:border-black hover:bg-gray-50 rounded-xl transition-all">
+                        <button onClick={() => { setEditPatient({ ...p, previousCaseNumber: p.caseNumber }); setEditError(""); }} className="p-2 border-2 border-transparent hover:border-black hover:bg-gray-50 rounded-xl transition-all">
                           <Edit size={18} />
                         </button>
                         <button onClick={() => setDeletePatient(p)} className="p-2 border-2 border-transparent hover:border-black hover:bg-red-50 text-red-500 rounded-xl transition-all">
@@ -410,9 +506,11 @@ export default function Patients() {
                   <tr>
                     <td colSpan="4" className="bg-white rounded-2xl border-2 border-black p-10 text-center">
                       <ClipboardList size={40} className="mx-auto text-slate-300 mb-3" />
-                      <p className="font-black text-slate-700 uppercase">No patients found</p>
+                      <p className="font-black text-slate-700 uppercase">
+                        {isLoading ? "Loading patients..." : "No patients found"}
+                      </p>
                       <p className="text-sm text-slate-400 font-semibold mt-1">
-                        Try changing the search, type, or status filter.
+                        {isLoading ? "Reading records from Firebase." : "Try changing the search or type filter."}
                       </p>
                     </td>
                   </tr>
@@ -437,7 +535,18 @@ export default function Patients() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1 col-span-2">
                     <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Patient Name</label>
-                    <input className="w-full border-2 border-black p-4 rounded-xl font-bold outline-none focus:bg-gray-50" value={editPatient.name} onChange={(e) => setEditPatient({ ...editPatient, name: e.target.value })} required />
+                    <input
+                      className="w-full border-2 border-black p-4 rounded-xl font-bold outline-none focus:bg-gray-50"
+                      value={editPatient.name}
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        const hasExistingRecord = patients.some(
+                          (p) => p.id !== editPatient.id && normalizePatientName(p.name) === normalizePatientName(name),
+                        );
+                        setEditPatient({ ...editPatient, name, recordType: hasExistingRecord ? "old" : editPatient.recordType || "new" });
+                      }}
+                      required
+                    />
                   </div>
                   <div className="space-y-1 col-span-2">
                     <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Case Number</label>
@@ -450,15 +559,62 @@ export default function Patients() {
                   )}
                   <div className="space-y-1">
                     <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Admission</label>
-                    <input type="date" className="w-full border-2 border-black p-3 rounded-xl font-bold" value={editPatient.admissionDate} onChange={(e) => setEditPatient({ ...editPatient, admissionDate: e.target.value })} />
+                    <input
+                      type="date"
+                      className="w-full border-2 border-black p-3 rounded-xl font-bold"
+                      value={editPatient.admissionDate}
+                      onChange={(e) => {
+                        const admissionDate = e.target.value;
+                        setEditPatient({
+                          ...editPatient,
+                          admissionDate,
+                          dischargeDate: editPatient.type === "outpatient" ? admissionDate : editPatient.dischargeDate,
+                        });
+                        setEditError("");
+                      }}
+                      required
+                    />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Discharge</label>
-                    <input type="date" className="w-full border-2 border-black p-3 rounded-xl font-bold" value={editPatient.dischargeDate} onChange={(e) => setEditPatient({ ...editPatient, dischargeDate: e.target.value })} />
+                    <input
+                      type="date"
+                      className="w-full border-2 border-black p-3 rounded-xl font-bold disabled:bg-slate-100 disabled:text-slate-400"
+                      value={editPatient.dischargeDate}
+                      onChange={(e) => {
+                        setEditPatient({ ...editPatient, dischargeDate: e.target.value });
+                        setEditError("");
+                      }}
+                      disabled={editPatient.type === "outpatient"}
+                      required={editPatient.type === "inpatient"}
+                    />
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Patient Record</label>
+                    <select
+                      className="w-full border-2 border-black p-4 rounded-xl font-bold"
+                      value={editPatient.recordType || "new"}
+                      onChange={(e) => setEditPatient({ ...editPatient, recordType: e.target.value })}
+                    >
+                      <option value="new">New Patient</option>
+                      <option value="old">Old Patient / Readmission</option>
+                    </select>
                   </div>
                   <div className="space-y-1 col-span-2">
                     <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Care Status</label>
-                    <select className="w-full border-2 border-black p-4 rounded-xl font-bold" value={editPatient.type} onChange={(e) => setEditPatient({ ...editPatient, type: e.target.value })}>
+                    <select
+                      className="w-full border-2 border-black p-4 rounded-xl font-bold"
+                      value={editPatient.type}
+                      onChange={(e) => {
+                        const type = e.target.value;
+                        setEditPatient({
+                          ...editPatient,
+                          type,
+                          dischargeDate: type === "outpatient" ? editPatient.admissionDate : "",
+                        });
+                        setEditError("");
+                      }}
+                    >
                       <option value="outpatient">Outpatient</option>
                       <option value="inpatient">Inpatient</option>
                     </select>
@@ -488,6 +644,12 @@ export default function Patients() {
                 
                 <div className="grid grid-cols-2 gap-4 mb-8">
                   <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
+                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Record</p>
+                    <p className="font-black text-gray-900 uppercase">
+                      {(viewPatient.recordType || "new") === "old" ? "Old / Readmission" : "New Patient"}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
                     <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Admission</p>
                     <p className="font-black text-gray-900">{viewPatient.admissionDate || "N/A"}</p>
                   </div>
@@ -499,10 +661,6 @@ export default function Patients() {
                     <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Type</p>
                     <p className="font-black text-gray-900 capitalize">{viewPatient.type}</p>
                   </div>
-                  <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
-                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Status</p>
-                    <p className="font-black text-gray-900">{viewPatient.dischargeDate ? "Discharged" : "Active"}</p>
-                  </div>
                 </div>
 
                 <div className="p-6 bg-white border-2 border-black rounded-2xl mb-8 flex justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
@@ -512,6 +670,74 @@ export default function Patients() {
                 <button onClick={() => downloadBarcode(viewPatient.caseNumber)} className="w-full flex items-center justify-center gap-3 bg-black text-white py-4 rounded-xl font-black hover:bg-gray-900 transition-all shadow-[4px_4px_0px_0px_rgba(0,255,0,0.3)]" >
                   <Download size={20} /> Download PNG
                 </button>
+            </Motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ADD CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {confirmPatient && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <Motion.div className="absolute inset-0 bg-black/40" onClick={() => setConfirmPatient(null)} />
+            <Motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              className="relative bg-white p-7 rounded-2xl border-4 border-black shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] max-w-md w-full"
+            >
+              <div className="flex items-center gap-3 mb-5">
+                <div className="p-3 bg-green-100 border-2 border-black rounded-2xl">
+                  <UserPlus size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-gray-900 uppercase">Add Patient Record?</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase">Please review before saving</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 mb-6">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-slate-400">Patient</p>
+                  <p className="font-black text-slate-900 uppercase">{confirmPatient.name}</p>
+                  <p className="font-mono text-sm font-black text-green-800">{confirmPatient.caseNumber}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-slate-400">Record</p>
+                    <p className="font-black text-slate-800 uppercase">
+                      {confirmPatient.recordType === "old" ? "Old / Readmission" : "New Patient"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-slate-400">Type</p>
+                    <p className="font-black text-slate-800 uppercase">{confirmPatient.type}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-slate-400">Admission</p>
+                    <p className="font-black text-slate-800">{confirmPatient.admissionDate}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-slate-400">Discharge</p>
+                    <p className="font-black text-slate-800">{confirmPatient.dischargeDate}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmPatient(null)}
+                  className="flex-1 py-3 font-black text-gray-500 uppercase"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmCreate}
+                  className="flex-1 py-3 bg-green-600 text-white border-2 border-black rounded-xl font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1"
+                >
+                  Confirm
+                </button>
+              </div>
             </Motion.div>
           </div>
         )}
@@ -528,7 +754,7 @@ export default function Patients() {
               <p className="text-gray-500 font-bold text-sm mb-10 leading-tight">Are you sure you want to remove <span className="text-black">{deletePatient.name}</span>?</p>
               <div className="flex gap-4">
                 <button onClick={() => setDeletePatient(null)} className="flex-1 py-4 font-black text-gray-400 uppercase">No</button>
-                <button onClick={() => handleDelete(deletePatient.id)} className="flex-1 py-4 bg-red-500 text-white border-2 border-black rounded-xl font-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1">Yes</button>
+                <button onClick={() => handleDelete(deletePatient.caseNumber)} className="flex-1 py-4 bg-red-500 text-white border-2 border-black rounded-xl font-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1">Yes</button>
               </div>
             </Motion.div>
           </div>

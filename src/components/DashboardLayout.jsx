@@ -5,12 +5,26 @@ import Navbar from "./Navbar";
 
 export default function DashboardLayout({ children }) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem("mrs-sidebar-collapsed") === "true";
+  });
+
+  const toggleSidebarCollapsed = () => {
+    setIsSidebarCollapsed((value) => {
+      const nextValue = !value;
+      localStorage.setItem("mrs-sidebar-collapsed", String(nextValue));
+      return nextValue;
+    });
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
       {/* SIDEBAR - Fixed width, non-scrolling */}
       <aside className="hidden lg:block shrink-0">
-        <Sidebar />
+        <Sidebar
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={toggleSidebarCollapsed}
+        />
       </aside>
 
       <AnimatePresence>
@@ -57,7 +71,7 @@ export default function DashboardLayout({ children }) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
-            className="p-6 md:p-8 min-h-full flex flex-col"
+            className="p-4 md:p-5 min-h-full flex flex-col"
           >
             {/* Main Page Content */}
             <div className="flex-1">

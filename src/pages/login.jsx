@@ -1,5 +1,14 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  createUserWithEmailAndPassword,
+  setPersistence,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
@@ -8,33 +17,119 @@ import {
   LockKeyhole,
   Mail,
   ShieldCheck,
+  UserRound,
 } from "lucide-react";
 import logo from "../assets/TGMCI_LOGO.png";
+import { useAuth } from "../context/useAuth";
+import { auth, db } from "../firebase";
+
+const authErrorMessages = {
+  "auth/email-already-in-use": "An account already exists for this email. Sign in instead.",
+  "auth/invalid-credential": "The email or password is incorrect.",
+  "auth/invalid-email": "Enter a valid department email address.",
+  "auth/operation-not-allowed": "Email/password sign-in is not enabled in Firebase Authentication.",
+  "auth/too-many-requests": "Too many failed attempts. Please try again later.",
+  "auth/user-disabled": "This account has been disabled.",
+  "auth/weak-password": "Use a stronger password with at least 6 characters.",
+  "permission-denied": "Firestore blocked this save. Check your Firestore rules and publish them.",
+  "unavailable": "Firebase is unavailable right now. Check your network connection and try again.",
+};
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { authLoading, isAuthenticated, missingFirebaseConfig } = useAuth();
+  const [authMode, setAuthMode] = useState("sign-in");
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
+    fullName: "",
     email: "",
     password: "",
+    confirmPassword: "",
     remember: true,
   });
   const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const redirectTo = location.state?.from?.pathname || "/admin";
+  const isCreateAccount = authMode === "create-account";
+
+  React.useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate(redirectTo, { replace: true });
+    }
+  }, [authLoading, isAuthenticated, navigate, redirectTo]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.email.trim() || !form.password) {
-      setError("Enter your department email and password to continue.");
+    if (!auth) {
+      setError("Firebase is not configured yet. Create a .env file using the values from .env.example.");
       return;
     }
 
-    setError("");
-    navigate("/admin");
+    if (isCreateAccount && !form.fullName.trim()) {
+      setError("Enter your full name to create an account.");
+      return;
+    }
+
+    if (!form.email.trim() || !form.password) {
+      setError(
+        isCreateAccount
+          ? "Enter your department email and password to create an account."
+          : "Enter your department email and password to continue.",
+      );
+      return;
+    }
+
+    if (isCreateAccount && form.password !== form.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError("");
+      await setPersistence(auth, form.remember ? browserLocalPersistence : browserSessionPersistence);
+
+      if (isCreateAccount) {
+        const userCredential = await createUserWithEmailAndPassword(auth, form.email.trim(), form.password);
+        await updateProfile(userCredential.user, {
+          displayName: form.fullName.trim(),
+        });
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+          uid: userCredential.user.uid,
+          fullName: form.fullName.trim(),
+          email: form.email.trim(),
+          role: "staff",
+          department: "Medical Records",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await signInWithEmailAndPassword(auth, form.email.trim(), form.password);
+      }
+
+      navigate(redirectTo, { replace: true });
+    } catch (err) {
+      console.error("Firebase authentication error:", err);
+      setError(
+        authErrorMessages[err.code] ||
+          err.message ||
+          "Unable to sign in. Please check your Firebase Auth setup.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const updateForm = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
+    setError("");
+  };
+
+  const toggleAuthMode = () => {
+    setAuthMode((current) => (current === "sign-in" ? "create-account" : "sign-in"));
     setError("");
   };
 
@@ -101,27 +196,55 @@ export default function Login() {
               </div>
             </div>
             <h2 className="text-3xl font-black text-slate-800 uppercase">
-              Department Sign In
+              {isCreateAccount ? "Create Account" : "Department Sign In"}
             </h2>
             <p className="text-slate-500 mt-1 font-medium">
-              Medical Records Department access only.
+              {isCreateAccount
+                ? "Register your Medical Records Department account."
+                : "Medical Records Department access only."}
             </p>
           </div>
 
           <AnimatePresence mode="wait">
-            {error && (
+            {(missingFirebaseConfig.length > 0 || error) && (
               <Motion.div
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 className="border-2 rounded-xl px-4 py-3 mb-5 text-sm font-bold bg-red-50 border-red-200 text-red-700"
               >
-                {error}
+                {error ||
+                  `Firebase config missing: ${missingFirebaseConfig
+                    .map((key) => `VITE_FIREBASE_${key.replace(/([A-Z])/g, "_$1").toUpperCase()}`)
+                    .join(", ")}`}
               </Motion.div>
             )}
           </AnimatePresence>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <AnimatePresence initial={false}>
+              {isCreateAccount && (
+                <Motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-1 overflow-hidden"
+                >
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Full Name</label>
+                  <div className="relative">
+                    <UserRound size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Juan Dela Cruz"
+                      className="w-full border-2 border-black bg-white pl-11 pr-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 outline-none font-bold"
+                      value={form.fullName}
+                      onChange={(e) => updateForm("fullName", e.target.value)}
+                    />
+                  </div>
+                </Motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Department Email</label>
               <div className="relative">
@@ -158,6 +281,29 @@ export default function Login() {
               </div>
             </div>
 
+            <AnimatePresence initial={false}>
+              {isCreateAccount && (
+                <Motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-1 overflow-hidden"
+                >
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Confirm Password</label>
+                  <div className="relative">
+                    <LockKeyhole size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Confirm password"
+                      className="w-full border-2 border-black bg-white pl-11 pr-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 outline-none font-bold"
+                      value={form.confirmPassword}
+                      onChange={(e) => updateForm("confirmPassword", e.target.value)}
+                    />
+                  </div>
+                </Motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="flex items-center justify-between text-sm px-1 gap-3">
               <label className="flex items-center text-slate-600 cursor-pointer font-semibold">
                 <input
@@ -173,11 +319,28 @@ export default function Login() {
             <Motion.button
               whileHover={{ y: -1 }}
               whileTap={{ scale: 0.98 }}
+              disabled={isSubmitting}
               className="w-full bg-green-700 text-white font-black py-4 rounded-xl border-2 border-black shadow-[4px_4px_0_0_#052e16] active:shadow-none active:translate-y-1 transition-all uppercase flex items-center justify-center gap-2"
             >
-              Enter Department System
+              {isSubmitting
+                ? isCreateAccount
+                  ? "Creating Account..."
+                  : "Signing In..."
+                : isCreateAccount
+                  ? "Create Account"
+                  : "Enter Department System"}
               <ArrowRight size={18} />
             </Motion.button>
+
+            <button
+              type="button"
+              onClick={toggleAuthMode}
+              className="w-full text-sm font-black text-green-700 hover:text-green-900 uppercase"
+            >
+              {isCreateAccount
+                ? "Already have an account? Sign in"
+                : "Need an account? Create one"}
+            </button>
           </form>
         </Motion.div>
       </div>
