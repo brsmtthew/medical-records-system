@@ -1,16 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
+import FloatingToast from "../components/FloatingToast";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import {
-  AlertTriangle,
   Archive,
   CheckCircle2,
   Clock,
   FileText,
   History,
   RotateCcw,
-  ScanLine,
   Search,
+  Table2,
   X,
 } from "lucide-react";
 import {
@@ -19,10 +19,27 @@ import {
   subscribeToCharts,
   subscribeToDepartments,
   updateChart,
-  updateChartLog,
-} from "../services/firebaseRecords";
+  updateChartLogIfExists,
+} from "../services/recordsService";
+import { buildReturnedChartLog, buildReturnedChartUpdate } from "../utils/chartTransactions";
 
 const today = new Date();
+const transactionModes = [
+  {
+    id: "borrow",
+    label: "Borrow Chart",
+    description: "Check out an available physical chart.",
+    icon: FileText,
+    tone: "blue",
+  },
+  {
+    id: "return",
+    label: "Return Chart",
+    description: "Check in a borrowed chart back to records.",
+    icon: RotateCcw,
+    tone: "green",
+  },
+];
 
 function normalizeCaseNumber(value) {
   return value.trim().toUpperCase();
@@ -30,6 +47,10 @@ function normalizeCaseNumber(value) {
 
 function normalizePatientName(value = "") {
   return value.trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+function searchable(value) {
+  return String(value || "").toLowerCase();
 }
 
 function chartCreatedValue(chart) {
@@ -66,6 +87,13 @@ function daysBorrowed(date) {
   );
 }
 
+const fieldClass =
+  "w-full rounded-xl border border-slate-200 bg-white p-3 font-bold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100";
+const softButtonClass =
+  "inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700";
+const modalCardClass =
+  "relative max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/20 sm:p-6";
+
 export default function Charts() {
   const [charts, setCharts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,15 +102,21 @@ export default function Charts() {
   const [borrower, setBorrower] = useState("");
   const [department, setDepartment] = useState("");
   const [returner, setReturner] = useState("");
+  const [transactionMode, setTransactionMode] = useState("");
   const [departments, setDepartments] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedHistory, setSelectedHistory] = useState(null);
   const [confirmTransaction, setConfirmTransaction] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [transactionToast, setTransactionToast] = useState(null);
 
   const setTransactionNotice = (type, message) => {
     setNotice({ type, message });
+  };
+
+  const showTransactionToast = (title, message, details = {}) => {
+    setTransactionToast({ title, message, ...details });
   };
 
   useEffect(() => {
@@ -111,16 +145,70 @@ export default function Charts() {
   const departmentOptions = departments.length > 0
     ? departments.map((item) => item.name)
     : fallbackDepartments;
+  const activeTransaction = transactionModes.find((mode) => mode.id === transactionMode);
+  const activeCaseNumber = transactionMode === "return" ? returnCaseNumber : borrowCaseNumber;
+
+  const selectTransactionMode = (mode) => {
+    setTransactionMode(mode);
+    setStatusFilter(mode === "borrow" ? "available" : "borrowed");
+    setNotice(null);
+  };
+
+  const setCaseNumberForActiveMode = (caseNumber) => {
+    const normalizedCaseNumber = normalizeCaseNumber(caseNumber);
+    if (transactionMode === "return") {
+      setReturnCaseNumber(normalizedCaseNumber);
+    } else {
+      setBorrowCaseNumber(normalizedCaseNumber);
+    }
+  };
+
+  const resetBorrowForm = () => {
+    if (!borrowCaseNumber && !borrower && !department) {
+      setTransactionNotice("info", "No borrow transaction details to reset.");
+      return;
+    }
+    setBorrowCaseNumber("");
+    setBorrower("");
+    setDepartment("");
+    setTransactionNotice("info", "Borrow transaction details were reset.");
+  };
+
+  const resetReturnForm = () => {
+    if (!returnCaseNumber && !returner) {
+      setTransactionNotice("info", "No return transaction details to reset.");
+      return;
+    }
+    setReturnCaseNumber("");
+    setReturner("");
+    setTransactionNotice("info", "Return transaction details were reset.");
+  };
+
+  const handleChartRowSelect = (chart) => {
+    if (!transactionMode) return;
+    const isBorrowMode = transactionMode === "borrow";
+
+    if (isBorrowMode && chart.status === "borrowed") {
+      setTransactionNotice("error", "This chart is already borrowed. Switch to Return Chart to check it in.");
+      return;
+    }
+
+    if (!isBorrowMode && chart.status !== "borrowed") {
+      setTransactionNotice("error", "This chart is already available. Switch to Borrow Chart to check it out.");
+      return;
+    }
+
+    setCaseNumberForActiveMode(chart.caseNumber);
+    setNotice(null);
+  };
 
   const stats = useMemo(() => {
     const borrowed = charts.filter((chart) => chart.status === "borrowed");
-    const overdue = borrowed.filter((chart) => chart.dueDate && new Date(chart.dueDate) < today);
 
     return [
       { label: "Total Charts", value: charts.length, icon: Archive, color: "bg-green-100 text-green-700" },
       { label: "Available", value: charts.filter((chart) => chart.status === "available").length, icon: CheckCircle2, color: "bg-emerald-100 text-emerald-700" },
       { label: "Borrowed", value: borrowed.length, icon: Clock, color: "bg-blue-100 text-blue-700" },
-      { label: "Overdue", value: overdue.length, icon: AlertTriangle, color: "bg-red-100 text-red-700" },
     ];
   }, [charts]);
 
@@ -128,17 +216,15 @@ export default function Charts() {
     const query = searchQuery.trim().toLowerCase();
 
     return charts.filter((chart) => {
-      const isOverdue = chart.status === "borrowed" && chart.dueDate && new Date(chart.dueDate) < today;
       const matchesStatus =
         statusFilter === "all" ||
-        chart.status === statusFilter ||
-        (statusFilter === "overdue" && isOverdue);
+        chart.status === statusFilter;
       const matchesSearch =
         !query ||
-        chart.patientName.toLowerCase().includes(query) ||
-        chart.caseNumber.toLowerCase().includes(query) ||
-        chart.borrower.toLowerCase().includes(query) ||
-        chart.department.toLowerCase().includes(query);
+        searchable(chart.patientName).includes(query) ||
+        searchable(chart.caseNumber).includes(query) ||
+        searchable(chart.borrower).includes(query) ||
+        searchable(chart.department).includes(query);
 
       return matchesStatus && matchesSearch;
     });
@@ -162,15 +248,12 @@ export default function Charts() {
       return;
     }
 
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + 3);
     setConfirmTransaction({
       type: "borrow",
       chart,
       caseNumber,
       borrower: borrower.trim(),
       department,
-      dueDate: dueDate.toISOString().slice(0, 10),
     });
   };
 
@@ -188,7 +271,7 @@ export default function Charts() {
       timestamp: now.toISOString(),
       borrowedAt: now.toISOString(),
       returnedAt: "",
-      dueDate: confirmTransaction.dueDate,
+      dueDate: "",
       remarks: "Chart checked out",
     };
 
@@ -199,7 +282,7 @@ export default function Charts() {
         borrower: confirmTransaction.borrower,
         department: confirmTransaction.department,
         borrowedAt: now.toISOString(),
-        dueDate: confirmTransaction.dueDate,
+        dueDate: "",
         activeLogId,
         history: [
           {
@@ -216,7 +299,12 @@ export default function Charts() {
       setBorrower("");
       setDepartment("");
       setConfirmTransaction(null);
-      setTransactionNotice("success", `${caseNumber} checked out successfully.`);
+      setNotice(null);
+      showTransactionToast("Checkout Complete", `${caseNumber} was checked out successfully.`, {
+        patientName: chart.patientName,
+        caseNumber,
+        action: "Chart Borrowed",
+      });
     } catch (error) {
       setTransactionNotice("error", error.message || "Unable to update chart in Firebase.");
       setConfirmTransaction(null);
@@ -253,53 +341,42 @@ export default function Charts() {
     if (!confirmTransaction || confirmTransaction.type !== "return") return;
     const { chart, caseNumber } = confirmTransaction;
     const now = new Date();
+    const returnedAt = now.toISOString();
+    const returnedLog = buildReturnedChartLog({
+      chart,
+      caseNumber,
+      returner: confirmTransaction.returner,
+      returnedAt,
+    });
+
     try {
       if (chart.activeLogId) {
-        await updateChartLog(chart.activeLogId, {
-          action: "returned",
-          returnedBy: confirmTransaction.returner,
-          returnedAt: now.toISOString(),
-          dueDate: chart.dueDate || "",
-          remarks: "Chart returned",
-        });
+        const updatedActiveLog = await updateChartLogIfExists(chart.activeLogId, returnedLog);
+
+        if (!updatedActiveLog) {
+          await addChartLog({
+            ...returnedLog,
+            remarks: "Chart returned after borrowed report row was deleted",
+          });
+        }
       } else {
-        await addChartLog({
-          action: "returned",
-          patientName: chart.patientName,
-          caseNumber,
-          borrowedBy: chart.borrower || "N/A",
-          returnedBy: confirmTransaction.returner,
-          department: chart.department || "N/A",
-          timestamp: chart.borrowedAt || now.toISOString(),
-          borrowedAt: chart.borrowedAt || now.toISOString(),
-          returnedAt: now.toISOString(),
-          dueDate: chart.dueDate || "",
-          remarks: "Chart returned",
-        });
+        await addChartLog(returnedLog);
       }
 
-      await updateChart(caseNumber, {
-        status: "available",
-        borrower: "",
-        department: "",
-        borrowedAt: "",
-        dueDate: "",
-        activeLogId: "",
-        history: [
-          {
-            action: "checkin",
-            date: now.toISOString(),
-            borrower: chart.borrower || "N/A",
-            returnedBy: confirmTransaction.returner,
-            department: chart.department || "N/A",
-          },
-          ...(chart.history || []),
-        ],
-      });
+      await updateChart(caseNumber, buildReturnedChartUpdate({
+        chart,
+        returner: confirmTransaction.returner,
+        returnedAt,
+      }));
       setReturnCaseNumber("");
       setReturner("");
       setConfirmTransaction(null);
-      setTransactionNotice("success", `${caseNumber} checked in successfully.`);
+      setNotice(null);
+      showTransactionToast("Return Complete", `${caseNumber} was returned successfully.`, {
+        patientName: chart.patientName,
+        caseNumber,
+        action: "Chart Returned",
+      });
     } catch (error) {
       setTransactionNotice("error", error.message || "Unable to update chart in Firebase.");
       setConfirmTransaction(null);
@@ -308,39 +385,28 @@ export default function Charts() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4 mb-6">
+      <div className="min-h-full lg:h-full lg:min-h-0 flex flex-col overflow-visible lg:overflow-hidden">
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-3 mb-4 shrink-0">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tight">
             Chart <span className="text-green-700">Tracking</span>
           </h1>
           <p className="text-slate-500 font-medium">
-            Physical record circulation, borrower accountability, and overdue monitoring.
+            Physical record circulation, borrower accountability, and return monitoring.
           </p>
         </div>
 
-        <div className="relative group w-full xl:w-96">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search size={18} className="text-slate-400 group-focus-within:text-black transition-colors" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search patient, case, borrower, department"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border-2 border-black py-2.5 pl-10 pr-4 rounded-xl font-bold text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:translate-x-[-2px] focus:translate-y-[-2px] focus:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] outline-none transition-all placeholder:text-slate-300"
-          />
-        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mb-3 shrink-0">
         {stats.map((item) => (
-          <div key={item.label} className="bg-white p-5 rounded-2xl border-2 border-black shadow-[5px_5px_0_0_rgba(0,0,0,1)]">
+          <div key={item.label} className="mrs-surface rounded-2xl p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
-                <p className="text-2xl font-black text-slate-800 mt-1">{item.value}</p>
+                <p className="text-xl font-black text-slate-800 mt-1">{item.value}</p>
               </div>
-              <div className={`p-2.5 rounded-xl border-2 border-black ${item.color}`}>
+              <div className={`p-2.5 rounded-xl ${item.color}`}>
                 <item.icon size={21} />
               </div>
             </div>
@@ -348,157 +414,192 @@ export default function Charts() {
         ))}
       </div>
 
-      {notice && (
-        <div
-          className={`mb-4 border-2 rounded-xl px-4 py-3 text-xs font-black ${
-            notice.type === "success"
-              ? "bg-green-50 text-green-700 border-green-200"
-              : "bg-red-50 text-red-700 border-red-200"
-          }`}
-        >
-          {notice.message}
+      <div className="mrs-panel rounded-2xl p-4 mb-3 shrink-0">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="p-2.5 rounded-xl bg-green-50 text-green-700">
+            <Table2 size={21} />
+          </div>
+          <div>
+            <h2 className="font-black uppercase text-slate-800">Select Transaction</h2>
+            <p className="text-xs font-bold text-slate-400">
+              Choose a mode, then scan a barcode or click a chart row to fill the case number.
+            </p>
+          </div>
         </div>
-      )}
 
-      <div className="grid xl:grid-cols-2 gap-5 mb-5">
-        <Motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white border-2 border-black rounded-2xl p-5 shadow-[6px_6px_0_0_rgba(0,0,0,1)]"
-        >
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-red-50 text-red-600 border-2 border-red-100">
-                <FileText size={21} />
-              </div>
-              <div>
-                <h2 className="text-lg font-black uppercase text-slate-800">Borrow Chart</h2>
-                <p className="text-xs font-bold text-slate-400">Check out an available physical chart.</p>
-              </div>
-            </div>
-            <ScanLine size={20} className="text-slate-300" />
-          </div>
+        <div className="grid md:grid-cols-2 gap-3">
+          {transactionModes.map((mode) => {
+            const Icon = mode.icon;
+            const isActive = transactionMode === mode.id;
+            const activeClass = mode.tone === "blue"
+              ? "border-blue-200 bg-blue-50 text-blue-700 ring-4 ring-blue-100"
+              : "border-green-200 bg-green-50 text-green-700 ring-4 ring-green-100";
 
-          <div className="grid md:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Barcode / Case No.</label>
-              <input
-                type="text"
-                placeholder="CN-2026-XXX"
-                value={borrowCaseNumber}
-                onChange={(e) => setBorrowCaseNumber(e.target.value.toUpperCase())}
-                className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-red-200 outline-none font-bold bg-white"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Borrower Name</label>
-              <input
-                type="text"
-                placeholder="e.g. Dr. Richards"
-                value={borrower}
-                onChange={(e) => setBorrower(e.target.value)}
-                className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-red-200 outline-none font-bold bg-white"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Department</label>
-              <select
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-red-200 outline-none font-bold bg-white"
-              >
-                <option value="">Select department</option>
-                {departmentOptions.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <button
-            onClick={prepareCheckout}
-            className="mt-4 w-full bg-red-500 text-white py-3 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_#991b1b] active:shadow-none active:translate-y-1 transition-all inline-flex items-center justify-center gap-2"
-          >
-            <FileText size={16} />
-            Borrow Chart
-          </button>
-        </Motion.div>
-
-        <Motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white border-2 border-black rounded-2xl p-5 shadow-[6px_6px_0_0_rgba(0,0,0,1)]"
-        >
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-green-50 text-green-700 border-2 border-green-100">
-                <RotateCcw size={21} />
-              </div>
-              <div>
-                <h2 className="text-lg font-black uppercase text-slate-800">Return Chart</h2>
-                <p className="text-xs font-bold text-slate-400">Record who returned a borrowed chart.</p>
-              </div>
-            </div>
-            <ScanLine size={20} className="text-slate-300" />
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Barcode / Case No.</label>
-              <input
-                type="text"
-                placeholder="CN-2026-XXX"
-                value={returnCaseNumber}
-                onChange={(e) => setReturnCaseNumber(e.target.value.toUpperCase())}
-                className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold bg-white"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Returned By</label>
-              <input
-                type="text"
-                placeholder="Name of person returning chart"
-                value={returner}
-                onChange={(e) => setReturner(e.target.value)}
-                className="w-full border-2 border-black p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold bg-white"
-              />
-            </div>
-          </div>
-
-          <button
-            onClick={prepareCheckin}
-            className="mt-4 w-full bg-green-600 text-white py-3 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_#14532d] active:shadow-none active:translate-y-1 transition-all inline-flex items-center justify-center gap-2"
-          >
-            <RotateCcw size={16} />
-            Return Chart
-          </button>
-        </Motion.div>
-      </div>
-
-      <div>
-          <div className="mb-4 flex flex-wrap gap-2">
-            {["all", "available", "borrowed", "overdue"].map((filter) => (
+            return (
               <button
-                key={filter}
-                onClick={() => setStatusFilter(filter)}
-                className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase border-2 transition-colors ${
-                  statusFilter === filter
-                    ? "bg-black text-white border-black"
-                    : "bg-white text-slate-500 border-slate-200 hover:border-black"
+                key={mode.id}
+                type="button"
+                onClick={() => selectTransactionMode(mode.id)}
+                className={`flex items-center gap-3 rounded-xl border p-4 text-left transition-all ${
+                  isActive ? activeClass : "border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-200 hover:bg-blue-50"
                 }`}
               >
-                {filter}
+                <Icon size={22} />
+                <span>
+                  <span className="block text-sm font-black uppercase">{mode.label}</span>
+                  <span className={`block text-xs font-semibold mt-0.5 ${isActive ? "opacity-75" : "text-slate-500"}`}>
+                    {mode.description}
+                  </span>
+                </span>
               </button>
-            ))}
+            );
+          })}
+        </div>
+      </div>
+
+      {activeTransaction && (
+        <Motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mrs-panel rounded-2xl p-4 mb-3 shrink-0"
+        >
+        <div className="flex flex-col lg:flex-row lg:items-end gap-3">
+            <div className="space-y-1 flex-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Barcode / Case No.</label>
+              <div>
+                <input
+                  type="text"
+                  placeholder="Scan with barcode device or click a chart row"
+                  value={activeCaseNumber}
+                  onChange={(event) => setCaseNumberForActiveMode(event.target.value)}
+                  className={fieldClass}
+                />
+              </div>
+            </div>
+
+            {transactionMode === "borrow" ? (
+              <>
+                <div className="space-y-1 flex-1">
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Borrower Name</label>
+                  <input
+                    type="text"
+                    placeholder="Borrower name"
+                    value={borrower}
+                    onChange={(event) => setBorrower(event.target.value)}
+                    className={fieldClass}
+                  />
+                </div>
+                <div className="space-y-1 flex-1">
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Department</label>
+                  <select
+                    value={department}
+                    onChange={(event) => setDepartment(event.target.value)}
+                    className={fieldClass}
+                  >
+                    <option value="">Select department</option>
+                    {departmentOptions.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={resetBorrowForm}
+                    className={softButtonClass}
+                  >
+                    <RotateCcw size={17} />
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={prepareCheckout}
+                    className="mrs-blue-button inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-black uppercase transition"
+                  >
+                    <FileText size={17} />
+                    Borrow
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1 flex-1">
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Returned By</label>
+                  <input
+                    type="text"
+                    placeholder="Name of person returning chart"
+                    value={returner}
+                    onChange={(event) => setReturner(event.target.value)}
+                    className={fieldClass}
+                  />
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={resetReturnForm}
+                    className={softButtonClass}
+                  >
+                    <RotateCcw size={17} />
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={prepareCheckin}
+                    className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-black uppercase transition"
+                  >
+                    <RotateCcw size={17} />
+                    Return
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </Motion.div>
+      )}
+
+      {activeTransaction && (
+        <div className="flex-1 min-h-0 flex flex-col overflow-visible lg:overflow-hidden">
+          <div className="mb-3 space-y-2 shrink-0">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <p className="text-xs font-bold uppercase text-slate-400">
+                Click a patient row to use its case number for {activeTransaction.label.toLowerCase()}.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {["all", "available", "borrowed"].map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setStatusFilter(filter)}
+                    className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase border transition-colors ${
+                      statusFilter === filter
+                        ? "border-green-700 bg-green-700 text-white"
+                        : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:bg-green-50 hover:text-green-700"
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search size={18} className="text-slate-400 group-focus-within:text-black transition-colors" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search patient, case, borrower, department"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm font-bold outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100 placeholder:text-slate-300"
+              />
+            </div>
           </div>
 
-          <div className="bg-white rounded-2xl border-2 border-black overflow-hidden shadow-sm">
-            <table className="w-full table-fixed text-left">
-              <thead>
-                <tr className="bg-slate-50 border-b-2 border-black">
+          <div className="mrs-panel rounded-2xl overflow-hidden">
+            <div className="max-h-full overflow-x-auto overflow-y-visible lg:overflow-y-auto">
+            <table className="w-full min-w-[780px] table-fixed text-left">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="w-[30%] p-3 text-[10px] font-black uppercase text-slate-400">Chart Info</th>
                   <th className="w-[27%] p-3 text-[10px] font-black uppercase text-slate-400">Borrower</th>
                   <th className="w-[28%] p-3 text-[10px] font-black uppercase text-slate-400">Current Status</th>
@@ -508,8 +609,8 @@ export default function Charts() {
               <tbody className="divide-y divide-slate-100">
                 <AnimatePresence initial={false}>
                   {filteredCharts.map((chart) => {
-                    const isOverdue = chart.status === "borrowed" && chart.dueDate && new Date(chart.dueDate) < today;
                     const recordType = determineChartRecordType(chart, charts);
+                    const isSelected = activeCaseNumber === chart.caseNumber;
 
                     return (
                       <Motion.tr
@@ -518,7 +619,19 @@ export default function Charts() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="hover:bg-slate-50/50 transition-colors group"
+                        onClick={() => handleChartRowSelect(chart)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            handleChartRowSelect(chart);
+                          }
+                        }}
+                        role="button"
+                        aria-selected={isSelected}
+                        tabIndex={0}
+                        className={`mrs-table-row group cursor-pointer ${
+                          isSelected ? "mrs-table-row-selected" : ""
+                        }`}
                       >
                         <td className="p-3">
                           <div className="font-black text-slate-800 uppercase leading-tight mb-1 break-words">{chart.patientName}</div>
@@ -542,22 +655,23 @@ export default function Charts() {
                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border-2 ${
                               chart.status === "available"
                                 ? "bg-green-50 text-green-700 border-green-200"
-                                : isOverdue
-                                  ? "bg-red-50 text-red-600 border-red-200"
-                                  : "bg-blue-50 text-blue-700 border-blue-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
                             }`}>
-                              {isOverdue ? "overdue" : chart.status}
+                              {chart.status}
                             </span>
                             {chart.status === "borrowed" && (
                               <span className="text-[10px] font-bold uppercase text-slate-400">
-                                {daysBorrowed(chart.borrowedAt)} day(s) borrowed • due {chart.dueDate}
+                                {daysBorrowed(chart.borrowedAt)} day(s) borrowed
                               </span>
                             )}
                           </div>
                         </td>
                         <td className="p-3 text-right">
                           <button
-                            onClick={() => setSelectedHistory(chart)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedHistory(chart);
+                            }}
                             className="p-2 border-2 border-transparent hover:border-black rounded-xl transition-all inline-flex items-center gap-2 text-slate-400 hover:text-black font-bold text-xs"
                           >
                             <History size={18} /> View History
@@ -583,12 +697,21 @@ export default function Charts() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
+        </div>
+      )}
       </div>
+
+      <FloatingToast toast={notice} onClose={() => setNotice(null)} />
+      <FloatingToast
+        toast={transactionToast ? { type: "success", ...transactionToast } : null}
+        onClose={() => setTransactionToast(null)}
+      />
 
       <AnimatePresence>
         {confirmTransaction && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
             <Motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -600,12 +723,12 @@ export default function Charts() {
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.92, opacity: 0 }}
-              className="relative bg-white border-4 border-black rounded-2xl p-7 max-w-md w-full shadow-[10px_10px_0_0_rgba(0,0,0,1)]"
+              className={`${modalCardClass} max-w-md sm:p-7`}
             >
               <div className="flex items-center gap-3 mb-5">
-                <div className={`p-3 rounded-2xl border-2 border-black ${
+                <div className={`p-3 rounded-2xl ${
                   confirmTransaction.type === "borrow"
-                    ? "bg-red-50 text-red-600"
+                    ? "bg-blue-50 text-blue-700"
                     : "bg-green-50 text-green-700"
                 }`}>
                   {confirmTransaction.type === "borrow" ? <FileText size={24} /> : <RotateCcw size={24} />}
@@ -620,7 +743,7 @@ export default function Charts() {
                 </div>
               </div>
 
-              <div className="space-y-3 bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 mb-6">
+              <div className="space-y-3 bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-6">
                 <div>
                   <p className="text-[10px] font-black uppercase text-slate-400">Chart</p>
                   <p className="font-black text-slate-900 uppercase">{confirmTransaction.chart.patientName}</p>
@@ -628,7 +751,7 @@ export default function Charts() {
                 </div>
 
                 {confirmTransaction.type === "borrow" ? (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <p className="text-[10px] font-black uppercase text-slate-400">Borrower</p>
                       <p className="font-black text-slate-800">{confirmTransaction.borrower}</p>
@@ -637,13 +760,9 @@ export default function Charts() {
                       <p className="text-[10px] font-black uppercase text-slate-400">Department</p>
                       <p className="font-black text-slate-800">{confirmTransaction.department}</p>
                     </div>
-                    <div className="col-span-2">
-                      <p className="text-[10px] font-black uppercase text-slate-400">Due Date</p>
-                      <p className="font-black text-slate-800">{confirmTransaction.dueDate}</p>
-                    </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <p className="text-[10px] font-black uppercase text-slate-400">Borrowed By</p>
                       <p className="font-black text-slate-800">{confirmTransaction.chart.borrower || "N/A"}</p>
@@ -655,10 +774,6 @@ export default function Charts() {
                     <div>
                       <p className="text-[10px] font-black uppercase text-slate-400">Department</p>
                       <p className="font-black text-slate-800">{confirmTransaction.chart.department || "N/A"}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-400">Due Date</p>
-                      <p className="font-black text-slate-800">{confirmTransaction.chart.dueDate || "N/A"}</p>
                     </div>
                   </div>
                 )}
@@ -673,8 +788,8 @@ export default function Charts() {
                 </button>
                 <button
                   onClick={confirmTransaction.type === "borrow" ? handleCheckout : handleCheckin}
-                  className={`flex-1 py-3 text-white border-2 border-black rounded-xl font-black uppercase shadow-[4px_4px_0_0_rgba(0,0,0,1)] active:shadow-none active:translate-y-1 ${
-                    confirmTransaction.type === "borrow" ? "bg-red-500" : "bg-green-600"
+                  className={`flex-1 rounded-xl py-3 font-black uppercase text-white shadow-lg transition ${
+                    confirmTransaction.type === "borrow" ? "mrs-blue-button" : "bg-green-600"
                   }`}
                 >
                   Confirm
@@ -687,12 +802,12 @@ export default function Charts() {
 
       <AnimatePresence>
         {selectedHistory && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 bg-black/60 backdrop-blur-sm sm:items-center sm:p-4">
             <Motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white border-4 border-black rounded-[40px] p-8 max-w-md w-full shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] relative"
+              className={`${modalCardClass} max-w-md sm:p-8`}
             >
               <button
                 onClick={() => setSelectedHistory(null)}
@@ -700,9 +815,9 @@ export default function Charts() {
               >
                 <X size={20} />
               </button>
-              <h2 className="text-2xl font-black uppercase italic text-slate-800 mb-1">Circulation History</h2>
+              <h2 className="pr-9 text-xl sm:text-2xl font-black uppercase italic text-slate-800 mb-1">Circulation History</h2>
               <p className="text-xs font-bold text-slate-400 uppercase mb-6">
-                {selectedHistory.patientName} • {selectedHistory.caseNumber}
+                {selectedHistory.patientName} - {selectedHistory.caseNumber}
               </p>
               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                 {(selectedHistory.history || []).filter((log) => log.borrower !== "System").length === 0 && (
@@ -716,7 +831,7 @@ export default function Charts() {
                 )}
                 {(selectedHistory.history || []).filter((log) => log.borrower !== "System").map((log, i) => (
                   <div key={`${log.action}-${log.date}-${i}`} className="relative pl-6 border-l-2 border-slate-200 pb-2 last:pb-0">
-                    <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-[0_0_0_2px_black] ${log.action === "checkout" ? "bg-red-500" : "bg-green-500"}`} />
+                    <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white ring-2 ring-slate-300 ${log.action === "checkout" ? "bg-blue-500" : "bg-green-500"}`} />
                     <p className="text-sm font-black uppercase text-slate-800">{log.action === "checkout" ? "Borrowed" : "Returned"}</p>
                     <p className="text-xs font-bold text-slate-700">Borrowed By: {log.borrower || "N/A"}</p>
                     {log.action === "checkin" && (
@@ -726,12 +841,19 @@ export default function Charts() {
                     )}
                     <p className="text-xs font-bold text-slate-700">Department: {log.department || "N/A"}</p>
                     <p className="text-[10px] font-bold text-slate-500 uppercase">
-                      {new Date(log.date).toLocaleString()}
+                      {new Date(log.date).toLocaleString([], {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                        hour12: true,
+                      })}
                     </p>
                   </div>
                 ))}
               </div>
-              <button onClick={() => setSelectedHistory(null)} className="w-full mt-8 py-3 bg-black text-white rounded-2xl font-black uppercase text-xs">Close Log</button>
+              <button onClick={() => setSelectedHistory(null)} className="mrs-primary-button w-full mt-8 rounded-xl py-3 font-black uppercase text-xs transition">Close Log</button>
             </Motion.div>
           </div>
         )}

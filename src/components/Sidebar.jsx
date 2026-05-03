@@ -8,8 +8,8 @@ import {
   FileSearch,
   BarChart3,
   Settings,
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronLeft,
+  ChevronRight,
   X,
 } from "lucide-react";
 import logo from "../assets/TGMCI_LOGO.png";
@@ -25,7 +25,7 @@ export default function Sidebar({
   const location = useLocation();
 
   const navItems = [
-    { name: "Dashboard", icon: LayoutDashboard, path: "/admin" },
+    { name: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
     { name: "Patients", icon: Users, path: "/patients" },
     { name: "Charts Station", icon: FileText, path: "/charts" },
     { name: "Chart Viewing", icon: FileSearch, path: "/chart-viewing" },
@@ -35,50 +35,34 @@ export default function Sidebar({
 
   return (
     <div
-      className={`min-h-screen bg-green-950 text-white flex flex-col border-r border-green-900 shadow-xl transition-all duration-300 ${
-        isCollapsed ? "w-24 p-4" : "w-72 p-6"
+      className={`mrs-sidebar min-h-screen bg-gradient-to-b from-blue-50 via-white to-green-50/70 text-slate-700 flex flex-col border-r border-blue-100 shadow-xl shadow-slate-900/5 transition-all duration-300 ease-out ${
+        isCollapsed ? "w-24 p-4" : "w-72 p-5"
       }`}
     >
 
-      <div className={`mb-8 flex gap-3 ${isCollapsed ? "flex-col items-center" : "items-center justify-between"}`}>
-        <div className={`flex items-center gap-3 min-w-0 ${isCollapsed ? "justify-center" : ""}`}>
-          <div className="shrink-0 w-12 h-12 rounded-2xl bg-white border-2 border-green-400 flex items-center justify-center shadow-[3px_3px_0_0_rgba(34,197,94,0.45)] overflow-hidden">
-            <img src={logo} alt="TGMCI" className="w-10 h-10 object-contain" />
+      <div className={`mb-8 flex gap-3 ${isCollapsed ? "flex-col items-center" : "items-center"}`}>
+        <div className={`flex items-center min-w-0 ${isCollapsed ? "justify-center" : "w-full"}`}>
+          <div
+            className={`mrs-logo-frame shrink-0 rounded-2xl border border-slate-200 flex items-center justify-center shadow-sm overflow-hidden transition-all duration-300 ${
+              isCollapsed ? "h-12 w-12 p-1.5" : "h-20 w-full p-3"
+            }`}
+          >
+            <img src={logo} alt="TGMCI" className="h-full w-full object-contain" />
           </div>
-          {!isCollapsed && (
-            <div className="min-w-0">
-              <h1 className="text-lg font-black tracking-widest uppercase text-white leading-none">
-                TGMCI MRS
-              </h1>
-              <p className="text-[10px] text-green-300/70 font-black uppercase tracking-widest mt-1">
-                Medical Records System
-              </p>
-            </div>
-          )}
         </div>
 
         {showCloseButton && (
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-green-800/70 text-green-100 hover:bg-green-700 transition-colors"
+            className="ml-auto p-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
             aria-label="Close menu"
           >
             <X size={18} />
           </button>
         )}
-
-        {!showCloseButton && onToggleCollapse && (
-          <button
-            onClick={onToggleCollapse}
-            className="hidden lg:inline-flex p-2 rounded-xl bg-green-900/80 text-green-100 hover:bg-green-800 transition-colors"
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {isCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-          </button>
-        )}
       </div>
 
-      <nav className="flex-1 space-y-2">
+      <nav className="flex-1 space-y-1.5">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
 
@@ -93,12 +77,12 @@ export default function Sidebar({
               whileTap={{ scale: 0.98 }}
               title={isCollapsed ? item.name : undefined}
               className={`
-                flex items-center rounded-xl cursor-pointer transition-all duration-200 group
+                flex items-center rounded-xl cursor-pointer transition-all duration-300 ease-out group
                 ${isCollapsed ? "justify-center px-0 py-3" : "gap-4 px-4 py-3"}
                 ${
                   isActive
-                    ? "bg-white text-green-900 shadow-lg shadow-green-950/20"
-                    : "text-green-100 hover:bg-green-800/50 hover:text-white"
+                    ? "bg-blue-50 text-blue-700 shadow-sm"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                 }
               `}
             >
@@ -106,8 +90,8 @@ export default function Sidebar({
                 size={20}
                 className={
                   isActive
-                    ? "text-green-700"
-                    : "text-green-400 group-hover:text-white"
+                    ? "text-blue-700"
+                    : "text-slate-400 group-hover:text-slate-700"
                 }
               />
 
@@ -120,7 +104,7 @@ export default function Sidebar({
               {isActive && !isCollapsed && (
                 <Motion.div
                   layoutId="activeIndicator"
-                  className="ml-auto w-1.5 h-1.5 rounded-full bg-green-600"
+                  className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600"
                 />
               )}
             </Motion.div>
@@ -128,11 +112,21 @@ export default function Sidebar({
         })}
       </nav>
 
-      <div className="mt-auto pt-6 border-t border-green-800/50">
-        {isCollapsed ? (
-          <div className="mx-auto w-2 h-2 rounded-full bg-green-400" />
-        ) : (
-          <p className="px-2 text-[10px] text-green-300/60 font-bold uppercase tracking-widest">
+      <div className="mt-auto pt-6 border-t border-slate-100">
+        {!showCloseButton && onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className={`hidden lg:flex items-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-300 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 ${
+              isCollapsed ? "mx-auto size-11 justify-center" : "w-full justify-between px-3 py-2.5"
+            }`}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {!isCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">Panel</span>}
+            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+        )}
+        {!isCollapsed && (
+          <p className="mt-4 px-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
             Secured Records Workspace
           </p>
         )}

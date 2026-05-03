@@ -13,21 +13,21 @@ export default function PatientViewModal({ patient, onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
       <Motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm"
         onClick={onClose}
       />
       <Motion.div
         initial={{ opacity: 0, scale: 0.94, y: 18 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94, y: 18 }}
-        className="relative bg-white w-full max-w-md rounded-3xl border-4 border-black shadow-[12px_12px_0_0_rgba(0,0,0,1)] overflow-hidden"
+        className="mrs-panel relative w-full max-w-md overflow-hidden rounded-2xl"
       >
-        <div className="p-6 bg-green-50 border-b-2 border-black">
+        <div className="border-b border-green-100 bg-green-50 p-6">
           <button
             onClick={onClose}
             className="absolute top-4 right-4 p-2 rounded-xl hover:bg-white transition-colors"
@@ -35,7 +35,7 @@ export default function PatientViewModal({ patient, onClose }) {
           >
             <X size={18} />
           </button>
-          <div className="size-16 rounded-2xl bg-green-700 text-white border-2 border-black flex items-center justify-center mb-4">
+          <div className="size-16 rounded-2xl bg-green-700 text-white flex items-center justify-center mb-4">
             <UserCircle size={34} />
           </div>
           <h2 className="text-2xl font-black text-slate-800 uppercase leading-tight">
@@ -48,7 +48,7 @@ export default function PatientViewModal({ patient, onClose }) {
 
         <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
           {details.map((item) => (
-            <div key={item.label} className="bg-slate-50 border-2 border-black rounded-2xl p-4">
+            <div key={item.label} className="mrs-card rounded-2xl p-4">
               <div className="flex items-center gap-2 text-slate-400 mb-2">
                 {item.label.includes("Date") || item.label === "Admission" || item.label === "Discharge" ? (
                   <CalendarDays size={15} />
@@ -65,7 +65,7 @@ export default function PatientViewModal({ patient, onClose }) {
         <div className="px-6 pb-6">
           <button
             onClick={onClose}
-            className="w-full bg-black text-white py-3 rounded-xl font-black uppercase text-xs"
+            className="mrs-primary-button w-full py-3 rounded-xl font-black uppercase text-xs"
           >
             Close
           </button>

@@ -6,19 +6,19 @@ export default function ConfirmDeleteModal({ patient, onConfirm, onClose }) {
   if (!patient) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
       <Motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm"
         onClick={onClose}
       />
       <Motion.div
         initial={{ opacity: 0, scale: 0.94, y: 18 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94, y: 18 }}
-        className="relative bg-white w-full max-w-sm rounded-3xl border-4 border-black shadow-[12px_12px_0_0_rgba(0,0,0,1)] overflow-hidden text-center"
+        className="mrs-panel relative w-full max-w-sm overflow-hidden rounded-2xl text-center"
       >
         <button
           onClick={onClose}
@@ -29,7 +29,7 @@ export default function ConfirmDeleteModal({ patient, onConfirm, onClose }) {
         </button>
 
         <div className="p-8">
-          <div className="size-18 bg-red-100 border-2 border-black text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-5">
+          <div className="size-18 bg-red-100 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-5">
             <AlertTriangle size={34} />
           </div>
           <h2 className="text-2xl font-black text-slate-800 uppercase">Delete Record?</h2>
@@ -48,7 +48,7 @@ export default function ConfirmDeleteModal({ patient, onConfirm, onClose }) {
           </button>
           <button
             onClick={onConfirm}
-            className="inline-flex items-center justify-center gap-2 bg-red-600 text-white border-2 border-black py-3 rounded-xl font-black uppercase text-xs shadow-[4px_4px_0_0_rgba(0,0,0,1)] active:shadow-none active:translate-y-1"
+            className="inline-flex items-center justify-center gap-2 bg-red-600 text-white py-3 rounded-xl font-black uppercase text-xs shadow-lg shadow-red-600/20"
           >
             <Trash2 size={16} />
             Delete

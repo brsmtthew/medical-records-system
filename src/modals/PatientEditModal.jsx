@@ -21,12 +21,12 @@ export default function PatientEditModal({ patient, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
       <Motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm"
         onClick={onClose}
       />
       <Motion.form
@@ -34,11 +34,11 @@ export default function PatientEditModal({ patient, onSave, onClose }) {
         initial={{ opacity: 0, scale: 0.94, y: 18 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94, y: 18 }}
-        className="relative bg-white w-full max-w-lg rounded-3xl border-4 border-black shadow-[12px_12px_0_0_rgba(0,0,0,1)] overflow-hidden"
+        className="mrs-panel relative w-full max-w-lg overflow-hidden rounded-2xl"
       >
-        <div className="px-6 py-4 border-b-2 border-black bg-green-50 flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 border-b border-green-100 bg-green-50 px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-green-600 text-white border-2 border-black">
+            <div className="p-2 rounded-xl bg-green-600 text-white">
               <UserPen size={20} />
             </div>
             <div>
@@ -55,7 +55,7 @@ export default function PatientEditModal({ patient, onSave, onClose }) {
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase text-slate-400">Patient Name</label>
             <input
-              className="w-full border-2 border-black p-4 rounded-xl font-bold outline-none focus:ring-2 focus:ring-green-500"
+              className="mrs-field w-full p-4 rounded-xl font-bold"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
@@ -65,7 +65,7 @@ export default function PatientEditModal({ patient, onSave, onClose }) {
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase text-slate-400">Case Number</label>
             <input
-              className="w-full border-2 border-black p-4 rounded-xl font-mono font-bold outline-none focus:ring-2 focus:ring-green-500"
+              className="mrs-field w-full p-4 rounded-xl font-mono font-bold"
               value={form.caseNumber}
               onChange={(e) => setForm({ ...form, caseNumber: e.target.value.toUpperCase() })}
               required
@@ -77,7 +77,7 @@ export default function PatientEditModal({ patient, onSave, onClose }) {
               <label className="text-[10px] font-black uppercase text-slate-400">Admission</label>
               <input
                 type="date"
-                className="w-full border-2 border-black p-3 rounded-xl font-bold outline-none focus:ring-2 focus:ring-green-500"
+                className="mrs-field w-full p-3 rounded-xl font-bold"
                 value={form.admissionDate || ""}
                 onChange={(e) => setForm({ ...form, admissionDate: e.target.value })}
               />
@@ -86,7 +86,7 @@ export default function PatientEditModal({ patient, onSave, onClose }) {
               <label className="text-[10px] font-black uppercase text-slate-400">Discharge</label>
               <input
                 type="date"
-                className="w-full border-2 border-black p-3 rounded-xl font-bold outline-none focus:ring-2 focus:ring-green-500"
+                className="mrs-field w-full p-3 rounded-xl font-bold"
                 value={form.dischargeDate || ""}
                 onChange={(e) => setForm({ ...form, dischargeDate: e.target.value })}
               />
@@ -96,7 +96,7 @@ export default function PatientEditModal({ patient, onSave, onClose }) {
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase text-slate-400">Care Type</label>
             <select
-              className="w-full border-2 border-black p-4 rounded-xl font-bold outline-none bg-white focus:ring-2 focus:ring-green-500"
+              className="mrs-field w-full p-4 rounded-xl font-bold"
               value={form.type || "outpatient"}
               onChange={(e) => setForm({ ...form, type: e.target.value })}
             >
@@ -106,11 +106,11 @@ export default function PatientEditModal({ patient, onSave, onClose }) {
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t-2 border-black bg-slate-50 flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 sm:flex-row">
           <button type="button" onClick={onClose} className="flex-1 py-3 font-black uppercase text-slate-500">
             Cancel
           </button>
-          <button className="flex-1 inline-flex items-center justify-center gap-2 bg-green-600 text-white border-2 border-black py-3 rounded-xl font-black uppercase shadow-[4px_4px_0_0_rgba(0,0,0,1)] active:shadow-none active:translate-y-1">
+          <button className="mrs-primary-button flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl font-black uppercase">
             <Save size={18} />
             Save
           </button>

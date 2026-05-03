@@ -1,8 +1,24 @@
 import React, { useMemo, useRef, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
-import { FolderOpen, FileText, Image, Search, ShieldCheck, X } from "lucide-react";
+import FloatingToast from "../components/FloatingToast";
+import { motion as Motion, AnimatePresence } from "framer-motion";
+import { FolderOpen, FileText, Image, RotateCcw, Search, ShieldCheck, X } from "lucide-react";
 
 const supportedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+const chartViewingSession = {
+  charts: [],
+  selectedPath: "",
+  searchQuery: "",
+  folderName: "",
+};
+
+function readChartViewingSession() {
+  return chartViewingSession;
+}
+
+function updateChartViewingSession(updates) {
+  Object.assign(chartViewingSession, updates);
+}
 
 function isSupportedChart(file) {
   return supportedTypes.includes(file.type);
@@ -19,13 +35,35 @@ function revokeChartUrls(charts) {
 
 export default function ChartViewing() {
   const folderInputRef = useRef(null);
-  const [charts, setCharts] = useState([]);
-  const [selectedChart, setSelectedChart] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [folderName, setFolderName] = useState("");
+  const [charts, setCharts] = useState(() => readChartViewingSession().charts);
+  const [selectedChart, setSelectedChart] = useState(() => {
+    const session = readChartViewingSession();
+    return session.charts.find((chart) => chart.path === session.selectedPath)
+      || session.charts[0]
+      || null;
+  });
+  const [searchQuery, setSearchQuery] = useState(() => readChartViewingSession().searchQuery);
+  const [folderName, setFolderName] = useState(() => readChartViewingSession().folderName);
+  const [pendingFiles, setPendingFiles] = useState(null);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+  const [notice, setNotice] = useState(null);
+
+  const selectChart = (chart) => {
+    setSelectedChart(chart);
+    updateChartViewingSession({ selectedPath: chart?.path || "" });
+  };
+
+  const updateSearchQuery = (value) => {
+    setSearchQuery(value);
+    updateChartViewingSession({ searchQuery: value });
+  };
 
   const loadFiles = (fileList) => {
     const selectedFiles = Array.from(fileList).filter(isSupportedChart);
+    if (selectedFiles.length === 0) {
+      setNotice({ type: "info", message: "No supported chart files were found in that folder." });
+      return;
+    }
     const nextCharts = selectedFiles
       .map((file) => ({
         file,
@@ -37,27 +75,64 @@ export default function ChartViewing() {
       }))
       .sort((a, b) => a.path.localeCompare(b.path));
 
-    setCharts((previousCharts) => {
-      revokeChartUrls(previousCharts);
-      return nextCharts;
+    const nextFolderName = nextCharts[0]?.path.split("/")[0] || "";
+    revokeChartUrls(readChartViewingSession().charts);
+    updateChartViewingSession({
+      charts: nextCharts,
+      selectedPath: nextCharts[0]?.path || "",
+      folderName: nextFolderName,
     });
+
+    setCharts(nextCharts);
     setSelectedChart(nextCharts[0] || null);
-    setFolderName(nextCharts[0]?.path.split("/")[0] || "");
+    setFolderName(nextFolderName);
   };
 
   const handleFolderChange = (event) => {
-    loadFiles(event.target.files);
+    const selectedFiles = Array.from(event.target.files || []);
+    if (selectedFiles.length === 0) {
+      setNotice({ type: "info", message: "No chart folder was selected." });
+      event.target.value = "";
+      return;
+    }
+    setPendingFiles(selectedFiles);
     event.target.value = "";
   };
 
   const clearFolder = () => {
-    setCharts((previousCharts) => {
-      revokeChartUrls(previousCharts);
-      return [];
+    if (charts.length === 0) {
+      setNotice({ type: "info", message: "No chart folder is currently loaded." });
+      return;
+    }
+    revokeChartUrls(readChartViewingSession().charts);
+    updateChartViewingSession({
+      charts: [],
+      selectedPath: "",
+      searchQuery: "",
+      folderName: "",
     });
+
+    setCharts([]);
     setSelectedChart(null);
     setSearchQuery("");
     setFolderName("");
+    setIsClearConfirmOpen(false);
+    setNotice({ type: "info", message: "Chart folder was cleared." });
+  };
+
+  const resetSearch = () => {
+    if (!searchQuery) {
+      setNotice({ type: "info", message: "No chart search to reset." });
+      return;
+    }
+    updateSearchQuery("");
+    setNotice({ type: "info", message: "Chart search was reset." });
+  };
+
+  const confirmFolderLoad = () => {
+    if (!pendingFiles) return;
+    loadFiles(pendingFiles);
+    setPendingFiles(null);
   };
 
   const filteredCharts = useMemo(() => {
@@ -71,10 +146,10 @@ export default function ChartViewing() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+      <div className="min-h-full lg:h-full lg:min-h-0 flex flex-col gap-3 overflow-visible lg:overflow-hidden">
+        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-3 shrink-0">
           <div>
-            <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tight">
               Chart <span className="text-green-700">Viewing</span>
             </h1>
             <p className="text-slate-500 font-medium">
@@ -83,18 +158,22 @@ export default function ChartViewing() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
-            {charts.length > 0 && (
-              <button
-                onClick={clearFolder}
-                className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-600 font-black text-xs uppercase hover:border-red-200 hover:text-red-600 transition-colors"
-              >
-                <X size={17} />
-                Clear
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (charts.length === 0) {
+                  setNotice({ type: "info", message: "No chart folder is currently loaded." });
+                  return;
+                }
+                setIsClearConfirmOpen(true);
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-600 font-black text-xs uppercase hover:border-blue-200 hover:text-blue-700 transition-colors"
+            >
+              <X size={17} />
+              Clear
+            </button>
             <button
               onClick={() => folderInputRef.current?.click()}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-green-700 text-white font-black text-xs uppercase shadow-[4px_4px_0_0_#052e16] active:translate-y-1 active:shadow-none transition-all"
+              className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-black uppercase transition"
             >
               <FolderOpen size={18} />
               Choose Chart Folder
@@ -112,9 +191,9 @@ export default function ChartViewing() {
           />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-1 space-y-4">
-            <div className="bg-white border-2 border-black rounded-2xl p-4 shadow-[6px_6px_0_0_rgba(0,0,0,1)]">
+        <div className="grid gap-4 lg:grid-cols-3 flex-1 min-h-0 overflow-visible lg:overflow-hidden">
+          <div className="lg:col-span-1 min-h-0 flex flex-col gap-3 overflow-visible lg:overflow-hidden">
+            <div className="mrs-panel rounded-2xl p-4">
               <div className="flex items-start gap-3">
                 <div className="p-2 rounded-xl bg-green-50 text-green-700 border border-green-100">
                   <ShieldCheck size={22} />
@@ -130,8 +209,9 @@ export default function ChartViewing() {
               </div>
             </div>
 
-            <div className="bg-white border-2 border-black rounded-2xl overflow-hidden">
-              <div className="p-4 border-b-2 border-black bg-slate-50">
+            <div className="mrs-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
+              <div className="p-4 border-b border-slate-100 bg-slate-50">
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                 <div className="relative">
                   <Search
                     size={17}
@@ -140,17 +220,26 @@ export default function ChartViewing() {
                   <input
                     type="text"
                     value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
+                    onChange={(event) => updateSearchQuery(event.target.value)}
                     placeholder="Search case, patient, or filename"
-                    className="w-full border-2 border-black rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold outline-none focus:ring-2 focus:ring-green-500"
+                    className="mrs-field w-full rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold"
                   />
                 </div>
+                <button
+                  type="button"
+                  onClick={resetSearch}
+                  className="mrs-soft-button inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                >
+                  <RotateCcw size={15} />
+                  Reset
+                </button>
+                </div>
                 <div className="mt-3 text-[10px] font-black uppercase text-slate-400">
-                  {folderName || "No folder selected"} • {filteredCharts.length} file(s)
+                  {folderName || "No folder selected"} - {filteredCharts.length} file(s)
                 </div>
               </div>
 
-              <div className="max-h-[560px] overflow-y-auto divide-y divide-slate-100">
+              <div className="max-h-[min(34rem,calc(100dvh-20rem))] min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
                 {filteredCharts.length === 0 ? (
                   <div className="p-8 text-center">
                     <FileText size={36} className="mx-auto text-slate-300 mb-3" />
@@ -163,13 +252,13 @@ export default function ChartViewing() {
                   </div>
                 ) : (
                   filteredCharts.map((chart) => {
-                    const isSelected = selectedChart?.url === chart.url;
+                    const isSelected = selectedChart?.path === chart.path;
                     const Icon = chart.type === "application/pdf" ? FileText : Image;
 
                     return (
                       <button
                         key={chart.url}
-                        onClick={() => setSelectedChart(chart)}
+                        onClick={() => selectChart(chart)}
                         className={`w-full text-left p-4 flex items-center gap-3 transition-colors ${
                           isSelected ? "bg-green-50" : "bg-white hover:bg-slate-50"
                         }`}
@@ -202,9 +291,9 @@ export default function ChartViewing() {
             </div>
           </div>
 
-          <div className="lg:col-span-2">
-            <div className="bg-white border-2 border-black rounded-2xl min-h-[660px] overflow-hidden flex flex-col">
-              <div className="p-4 border-b-2 border-black flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50">
+          <div className="lg:col-span-2 min-h-0">
+            <div className="mrs-panel rounded-2xl min-h-[65dvh] lg:h-full lg:min-h-0 overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50">
                 <div className="min-w-0">
                   <p className="font-black text-slate-800 truncate">
                     {selectedChart?.name || "Select a scanned chart"}
@@ -218,7 +307,7 @@ export default function ChartViewing() {
                     href={selectedChart.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center justify-center px-4 py-2 rounded-xl border-2 border-black bg-white text-xs font-black uppercase hover:bg-slate-100 transition-colors"
+                    className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-black uppercase"
                   >
                     Open Full View
                   </a>
@@ -227,7 +316,7 @@ export default function ChartViewing() {
 
               <div className="flex-1 bg-slate-100">
                 {!selectedChart ? (
-                  <div className="h-full min-h-[560px] flex items-center justify-center p-8 text-center">
+                  <div className="h-full flex items-center justify-center p-8 text-center">
                     <div>
                       <FolderOpen size={48} className="mx-auto text-slate-300 mb-4" />
                       <p className="text-lg font-black text-slate-700 uppercase">
@@ -242,14 +331,14 @@ export default function ChartViewing() {
                   <iframe
                     src={selectedChart.url}
                     title={selectedChart.name}
-                    className="w-full h-[620px] bg-white"
+                    className="w-full h-full bg-white"
                   />
                 ) : (
-                  <div className="h-full min-h-[620px] flex items-center justify-center p-4">
+                  <div className="h-full flex items-center justify-center p-4">
                     <img
                       src={selectedChart.url}
                       alt={selectedChart.name}
-                      className="max-h-[600px] max-w-full object-contain bg-white border border-slate-200"
+                      className="max-h-full max-w-full object-contain bg-white border border-slate-200"
                     />
                   </div>
                 )}
@@ -258,6 +347,102 @@ export default function ChartViewing() {
           </div>
         </div>
       </div>
+      <AnimatePresence>
+        {pendingFiles && (
+          <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
+            <Motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/45"
+              onClick={() => setPendingFiles(null)}
+            />
+            <Motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.97 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="mrs-panel relative w-full max-w-md rounded-2xl p-6"
+            >
+              <div className="mb-5 flex items-center gap-3">
+                <div className="rounded-2xl bg-blue-50 p-3 text-blue-700">
+                  <FolderOpen size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-800 uppercase">Load Chart Folder?</h2>
+                  <p className="text-xs font-bold text-slate-400 uppercase">
+                    {pendingFiles.length} selected file(s)
+                  </p>
+                </div>
+              </div>
+              <p className="mb-6 text-sm font-semibold text-slate-500">
+                This will replace the current local chart preview list.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPendingFiles(null)}
+                  className="rounded-xl py-3 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmFolderLoad}
+                  className="mrs-blue-button rounded-xl py-3 text-xs font-black uppercase"
+                >
+                  Load
+                </button>
+              </div>
+            </Motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isClearConfirmOpen && (
+          <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
+            <Motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/45"
+              onClick={() => setIsClearConfirmOpen(false)}
+            />
+            <Motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.97 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="mrs-panel relative w-full max-w-sm rounded-2xl p-6 text-center"
+            >
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                <FolderOpen size={26} />
+              </div>
+              <h2 className="text-xl font-black text-slate-800 uppercase">Clear Folder?</h2>
+              <p className="mt-2 mb-6 text-sm font-semibold text-slate-500">
+                This will remove the current local previews from this screen.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsClearConfirmOpen(false)}
+                  className="rounded-xl py-3 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={clearFolder}
+                  className="mrs-blue-button rounded-xl py-3 text-xs font-black uppercase"
+                >
+                  Clear
+                </button>
+              </div>
+            </Motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <FloatingToast toast={notice} onClose={() => setNotice(null)} />
     </DashboardLayout>
   );
 }

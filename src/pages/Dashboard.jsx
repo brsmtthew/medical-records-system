@@ -1,0 +1,603 @@
+import React, { useEffect, useState } from "react";
+import DashboardLayout from "../components/DashboardLayout";
+import { motion as Motion } from "framer-motion";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  Archive,
+  Bed,
+  ClipboardCheck,
+  Stethoscope,
+  UserRound,
+  Users,
+} from "lucide-react";
+import {
+  fallbackDepartments,
+  subscribeToChartLogs,
+  subscribeToCharts,
+  subscribeToDepartments,
+  subscribeToPatients,
+} from "../services/recordsService";
+import { recordTimeValue } from "../utils/recordSorting";
+
+const periodOptions = [
+  { id: "today", label: "Today" },
+  { id: "monthly", label: "Monthly" },
+  { id: "yearly", label: "Yearly" },
+];
+
+function toDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toMonthInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function dateFromRecordValue(value) {
+  const time = recordTimeValue(value);
+  return time ? new Date(time) : null;
+}
+
+function datePartsFromRecordValue(value) {
+  if (!value) return null;
+
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+    const isoDateMatch = trimmedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoDateMatch) {
+      const [, year, month, day] = isoDateMatch;
+      return {
+        date: new Date(Number(year), Number(month) - 1, Number(day)),
+        dateKey: `${year}-${month}-${day}`,
+        monthKey: `${year}-${month}`,
+        yearKey: year,
+      };
+    }
+
+    const localDateMatch = trimmedValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (localDateMatch) {
+      const [, dayValue, monthValue, year] = localDateMatch;
+      const day = dayValue.padStart(2, "0");
+      const month = monthValue.padStart(2, "0");
+      return {
+        date: new Date(Number(year), Number(month) - 1, Number(day)),
+        dateKey: `${year}-${month}-${day}`,
+        monthKey: `${year}-${month}`,
+        yearKey: year,
+      };
+    }
+  }
+
+  const date = dateFromRecordValue(value);
+  if (!date || Number.isNaN(date.getTime())) return null;
+
+  return {
+    date,
+    dateKey: toDateInputValue(date),
+    monthKey: toMonthInputValue(date),
+    yearKey: String(date.getFullYear()),
+  };
+}
+
+function isRecordValueInPeriod(value, period, selectedDate, selectedMonth, selectedYear) {
+  const parts = datePartsFromRecordValue(value);
+  if (!parts) return false;
+
+  if (period === "today") {
+    return parts.dateKey === selectedDate;
+  }
+
+  if (period === "monthly") {
+    return parts.monthKey === selectedMonth;
+  }
+
+  return parts.yearKey === String(selectedYear);
+}
+
+function isPatientInPeriod(patient, period, selectedDate, selectedMonth, selectedYear) {
+  return isRecordValueInPeriod(
+    patient.admissionDate || patient.createdAt || patient.updatedAt,
+    period,
+    selectedDate,
+    selectedMonth,
+    selectedYear,
+  );
+}
+
+function chartLogBorrowDate(log) {
+  return datePartsFromRecordValue(log.borrowedAt || log.timestamp || log.createdAt);
+}
+
+function chartLogReturnDate(log) {
+  return datePartsFromRecordValue(log.returnedAt);
+}
+
+function chartLogDepartment(log) {
+  return log.department || "Unassigned";
+}
+
+function buildChartMovementEvents(logs, period, selectedDate, selectedMonth, selectedYear) {
+  return logs.flatMap((log) => {
+    const events = [];
+    const borrowedDateParts = chartLogBorrowDate(log);
+    const returnedDateParts = chartLogReturnDate(log);
+
+    if (
+      borrowedDateParts &&
+      isRecordValueInPeriod(log.borrowedAt || log.timestamp || log.createdAt, period, selectedDate, selectedMonth, selectedYear)
+    ) {
+      events.push({
+        type: "borrowed",
+        log,
+        department: chartLogDepartment(log),
+        date: borrowedDateParts.date,
+      });
+    }
+
+    if (
+      returnedDateParts &&
+      isRecordValueInPeriod(log.returnedAt, period, selectedDate, selectedMonth, selectedYear)
+    ) {
+      events.push({
+        type: "returned",
+        log,
+        department: chartLogDepartment(log),
+        date: returnedDateParts.date,
+      });
+    }
+
+    return events;
+  });
+}
+
+function StatCard({ item, index }) {
+  return (
+    <Motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.06 }}
+      className="mrs-surface rounded-2xl p-4"
+    >
+      <div className="flex justify-between items-start gap-4">
+        <div>
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+            {item.label}
+          </p>
+          <h2 className="text-xl font-black mt-0.5 text-slate-800">{item.value}</h2>
+          {item.trend && (
+            <p className={`text-[10px] font-black uppercase mt-1 ${item.trendColor}`}>
+              {item.trend}
+            </p>
+          )}
+        </div>
+        <div className={`p-2.5 rounded-xl ${item.color}`}>
+          <item.icon size={22} className="text-slate-900" />
+        </div>
+      </div>
+    </Motion.div>
+  );
+}
+
+function buildServiceAnalytics(rows) {
+  return Object.entries(
+    rows.reduce((counts, patient) => {
+      const service = patient.department || "Unassigned";
+      counts[service] = (counts[service] || 0) + 1;
+      return counts;
+    }, {}),
+  )
+    .map(([name, value]) => ({ name, value }))
+    .sort((first, second) => second.value - first.value || first.name.localeCompare(second.name));
+}
+
+function ServiceList({ title, services, tone }) {
+  const maxServiceCount = Math.max(...services.map((service) => service.value), 1);
+  const barColor = tone === "green" ? "bg-green-600" : "bg-blue-600";
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col rounded-xl bg-white p-2.5">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-black uppercase text-slate-500">{title}</p>
+        <span className="text-[10px] font-black text-slate-400">{services.reduce((total, service) => total + service.value, 0)}</span>
+      </div>
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+        {services.map((service) => (
+          <div key={`${title}-${service.name}`}>
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <p className="truncate text-[11px] font-black uppercase text-slate-600">{service.name}</p>
+              <span className="text-xs font-black text-slate-800">{service.value}</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-100">
+              <div
+                className={`h-full rounded-full ${barColor}`}
+                style={{ width: `${Math.max(6, (service.value / maxServiceCount) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+        {services.length === 0 && (
+          <div className="flex h-full min-h-20 items-center justify-center rounded-xl bg-slate-50 p-3 text-center">
+            <p className="text-xs font-black uppercase text-slate-500">No service data</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  const [patients, setPatients] = useState([]);
+  const [charts, setCharts] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [selectedPeriod, setSelectedPeriod] = useState("monthly");
+  const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
+  const [selectedMonth, setSelectedMonth] = useState(() => toMonthInputValue(new Date()));
+  const [selectedYear, setSelectedYear] = useState(() => String(new Date().getFullYear()));
+
+  useEffect(() => {
+    const unsubscribePatients = subscribeToPatients(setPatients, console.error);
+    const unsubscribeCharts = subscribeToCharts(setCharts, console.error);
+    const unsubscribeLogs = subscribeToChartLogs(setLogs, console.error);
+    const unsubscribeDepartments = subscribeToDepartments(setDepartments, console.error);
+
+    return () => {
+      unsubscribePatients();
+      unsubscribeCharts();
+      unsubscribeLogs();
+      unsubscribeDepartments();
+    };
+  }, []);
+
+  const periodMovementEvents = buildChartMovementEvents(logs, selectedPeriod, selectedDate, selectedMonth, selectedYear);
+  const periodPatients = patients.filter((patient) => isPatientInPeriod(patient, selectedPeriod, selectedDate, selectedMonth, selectedYear));
+  const inpatientCount = patients.filter((patient) => patient.type === "inpatient").length;
+  const outpatientCount = patients.filter((patient) => patient.type === "outpatient").length;
+  const periodInpatientCount = periodPatients.filter((patient) => patient.type === "inpatient").length;
+  const periodOutpatientCount = periodPatients.filter((patient) => patient.type === "outpatient").length;
+  const newPatientCount = periodPatients.filter((patient) => (patient.recordType || "new") === "new").length;
+  const oldPatientCount = periodPatients.filter((patient) => (patient.recordType || "new") === "old").length;
+  const borrowedCharts = charts.filter((chart) => chart.status === "borrowed");
+  const patientMix = [
+    { name: "Inpatient", value: periodInpatientCount, color: "bg-green-600", text: "text-green-700" },
+    { name: "Outpatient", value: periodOutpatientCount, color: "bg-blue-600", text: "text-blue-700" },
+    { name: "New", value: newPatientCount, color: "bg-emerald-500", text: "text-emerald-700" },
+    { name: "Old", value: oldPatientCount, color: "bg-amber-500", text: "text-amber-700" },
+  ];
+  const registryPatientTotal = patients.length;
+  const periodPatientTotal = periodPatients.length;
+  const maxPatientMix = Math.max(...patientMix.map((item) => item.value), 1);
+  const periodInpatients = periodPatients.filter((patient) => patient.type === "inpatient");
+  const periodOutpatients = periodPatients.filter((patient) => patient.type === "outpatient");
+  const inpatientServices = buildServiceAnalytics(periodInpatients);
+  const outpatientServices = buildServiceAnalytics(periodOutpatients);
+  const configuredDepartments = departments.length > 0
+    ? departments.map((department) => department.name)
+    : fallbackDepartments;
+  const logDepartments = periodMovementEvents.map((event) => event.department).filter(Boolean);
+  const chartDepartmentNames = [...new Set([...configuredDepartments, ...logDepartments])];
+  const chartMovementRows = chartDepartmentNames.map((department) => {
+    const departmentEvents = periodMovementEvents.filter((event) => event.department === department);
+    return {
+      name: department,
+      borrowed: departmentEvents.filter((event) => event.type === "borrowed").length,
+      returned: departmentEvents.filter((event) => event.type === "returned").length,
+    };
+  });
+  const chartMovementData = chartMovementRows.some((row) => row.borrowed > 0 || row.returned > 0)
+    ? chartMovementRows
+    : [{ name: "No Logs", borrowed: 0, returned: 0 }];
+  const recentActivity = [...periodMovementEvents]
+    .sort((first, second) => second.date.getTime() - first.date.getTime())
+    .slice(0, 2)
+    .map((event) => ({
+    action: event.type === "borrowed" ? "Borrowed" : "Returned",
+    chart: event.log.caseNumber,
+    person: event.type === "returned"
+      ? event.log.returnedBy || event.log.borrowedBy || "N/A"
+      : event.log.borrowedBy || "N/A",
+    time: event.date
+      ? event.date.toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })
+      : "",
+    tone: event.type === "borrowed" ? "red" : "green",
+  }));
+  const alerts = [
+    { label: "Currently borrowed charts", value: String(borrowedCharts.length), detail: "Active circulation records" },
+    { label: "Available charts", value: String(charts.filter((chart) => chart.status === "available").length), detail: "Ready for checkout" },
+    { label: "Registered patient charts", value: String(charts.length), detail: "Synced from patient registry" },
+  ];
+
+  const stats = [
+    {
+      label: "Total Number of Registered Patients",
+      value: patients.length,
+      icon: Users,
+      color: "bg-green-100",
+      trend: "Synced from Firebase",
+      trendColor: "text-green-700",
+    },
+    {
+      label: "Total Number of Inpatients",
+      value: inpatientCount,
+      icon: Bed,
+      color: "bg-emerald-100",
+      trend: `${registryPatientTotal ? ((inpatientCount / registryPatientTotal) * 100).toFixed(1) : "0.0"}% of registry`,
+      trendColor: "text-slate-500",
+    },
+    {
+      label: "Total Number of Outpatients",
+      value: outpatientCount,
+      icon: UserRound,
+      color: "bg-blue-100",
+      trend: `${registryPatientTotal ? ((outpatientCount / registryPatientTotal) * 100).toFixed(1) : "0.0"}% of registry`,
+      trendColor: "text-slate-500",
+    },
+    {
+      label: "Total Number of Borrowed Charts",
+      value: borrowedCharts.length,
+      icon: Archive,
+      color: "bg-amber-100",
+      trend: "",
+      trendColor: "text-amber-700",
+    },
+  ];
+
+  const periodLabel = selectedPeriod === "today"
+    ? selectedDate
+    : selectedPeriod === "monthly"
+      ? selectedMonth
+      : selectedYear;
+
+  return (
+    <DashboardLayout>
+      <div className="min-h-full lg:h-full lg:min-h-0 flex flex-col overflow-visible lg:overflow-hidden">
+      <Motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-4 flex flex-col xl:flex-row xl:items-end justify-between gap-3 shrink-0"
+      >
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tight">
+            Records <span className="text-green-700">Dashboard</span>
+          </h1>
+          <p className="text-slate-500 font-medium">
+            Chart movement, patient mix, and active circulation records.
+          </p>
+        </div>
+        <div className="mrs-surface flex flex-col sm:flex-row gap-2 rounded-2xl p-2">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+            {periodOptions.map((period) => (
+              <button
+                key={period.id}
+                onClick={() => setSelectedPeriod(period.id)}
+                  className={`px-2 py-2 sm:px-4 rounded-xl text-[11px] sm:text-xs font-black uppercase ${
+                  selectedPeriod === period.id ? "bg-green-700 text-white shadow-sm" : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                {period.label}
+              </button>
+            ))}
+          </div>
+          <div className="min-w-40">
+            {selectedPeriod === "today" && (
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-green-500"
+                aria-label="Select day"
+              />
+            )}
+            {selectedPeriod === "monthly" && (
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(event) => setSelectedMonth(event.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-green-500"
+                aria-label="Select month"
+              />
+            )}
+            {selectedPeriod === "yearly" && (
+              <input
+                type="number"
+                min="2000"
+                max="2100"
+                value={selectedYear}
+                onChange={(event) => setSelectedYear(event.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-green-500"
+                aria-label="Select year"
+              />
+            )}
+          </div>
+        </div>
+      </Motion.div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-3 shrink-0">
+        {stats.map((item, index) => (
+          <StatCard key={item.label} item={item} index={index} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 xl:grid-rows-[minmax(0,1fr)_minmax(0,0.55fr)] gap-3 flex-1 min-h-0 overflow-visible xl:overflow-hidden">
+        <Motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mrs-panel flex min-h-[300px] flex-col rounded-2xl p-4 xl:col-span-7 xl:min-h-0"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+            <div className="flex items-center gap-2">
+              <Archive className="text-green-700" size={20} />
+              <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">
+                Chart Movement by Department
+              </h3>
+            </div>
+            <span className="text-[10px] font-black uppercase text-slate-400">
+              {selectedPeriod} report log departments - {periodLabel}
+            </span>
+          </div>
+          <div className="min-h-[220px] flex-1 xl:min-h-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartMovementData} margin={{ top: 10, right: 10, bottom: 0, left: -16 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef2f7" />
+              <XAxis
+                dataKey="name"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#64748b", fontWeight: 700, fontSize: 12 }}
+              />
+              <YAxis
+                allowDecimals={false}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#64748b", fontSize: 12 }}
+              />
+              <Tooltip contentStyle={{ borderRadius: "14px", border: "1px solid #e2e8f0", fontWeight: "bold", boxShadow: "0 16px 32px rgba(15,23,42,.10)" }} cursor={{ fill: "#f8fafc" }} />
+              <Bar dataKey="borrowed" name="Borrowed" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="returned" name="Returned" fill="#15803d" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          </div>
+        </Motion.div>
+
+        <Motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mrs-panel flex min-h-[300px] flex-col rounded-2xl p-4 xl:col-span-5 xl:min-h-0"
+        >
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Users className="text-green-700" size={20} />
+              <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">
+                Patient Analytics
+              </h3>
+            </div>
+            <span className="text-[10px] font-black uppercase text-slate-400">{periodLabel}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {patientMix.map((item) => (
+              <div key={item.name} className="rounded-xl bg-slate-50 p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-black uppercase text-slate-500">{item.name}</span>
+                  <span className={`text-sm font-black ${item.text}`}>{item.value}</span>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-white">
+                  <div
+                    className={`h-full rounded-full ${item.color}`}
+                    style={{ width: `${Math.max(5, (item.value / maxPatientMix) * 100)}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">
+                  {periodPatientTotal ? ((item.value / periodPatientTotal) * 100).toFixed(1) : "0.0"}%
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-100 bg-slate-50 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Stethoscope size={16} className="text-blue-700" />
+                <p className="text-xs font-black uppercase text-slate-800">Hospital Services</p>
+              </div>
+              <span className="text-[10px] font-black uppercase text-slate-400">
+                From loc/dept
+              </span>
+            </div>
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
+              <ServiceList title="Inpatient Services" services={inpatientServices} tone="green" />
+              <ServiceList title="Outpatient Services" services={outpatientServices} tone="blue" />
+            </div>
+          </div>
+        </Motion.div>
+
+        <Motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mrs-panel flex min-h-[190px] flex-col overflow-hidden rounded-2xl xl:col-span-6 xl:min-h-0"
+        >
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+            <ClipboardCheck size={19} className="text-green-700" />
+            <h3 className="font-black uppercase text-slate-800">Activity LOGS</h3>
+            </div>
+            <span className="text-[10px] font-black uppercase text-slate-400">{periodLabel}</span>
+          </div>
+          <div className="grid min-h-0 flex-1 grid-rows-2 divide-y divide-slate-100">
+            {recentActivity.map((item) => (
+              <div key={`${item.action}-${item.chart}`} className="px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-black text-slate-800 text-sm">{item.chart}</p>
+                  <p className="text-[10px] font-bold uppercase text-slate-400">
+                    {item.person} - {item.time}
+                  </p>
+                </div>
+                <span
+                  className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase ${
+                    item.tone === "red"
+                      ? "bg-red-50 text-red-700 border-red-200"
+                      : item.tone === "blue"
+                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                        : "bg-green-50 text-green-700 border-green-200"
+                  }`}
+                >
+                  {item.action}
+                </span>
+              </div>
+            ))}
+            {recentActivity.length === 0 && (
+              <div className="row-span-2 flex items-center justify-center px-4 py-6 text-center">
+                <div>
+                <p className="font-black text-slate-700 uppercase">No activity yet</p>
+                <p className="text-xs font-semibold text-slate-400 mt-1">
+                  No chart movement in this period.
+                </p>
+                </div>
+              </div>
+            )}
+            {recentActivity.length === 1 && <div aria-hidden="true" />}
+          </div>
+        </Motion.div>
+
+        <Motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mrs-panel flex min-h-[190px] flex-col overflow-hidden rounded-2xl xl:col-span-6 xl:min-h-0"
+        >
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+            <ClipboardCheck size={19} className="text-amber-700" />
+            <h3 className="font-black uppercase text-slate-800">Activity STATUS</h3>
+          </div>
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 bg-slate-50 p-3 sm:grid-cols-3">
+            {alerts.map((item) => (
+              <div key={item.label} className="flex h-full flex-col justify-between rounded-xl bg-white p-4">
+                <div>
+                  <p className="font-black text-slate-800 text-xs leading-tight">{item.label}</p>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">{item.detail}</p>
+                </div>
+                <span className="mt-4 text-3xl font-black leading-none text-slate-800">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </Motion.div>
+      </div>
+      </div>
+    </DashboardLayout>
+  );
+}
