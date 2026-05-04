@@ -1,40 +1,121 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { motion as Motion } from "framer-motion";
+import { Save, UserPen, X } from "lucide-react";
 
 export default function PatientEditModal({ patient, onSave, onClose }) {
   const [form, setForm] = useState(patient);
 
+  useEffect(() => {
+    setForm(patient);
+  }, [patient]);
+
+  if (!patient || !form) return null;
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    onSave({
+      ...form,
+      name: form.name.trim(),
+      caseNumber: form.caseNumber.trim().toUpperCase(),
+    });
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-      <div className="bg-white p-6 rounded-xl w-96 space-y-2">
-        <h2 className="font-bold">Edit Patient</h2>
+    <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
+      <Motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <Motion.form
+        onSubmit={handleSubmit}
+        initial={{ opacity: 0, scale: 0.94, y: 18 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 18 }}
+        className="mrs-panel relative w-full max-w-lg overflow-hidden rounded-2xl"
+      >
+        <div className="flex items-center justify-between gap-4 border-b border-green-100 bg-green-50 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-green-600 text-white">
+              <UserPen size={20} />
+            </div>
+            <div>
+              <h2 className="font-black text-slate-800 uppercase">Edit Patient</h2>
+              <p className="text-xs font-bold text-slate-500">{form.caseNumber}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="p-2 rounded-xl hover:bg-white">
+            <X size={18} />
+          </button>
+        </div>
 
-        <input
-          className="border p-2 w-full"
-          value={form.name}
-          onChange={(e) =>
-            setForm({ ...form, name: e.target.value })
-          }
-        />
+        <div className="p-6 space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-400">Patient Name</label>
+            <input
+              className="mrs-field w-full p-4 rounded-xl font-bold"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
+          </div>
 
-        <input
-          className="border p-2 w-full"
-          value={form.caseNumber}
-          onChange={(e) =>
-            setForm({ ...form, caseNumber: e.target.value })
-          }
-        />
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-400">Case Number</label>
+            <input
+              className="mrs-field w-full p-4 rounded-xl font-mono font-bold"
+              value={form.caseNumber}
+              onChange={(e) => setForm({ ...form, caseNumber: e.target.value.toUpperCase() })}
+              required
+            />
+          </div>
 
-        <button
-          onClick={() => onSave(form)}
-          className="bg-green-600 text-white px-4 py-2 w-full"
-        >
-          Save
-        </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400">Admission</label>
+              <input
+                type="date"
+                className="mrs-field w-full p-3 rounded-xl font-bold"
+                value={form.admissionDate || ""}
+                onChange={(e) => setForm({ ...form, admissionDate: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400">Discharge</label>
+              <input
+                type="date"
+                className="mrs-field w-full p-3 rounded-xl font-bold"
+                value={form.dischargeDate || ""}
+                onChange={(e) => setForm({ ...form, dischargeDate: e.target.value })}
+              />
+            </div>
+          </div>
 
-        <button onClick={onClose} className="text-red-500 w-full">
-          Cancel
-        </button>
-      </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-400">Care Type</label>
+            <select
+              className="mrs-field w-full p-4 rounded-xl font-bold"
+              value={form.type || "outpatient"}
+              onChange={(e) => setForm({ ...form, type: e.target.value })}
+            >
+              <option value="outpatient">Outpatient</option>
+              <option value="inpatient">Inpatient</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 sm:flex-row">
+          <button type="button" onClick={onClose} className="flex-1 py-3 font-black uppercase text-slate-500">
+            Cancel
+          </button>
+          <button className="mrs-primary-button flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-xl font-black uppercase">
+            <Save size={18} />
+            Save
+          </button>
+        </div>
+      </Motion.form>
     </div>
   );
 }

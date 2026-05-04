@@ -1,215 +1,437 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  createUserWithEmailAndPassword,
+  setPersistence,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion as Motion, AnimatePresence } from "framer-motion";
+import {
+  ArrowRight,
+  Building2,
+  ClipboardCheck,
+  Eye,
+  EyeOff,
+  HeartPulse,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 import logo from "../assets/TGMCI_LOGO.png";
+import FloatingToast from "../components/FloatingToast";
+import { useAuth } from "../context/useAuth";
+import { auth, db } from "../firebaseClient";
+import { isStrongPassword, normalizeEmail, sanitizeText } from "../utils/security";
+
+const authErrorMessages = {
+  "auth/email-already-in-use": "An account already exists for this email. Sign in instead.",
+  "auth/invalid-credential": "The email or password is incorrect.",
+  "auth/invalid-email": "Enter a valid department email address.",
+  "auth/operation-not-allowed": "Email/password sign-in is not enabled in Firebase Authentication.",
+  "auth/too-many-requests": "Too many failed attempts. Please try again later.",
+  "auth/user-disabled": "This account has been disabled.",
+  "auth/weak-password": "Use a stronger password with at least 6 characters.",
+  "permission-denied": "Firestore blocked this save. Check your Firestore rules and publish them.",
+  "unavailable": "Firebase is unavailable right now. Check your network connection and try again.",
+};
 
 export default function Login() {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true); // Toggle between Login and Signup
-  const [form, setForm] = useState({ 
-    email: "", 
-    password: "", 
-    confirmPassword: "", 
-    role: "administrator",
-    fullName: "" 
+  const location = useLocation();
+  const { authLoading, isAuthenticated, missingFirebaseConfig } = useAuth();
+  const [authMode, setAuthMode] = useState("sign-in");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    remember: true,
   });
   const [error, setError] = useState("");
+  const [isConfigToastDismissed, setIsConfigToastDismissed] = useState(false);
+  const [isSecurityToastDismissed, setIsSecurityToastDismissed] = useState(false);
 
-  const handleSubmit = (e) => {
+  const redirectTo = location.state?.from?.pathname || "/dashboard";
+  const isCreateAccount = authMode === "create-account";
+
+  React.useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate(redirectTo, { replace: true });
+    }
+  }, [authLoading, isAuthenticated, navigate, redirectTo]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (isLogin) {
-      if (!form.email || !form.password) {
-        setError("Please fill in all fields");
-        return;
-      }
+
+    if (!auth) {
+      setError("Firebase is not configured yet. Create a .env file using the values from .env.example.");
+      return;
+    }
+
+    const email = normalizeEmail(form.email);
+    const fullName = sanitizeText(form.fullName, { maxLength: 120 });
+
+    if (isCreateAccount && !fullName) {
+      setError("Enter your full name to create an account.");
+      return;
+    }
+
+    if (!email || !form.password) {
+      setError(
+        isCreateAccount
+          ? "Enter your department email and password to create an account."
+          : "Enter your department email and password to continue.",
+      );
+      return;
+    }
+
+    if (isCreateAccount && !isStrongPassword(form.password)) {
+      setError("Use at least 8 characters with uppercase, lowercase, and a number.");
+      return;
+    }
+
+    if (isCreateAccount && form.password !== form.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
       setError("");
-      // Logic for navigation
-      if (form.role === "admin") navigate("/admin");
-      else if (form.role === "doctor") navigate("/doctor");
-      else navigate("/nurse");
-    } else {
-      // Signup Logic
-      if (!form.email || !form.password || !form.fullName) {
-        setError("All fields are required for registration");
-        return;
+      await setPersistence(auth, form.remember ? browserLocalPersistence : browserSessionPersistence);
+
+      if (isCreateAccount) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, form.password);
+        await updateProfile(userCredential.user, {
+          displayName: fullName,
+        });
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+          uid: userCredential.user.uid,
+          fullName,
+          email,
+          role: "staff",
+          accountStatus: "active",
+          department: "Medical Records",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const userCredential = await signInWithEmailAndPassword(auth, email, form.password);
+        if (db) {
+          await setDoc(
+            doc(db, "users", userCredential.user.uid),
+            {
+              uid: userCredential.user.uid,
+              email,
+              lastLoginAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
       }
-      if (form.password !== form.confirmPassword) {
-        setError("Passwords do not match");
-        return;
-      }
-      setError("");
-      alert("Registration request sent to Administrator.");
-      setIsLogin(true);
+
+      navigate(redirectTo, { replace: true });
+    } catch (err) {
+      console.error("Firebase authentication error:", err);
+      setError(
+        authErrorMessages[err.code] ||
+          err.message ||
+          "Unable to sign in. Please check your Firebase Auth setup.",
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  const updateForm = (key, value) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setError("");
+  };
+
   return (
-    <div className="min-h-screen flex bg-slate-50 font-sans">
-      {/* LEFT SIDE - BRANDING */}
-      <Motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.8 }}
-        className="hidden lg:flex w-1/2 bg-gradient-to-br from-green-700 to-green-900 text-white flex-col justify-center items-center p-12 relative"
-      >
-        <Motion.div 
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3, duration: 0.6 }}
-          className="z-10 text-center"
+    <div className="min-h-dvh overflow-hidden bg-slate-950 font-sans text-white">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:44px_44px]" />
+      <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-blue-900/45 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-emerald-950/50 to-transparent" />
+
+      <main className="relative flex min-h-dvh items-center justify-center p-4 sm:p-6">
+        <Motion.section
+          initial={{ opacity: 0, scale: 0.97, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
+          className="grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.08] shadow-2xl shadow-black/30 backdrop-blur-xl lg:grid-cols-[0.92fr_1.08fr]"
         >
-          <div className="bg-white p-6 rounded-2xl shadow-2xl mb-8 mx-auto w-48 h-32 flex items-center justify-center">
-            <img
-              src={logo}
-              className="max-w-full max-h-full object-contain"
-              alt="TGMCI Logo"
-            />
-          </div>
-          
-          <h1 className="text-4xl font-black tracking-tight uppercase">
-            Medical Records System
-          </h1>
-          <p className="mt-4 text-green-100 font-medium max-w-sm mx-auto leading-relaxed">
-            Securely access and manage patient data, clinical notes, and historical medical records.
-          </p>
-        </Motion.div>
-      </Motion.div>
-
-      {/* RIGHT SIDE - FORM CONTAINER */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center p-6 bg-white lg:bg-transparent">
-        <Motion.div
-          layout // Smoothly animates size changes when switching forms
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="bg-white p-10 rounded-3xl w-full max-w-md border-2 border-green-500/30 shadow-[0_20px_60px_-15px_rgba(34,197,94,0.2)]"
-        >
-          <div className="mb-8 text-center lg:text-left">
-            <h2 className="text-3xl font-bold text-slate-800">
-              {isLogin ? "Welcome Back" : "Create Account"}
-            </h2>
-            <p className="text-slate-500 mt-2">
-              {isLogin ? "Please enter your details to sign in." : "Fill in the details to request access."}
-            </p>
-          </div>
-
-          <AnimatePresence mode="wait">
-            {error && (
-              <Motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded mb-6 text-sm font-medium overflow-hidden"
-              >
-                {error}
-              </Motion.div>
-            )}
-          </AnimatePresence>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
-              <Motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
-                <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">Full Name</label>
-                <input
-                  type="text"
-                  placeholder="Dr. John Doe"
-                  className="w-full border-2 border-black bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
-                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                />
-              </Motion.div>
-            )}
-
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">Email Address</label>
-              <input
-                type="email"
-                placeholder="name@hospital.com"
-                className="w-full border-2 border-black bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
+          <aside className="relative border-b border-white/10 bg-slate-900/80 p-5 sm:p-7 lg:border-b-0 lg:border-r">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 via-blue-400 to-white/50" />
+            <div className="flex h-full min-h-[26rem] flex-col justify-between gap-8">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">Password</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  className="w-full border-2 border-black bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                />
-              </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-24 w-32 shrink-0 items-center justify-center rounded-3xl border border-white/10 bg-white p-3 shadow-xl shadow-black/20">
+                    <img src={logo} className="h-full w-full object-contain" alt="TGMCI Logo" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xl font-black uppercase leading-tight text-white sm:text-2xl">
+                      Tagum Global Medical Center Inc.
+                    </p>
+                    <p className="mt-1 text-xs font-black uppercase tracking-[0.22em] text-emerald-200">
+                      Medical Records System
+                    </p>
+                  </div>
+                </div>
 
-              {!isLogin && (
-                <Motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}>
-                  <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">Confirm Password</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    className="w-full border-2 border-black bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
-                    onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                  />
-                </Motion.div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1 ml-1">Assigned Role</label>
-              <div className="relative">
-                <select
-                  className="w-full border-2 border-black bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-green-600 outline-none appearance-none transition-all cursor-pointer"
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  value={form.role}
-                >
-                  <option value="doctor">Doctor</option>
-                  <option value="nurse">Nurse</option>
-                  <option value="admin">Administrator</option>
-                </select>
-                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-                  <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
+                <div className="mt-12 max-w-lg">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/10 px-4 py-2">
+                    <ShieldCheck size={16} className="text-emerald-200" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-100">
+                      Records Vault Portal
+                    </span>
+                  </div>
+                  <h1 className="mt-6 text-4xl font-black uppercase leading-none tracking-tight sm:text-5xl">
+                    Access the records workspace.
+                  </h1>
+                  <p className="mt-5 max-w-md text-sm font-semibold leading-relaxed text-slate-300">
+                    A secure entry point for patient registry, chart tracking, scanned chart viewing, and report activity logs.
+                  </p>
                 </div>
               </div>
-            </div>
 
-            {isLogin && (
-              <div className="flex items-center justify-between text-sm px-1">
-                <label className="flex items-center text-slate-600 cursor-pointer">
-                  <input type="checkbox" className="mr-2 rounded border-black text-green-600 focus:ring-green-500" />
-                  Keep me logged in
-                </label>
-                <a href="#" className="text-green-700 font-bold hover:text-green-800 transition-colors">Forgot password?</a>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                {[
+                  { label: "Audit Trail", value: "Tracked", icon: ClipboardCheck },
+                  { label: "Session Lock", value: "Enabled", icon: LockKeyhole },
+                  { label: "Records Unit", value: "Authorized", icon: Building2 },
+                ].map((item, index) => (
+                  <Motion.div
+                    key={item.label}
+                    initial={{ opacity: 0, x: -14 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 + index * 0.06 }}
+                    className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"
+                  >
+                    <item.icon size={18} className="mb-3 text-emerald-200" />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
+                    <p className="mt-1 text-sm font-black uppercase text-white">{item.value}</p>
+                  </Motion.div>
+                ))}
               </div>
-            )}
+            </div>
+          </aside>
 
-            <Motion.button
-              whileHover={{ scale: 1.02, backgroundColor: "#15803d" }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-200 transition-all text-lg mt-2"
-            >
-              {isLogin ? "Sign In" : "Register Now"}
-            </Motion.button>
-          </form>
+          <div className="flex items-center justify-center bg-slate-50 p-5 text-slate-900 sm:p-8 lg:p-10">
+            <div className="w-full max-w-md">
+              <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+                <div className="relative grid grid-cols-2 gap-1">
+                  <Motion.div
+                    layout
+                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                    className={`absolute inset-y-0 w-1/2 rounded-xl bg-slate-950 ${
+                      isCreateAccount ? "left-1/2" : "left-0"
+                    }`}
+                  />
+                  {[
+                    { id: "sign-in", label: "Sign In" },
+                    { id: "create-account", label: "Create" },
+                  ].map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => {
+                        setAuthMode(mode.id);
+                        setError("");
+                      }}
+                      className={`relative z-10 rounded-xl px-4 py-3 text-xs font-black uppercase transition-colors ${
+                        authMode === mode.id ? "text-white" : "text-slate-500 hover:text-slate-900"
+                      }`}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          {/* TOGGLE LINK */}
-          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-            <p className="text-slate-600 text-sm">
-              {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-              <button 
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setError("");
-                }} 
-                className="text-green-700 font-bold hover:text-green-900 transition-colors underline-offset-4 hover:underline"
-              >
-                {isLogin ? "Request Access / Sign Up" : "Back to Login"}
-              </button>
-            </p>
+              <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+                <div className="border-b border-slate-100 bg-gradient-to-r from-blue-50 to-green-50 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                        {isCreateAccount ? "Account Setup" : "Secure Login"}
+                      </p>
+                      <h2 className="mt-2 text-3xl font-black uppercase tracking-tight text-slate-950">
+                        {isCreateAccount ? "Create Account" : "Department Sign In"}
+                      </h2>
+                    </div>
+                    <Motion.div
+                      key={authMode}
+                      initial={{ rotate: -8, scale: 0.9, opacity: 0 }}
+                      animate={{ rotate: 0, scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 20 }}
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-700 shadow-sm"
+                    >
+                      {isCreateAccount ? <UserRound size={24} /> : <ShieldCheck size={24} />}
+                    </Motion.div>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-5 sm:p-6">
+                  <AnimatePresence mode="wait" initial={false}>
+                    <Motion.div
+                      key={authMode}
+                      initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -14, scale: 0.97 }}
+                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                      className="space-y-4"
+                    >
+                      {isCreateAccount && (
+                        <div className="space-y-1">
+                          <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Full Name</label>
+                          <div className="relative">
+                            <UserRound size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type="text"
+                              placeholder="Juan Dela Cruz"
+                              className="mrs-field w-full bg-white pl-11 pr-4 py-3 rounded-xl font-bold"
+                              value={form.fullName}
+                              onChange={(e) => updateForm("fullName", e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Department Email</label>
+                        <div className="relative">
+                          <Mail size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="email"
+                            placeholder="name@hospital.com"
+                            className="mrs-field w-full bg-white pl-11 pr-4 py-3 rounded-xl font-bold"
+                            value={form.email}
+                            onChange={(e) => updateForm("email", e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Password</label>
+                        <div className="relative">
+                          <LockKeyhole size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Password"
+                            className="mrs-field w-full bg-white pl-11 pr-12 py-3 rounded-xl font-bold"
+                            value={form.password}
+                            onChange={(e) => updateForm("password", e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((value) => !value)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 hover:bg-slate-100"
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {isCreateAccount && (
+                        <div className="space-y-1">
+                          <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Confirm Password</label>
+                          <div className="relative">
+                            <LockKeyhole size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type={showPassword ? "text" : "password"}
+                              placeholder="Confirm password"
+                              className="mrs-field w-full bg-white pl-11 pr-4 py-3 rounded-xl font-bold"
+                              value={form.confirmPassword}
+                              onChange={(e) => updateForm("confirmPassword", e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between gap-3 px-1 text-sm">
+                        <label className="flex cursor-pointer items-center font-semibold text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={form.remember}
+                            onChange={(e) => updateForm("remember", e.target.checked)}
+                            className="mr-2 rounded border-black text-green-600 focus:ring-green-500"
+                          />
+                          Keep signed in
+                        </label>
+                      </div>
+
+                      <Motion.button
+                        whileHover={{ y: -1 }}
+                        whileTap={{ scale: 0.98 }}
+                        disabled={isSubmitting}
+                        className="mrs-primary-button flex w-full items-center justify-center gap-2 rounded-xl py-4 font-black uppercase transition-all"
+                      >
+                        {isSubmitting
+                          ? isCreateAccount
+                            ? "Creating Account..."
+                            : "Signing In..."
+                          : isCreateAccount
+                            ? "Create Account"
+                            : "Enter Department System"}
+                        <ArrowRight size={18} />
+                      </Motion.button>
+                    </Motion.div>
+                  </AnimatePresence>
+
+                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-700">
+                        <HeartPulse size={19} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</p>
+                        <p className="text-xs font-bold text-slate-600">
+                          {isCreateAccount
+                            ? "New accounts start as staff and can be reviewed later."
+                            : "Records department access is ready."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
           </div>
-        </Motion.div>
-      </div>
+        </Motion.section>
+      </main>
+      <FloatingToast
+        toast={
+          error
+            ? { type: "error", message: error }
+            : location.state?.securityMessage && !isSecurityToastDismissed
+              ? { type: "info", message: location.state.securityMessage }
+            : missingFirebaseConfig.length > 0 && !isConfigToastDismissed
+              ? {
+                  type: "error",
+                  title: "Firebase Config Missing",
+                  message: `Missing: ${missingFirebaseConfig
+                    .map((key) => `VITE_FIREBASE_${key.replace(/([A-Z])/g, "_$1").toUpperCase()}`)
+                    .join(", ")}`,
+                }
+              : null
+        }
+        duration={error ? 3200 : 0}
+        onClose={() => {
+          setError("");
+          setIsSecurityToastDismissed(true);
+          setIsConfigToastDismissed(true);
+        }}
+      />
     </div>
   );
 }
