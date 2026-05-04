@@ -120,6 +120,95 @@
 }
 
 @layer utilities {
+  @media (max-width: 1366px), (max-height: 820px) {
+    html {
+      font-size: 13px;
+    }
+
+    .mrs-deploy-fit main {
+      overflow: hidden;
+      scrollbar-gutter: stable;
+    }
+
+    .mrs-deploy-fit {
+      --mrs-compact-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+    }
+
+    .mrs-deploy-fit .mrs-navbar {
+      min-height: 4.35rem;
+    }
+
+    .mrs-deploy-fit .mrs-surface,
+    .mrs-deploy-fit .mrs-panel,
+    .mrs-deploy-fit .mrs-card {
+      box-shadow: var(--mrs-compact-shadow);
+    }
+
+    .mrs-deploy-fit .rounded-2xl {
+      border-radius: 1rem;
+    }
+
+    .mrs-deploy-fit .min-w-\[980px\],
+    .mrs-deploy-fit .min-w-\[960px\] {
+      min-width: 50rem !important;
+    }
+
+    .mrs-deploy-fit .min-w-\[780px\],
+    .mrs-deploy-fit .min-w-\[760px\] {
+      min-width: 44rem !important;
+    }
+
+    .mrs-deploy-fit .min-h-\[300px\] {
+      min-height: 15.5rem !important;
+    }
+
+    .mrs-deploy-fit .min-h-\[220px\] {
+      min-height: 11.5rem !important;
+    }
+
+    .mrs-deploy-fit .min-h-\[190px\] {
+      min-height: 8.75rem !important;
+    }
+
+    .mrs-deploy-fit .min-h-\[65dvh\] {
+      min-height: 0 !important;
+    }
+
+    .mrs-deploy-fit .size-20 {
+      width: 4rem;
+      height: 4rem;
+    }
+
+    .mrs-deploy-fit .size-10,
+    .mrs-deploy-fit .w-10.h-10,
+    .mrs-deploy-fit .h-10.w-10 {
+      width: 2.4rem;
+      height: 2.4rem;
+    }
+
+    .mrs-deploy-fit th,
+    .mrs-deploy-fit td {
+      line-height: 1.2;
+    }
+
+    .mrs-deploy-fit .recharts-text {
+      font-size: 10px;
+    }
+
+    .mrs-deploy-fit input,
+    .mrs-deploy-fit select,
+    .mrs-deploy-fit textarea,
+    .mrs-deploy-fit button {
+      min-height: 0;
+    }
+  }
+
+  @media (min-width: 1536px) and (min-height: 821px) {
+    html {
+      font-size: 16px;
+    }
+  }
+
   html.soft-light body {
     background: rgb(235 241 248);
     color: rgb(15 23 42);

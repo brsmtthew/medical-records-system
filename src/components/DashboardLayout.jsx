@@ -18,7 +18,7 @@ export default function DashboardLayout({ children }) {
   };
 
   return (
-    <div className="mrs-shell flex min-h-dvh overflow-x-hidden font-sans lg:h-screen lg:overflow-hidden">
+    <div className="mrs-shell mrs-deploy-fit flex min-h-dvh overflow-x-hidden font-sans lg:h-screen lg:overflow-hidden">
       <aside className="hidden lg:block shrink-0">
         <Sidebar
           isCollapsed={isSidebarCollapsed}
@@ -61,7 +61,7 @@ export default function DashboardLayout({ children }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            className="min-h-full p-4 md:p-6 flex flex-col overflow-visible lg:h-full lg:min-h-0 lg:overflow-hidden"
+            className="min-h-full p-4 md:p-5 2xl:p-6 flex flex-col overflow-visible lg:h-full lg:min-h-0 lg:overflow-hidden"
           >
             <div className="flex-1 min-h-0 overflow-visible lg:overflow-hidden">{children}</div>
           </Motion.div>

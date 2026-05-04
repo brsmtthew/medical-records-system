@@ -36,15 +36,15 @@ export default function Sidebar({
   return (
     <div
       className={`mrs-sidebar min-h-screen bg-gradient-to-b from-blue-50 via-white to-green-50/70 text-slate-700 flex flex-col border-r border-blue-100 shadow-xl shadow-slate-900/5 transition-all duration-300 ease-out ${
-        isCollapsed ? "w-24 p-4" : "w-72 p-5"
+        isCollapsed ? "w-20 p-3 2xl:w-24 2xl:p-4" : "w-64 p-4 2xl:w-72 2xl:p-5"
       }`}
     >
 
-      <div className={`mb-8 flex gap-3 ${isCollapsed ? "flex-col items-center" : "items-center"}`}>
+      <div className={`mb-5 2xl:mb-8 flex gap-3 ${isCollapsed ? "flex-col items-center" : "items-center"}`}>
         <div className={`flex items-center min-w-0 ${isCollapsed ? "justify-center" : "w-full"}`}>
           <div
             className={`mrs-logo-frame shrink-0 rounded-2xl border border-slate-200 flex items-center justify-center shadow-sm overflow-hidden transition-all duration-300 ${
-              isCollapsed ? "h-12 w-12 p-1.5" : "h-20 w-full p-3"
+              isCollapsed ? "h-11 w-11 p-1.5 2xl:h-12 2xl:w-12" : "h-16 w-full p-2.5 2xl:h-20 2xl:p-3"
             }`}
           >
             <img src={logo} alt="TGMCI" className="h-full w-full object-contain" />
@@ -62,7 +62,7 @@ export default function Sidebar({
         )}
       </div>
 
-      <nav className="flex-1 space-y-1.5">
+      <nav className="flex-1 space-y-1 2xl:space-y-1.5">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
 
@@ -78,7 +78,7 @@ export default function Sidebar({
               title={isCollapsed ? item.name : undefined}
               className={`
                 flex items-center rounded-xl cursor-pointer transition-all duration-300 ease-out group
-                ${isCollapsed ? "justify-center px-0 py-3" : "gap-4 px-4 py-3"}
+                ${isCollapsed ? "justify-center px-0 py-2.5 2xl:py-3" : "gap-3 px-3 py-2.5 2xl:gap-4 2xl:px-4 2xl:py-3"}
                 ${
                   isActive
                     ? "bg-blue-50 text-blue-700 shadow-sm"
@@ -112,12 +112,12 @@ export default function Sidebar({
         })}
       </nav>
 
-      <div className="mt-auto pt-6 border-t border-slate-100">
+      <div className="mt-auto pt-4 2xl:pt-6 border-t border-slate-100">
         {!showCloseButton && onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
             className={`hidden lg:flex items-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-300 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 ${
-              isCollapsed ? "mx-auto size-11 justify-center" : "w-full justify-between px-3 py-2.5"
+              isCollapsed ? "mx-auto size-10 justify-center 2xl:size-11" : "w-full justify-between px-3 py-2.5"
             }`}
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >

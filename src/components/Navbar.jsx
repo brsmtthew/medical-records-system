@@ -238,7 +238,7 @@ export default function Navbar({ onMenuClick }) {
 
   return (
     <>
-    <div className="mrs-navbar w-full border-b border-blue-100/80 bg-gradient-to-r from-blue-50/95 via-white/95 to-green-50/90 px-3 py-3 backdrop-blur-xl sm:px-4 md:px-6 md:py-3 flex justify-between items-center sticky top-0 z-50">
+    <div className="mrs-navbar w-full border-b border-blue-100/80 bg-gradient-to-r from-blue-50/95 via-white/95 to-green-50/90 px-3 py-2.5 backdrop-blur-xl sm:px-4 md:px-5 2xl:px-6 2xl:py-3 flex justify-between items-center sticky top-0 z-50">
       <div className="flex items-center gap-3 md:gap-4 min-w-0">
         <Motion.button
           whileTap={{ scale: 0.94 }}
@@ -250,7 +250,7 @@ export default function Navbar({ onMenuClick }) {
         </Motion.button>
 
         <div className="flex flex-col min-w-0">
-          <h1 className="text-[12px] sm:text-lg font-black tracking-tight text-slate-900 leading-tight sm:leading-none truncate">
+          <h1 className="text-[12px] sm:text-base 2xl:text-lg font-black tracking-tight text-slate-900 leading-tight sm:leading-none truncate">
             TAGUM GLOBAL <span className="text-blue-700">MEDICAL CENTER</span> INC.
           </h1>
           <div className="flex items-center gap-2 mt-1">
@@ -261,8 +261,8 @@ export default function Navbar({ onMenuClick }) {
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 sm:gap-3 lg:gap-6">
-        <div className="hidden lg:flex items-center gap-2 text-slate-500 px-4 border-r border-slate-200">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3 2xl:gap-6">
+        <div className="hidden xl:flex items-center gap-2 text-slate-500 px-3 2xl:px-4 border-r border-slate-200">
           <Calendar size={16} />
           <span className="text-xs font-bold uppercase tracking-wider">
             {new Date().toLocaleDateString("en-US", {
@@ -392,7 +392,7 @@ export default function Navbar({ onMenuClick }) {
             </div>
             <div className="hidden sm:flex flex-col text-left">
               <div className="flex items-center gap-1.5">
-                <span className="whitespace-nowrap text-sm font-black text-slate-800 leading-tight">
+                <span className="block max-w-28 truncate whitespace-nowrap text-sm font-black text-slate-800 leading-tight 2xl:max-w-40">
                   {displayName}
                 </span>
                 <Circle size={8} className="fill-green-500 text-green-500" />
