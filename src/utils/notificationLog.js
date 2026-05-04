@@ -3,6 +3,7 @@ export const bellNotificationStorageKey = "mrs-bell-notifications";
 export const unreadNotificationStorageKey = "mrs-navbar-unread-notifications";
 export const maxNotificationLogItems = 50;
 
+// Normalizes toast and bell notification objects before saving or rendering them.
 export function normalizeNotification(notification) {
   return {
     id: notification.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -16,9 +17,11 @@ export function normalizeNotification(notification) {
     userName: notification.userName || "",
     userEmail: notification.userEmail || "",
     userId: notification.userId || "",
+    adminOnly: Boolean(notification.adminOnly),
   };
 }
 
+// Reads the Settings action-log notification history from local storage.
 export function readStoredNotifications() {
   try {
     if (typeof localStorage === "undefined") return [];
@@ -30,6 +33,7 @@ export function readStoredNotifications() {
   }
 }
 
+// Saves the Settings action-log notification history with a fixed maximum length.
 export function writeStoredNotifications(notifications) {
   try {
     if (typeof localStorage === "undefined") return;
@@ -42,6 +46,7 @@ export function writeStoredNotifications(notifications) {
   }
 }
 
+// Reads the navbar bell notification list from local storage.
 export function readStoredBellNotifications() {
   try {
     if (typeof localStorage === "undefined") return [];
@@ -53,6 +58,7 @@ export function readStoredBellNotifications() {
   }
 }
 
+// Saves the navbar bell notification list with a fixed maximum length.
 export function writeStoredBellNotifications(notifications) {
   try {
     if (typeof localStorage === "undefined") return;
@@ -65,6 +71,7 @@ export function writeStoredBellNotifications(notifications) {
   }
 }
 
+// Reads the persisted unread notification badge count.
 export function readStoredUnreadNotifications() {
   try {
     if (typeof localStorage === "undefined") return 0;
@@ -74,6 +81,7 @@ export function readStoredUnreadNotifications() {
   }
 }
 
+// Saves a non-negative unread notification badge count.
 export function writeStoredUnreadNotifications(count) {
   try {
     if (typeof localStorage === "undefined") return;

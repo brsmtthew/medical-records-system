@@ -120,6 +120,37 @@
 }
 
 @layer utilities {
+  .mrs-icon-button {
+    align-items: center;
+    border: 1px solid rgb(203 213 225);
+    border-radius: 0.875rem;
+    display: inline-flex;
+    justify-content: center;
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease,
+      transform 180ms ease;
+  }
+
+  .mrs-icon-button:hover {
+    transform: translateY(-1px);
+  }
+
+  .mrs-mobile-menu-button {
+    background: rgb(15 23 42);
+    color: white;
+    height: 2.75rem;
+    width: 2.75rem;
+  }
+
+  .mrs-mobile-close-button {
+    background: rgb(248 250 252);
+    color: rgb(15 23 42);
+    height: 2.5rem;
+    width: 2.5rem;
+  }
+
   @media (max-width: 1366px), (max-height: 820px) {
     html {
       font-size: 13px;
@@ -200,6 +231,21 @@
     .mrs-deploy-fit textarea,
     .mrs-deploy-fit button {
       min-height: 0;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    html {
+      font-size: 14px;
+    }
+
+    .mrs-deploy-fit main {
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .mrs-deploy-fit .mrs-navbar {
+      min-height: auto;
     }
   }
 
@@ -444,6 +490,18 @@
     border-color: rgb(59 130 246);
     background-color: rgba(30, 64, 175, 0.22);
     color: rgb(191 219 254);
+  }
+
+  html.dark .mrs-mobile-menu-button {
+    border-color: rgb(71 85 105);
+    background: rgb(248 250 252);
+    color: rgb(15 23 42);
+  }
+
+  html.dark .mrs-mobile-close-button {
+    border-color: rgb(71 85 105);
+    background: rgb(15 23 42);
+    color: rgb(241 245 249);
   }
 
   html.dark .mrs-table-row:hover,

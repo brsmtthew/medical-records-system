@@ -3,23 +3,24 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { useAuth } from "../context/useAuth";
 import { auth } from "../firebaseClient";
-import { readSystemSettings } from "../utils/systemSettings";
-import { defaultSessionTimeoutMinutes } from "../utils/security";
 
-export default function ProtectedRoute({ children }) {
+const fixedSessionTimeoutMinutes = 10;
+
+export default function ProtectedRoute({ children, requireAdmin = false }) {
   const location = useLocation();
   const navigate = useNavigate();
   const lastActivityRef = useRef(0);
-  const { authLoading, isAuthenticated, isAccountDisabled } = useAuth();
+  const { authLoading, isAuthenticated, isAccountDisabled, isAdmin } = useAuth();
 
   useEffect(() => {
+    // Locks the session after the fixed security timeout inside protected pages.
     if (!isAuthenticated || !auth) return undefined;
 
-    const timeoutMinutes = Number(readSystemSettings().sessionTimeoutMinutes) || defaultSessionTimeoutMinutes;
-    const timeoutMs = timeoutMinutes * 60 * 1000;
+    const timeoutMs = fixedSessionTimeoutMinutes * 60 * 1000;
     const resetActivity = () => {
       lastActivityRef.current = Date.now();
     };
+    // Checks inactivity on an interval so passive users are signed out.
     const checkActivity = async () => {
       if (Date.now() - lastActivityRef.current < timeoutMs) return;
       await signOut(auth);
@@ -74,6 +75,26 @@ export default function ProtectedRoute({ children }) {
             className="mrs-primary-button mt-6 rounded-xl px-5 py-3 text-xs font-black uppercase"
           >
             Return to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (requireAdmin && !isAdmin) {
+    return (
+      <div className="mrs-shell min-h-screen flex items-center justify-center p-4 font-sans">
+        <div className="mrs-panel max-w-sm rounded-2xl p-6 text-center">
+          <p className="text-xl font-black uppercase text-slate-800">Admin Access Only</p>
+          <p className="mt-2 text-sm font-semibold text-slate-500">
+            Settings and account controls are restricted to administrator accounts.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard", { replace: true })}
+            className="mrs-primary-button mt-6 rounded-xl px-5 py-3 text-xs font-black uppercase"
+          >
+            Return to Dashboard
           </button>
         </div>
       </div>

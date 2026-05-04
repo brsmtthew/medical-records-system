@@ -3,6 +3,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   setPersistence,
   signInWithEmailAndPassword,
   updateProfile,
@@ -32,6 +33,7 @@ const authErrorMessages = {
   "auth/email-already-in-use": "An account already exists for this email. Sign in instead.",
   "auth/invalid-credential": "The email or password is incorrect.",
   "auth/invalid-email": "Enter a valid department email address.",
+  "auth/missing-email": "Enter your email first, then click forgot password.",
   "auth/operation-not-allowed": "Email/password sign-in is not enabled in Firebase Authentication.",
   "auth/too-many-requests": "Too many failed attempts. Please try again later.",
   "auth/user-disabled": "This account has been disabled.",
@@ -55,6 +57,7 @@ export default function Login() {
     remember: true,
   });
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [isConfigToastDismissed, setIsConfigToastDismissed] = useState(false);
   const [isSecurityToastDismissed, setIsSecurityToastDismissed] = useState(false);
 
@@ -62,11 +65,13 @@ export default function Login() {
   const isCreateAccount = authMode === "create-account";
 
   React.useEffect(() => {
+    // Sends already-authenticated users directly to the protected workspace.
     if (!authLoading && isAuthenticated) {
       navigate(redirectTo, { replace: true });
     }
   }, [authLoading, isAuthenticated, navigate, redirectTo]);
 
+  // Validates the current auth form, then signs in or creates the Firebase account.
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -151,30 +156,54 @@ export default function Login() {
     }
   };
 
+  // Updates one form field and clears stale validation errors.
   const updateForm = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
     setError("");
+    setNotice("");
+  };
+
+  // Sends a Firebase reset email for staff who forgot their password.
+  const handlePasswordReset = async () => {
+    if (!auth) {
+      setError("Firebase is not configured yet.");
+      return;
+    }
+
+    const email = normalizeEmail(form.email);
+    if (!email) {
+      setError("Enter your email first, then click forgot password.");
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setNotice("If the staff email exists, Firebase will send a secure password reset email.");
+      setError("");
+    } catch (err) {
+      setError(authErrorMessages[err.code] || err.message || "Unable to send the password reset email.");
+    }
   };
 
   return (
-    <div className="min-h-dvh overflow-hidden bg-slate-950 font-sans text-white">
+    <div className="min-h-dvh overflow-x-hidden bg-slate-950 font-sans text-white">
       <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:44px_44px]" />
       <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-blue-900/45 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-emerald-950/50 to-transparent" />
 
-      <main className="relative flex min-h-dvh items-center justify-center p-4 sm:p-6">
+      <main className="relative flex min-h-dvh items-center justify-center px-3 py-4 sm:p-6">
         <Motion.section
           initial={{ opacity: 0, scale: 0.97, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
-          className="grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.08] shadow-2xl shadow-black/30 backdrop-blur-xl lg:grid-cols-[0.92fr_1.08fr]"
+          className="grid w-full max-w-6xl overflow-hidden rounded-3xl border border-white/10 bg-white/[0.08] shadow-2xl shadow-black/30 backdrop-blur-xl sm:rounded-[2rem] lg:grid-cols-[0.92fr_1.08fr]"
         >
-          <aside className="relative border-b border-white/10 bg-slate-900/80 p-5 sm:p-7 lg:border-b-0 lg:border-r">
+          <aside className="relative border-b border-white/10 bg-slate-900/80 p-4 sm:p-7 lg:border-b-0 lg:border-r">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 via-blue-400 to-white/50" />
-            <div className="flex h-full min-h-[26rem] flex-col justify-between gap-8">
+            <div className="flex h-full min-h-0 flex-col justify-between gap-7 sm:min-h-[26rem]">
               <div>
-                <div className="flex items-center gap-4">
-                  <div className="flex h-24 w-32 shrink-0 items-center justify-center rounded-3xl border border-white/10 bg-white p-3 shadow-xl shadow-black/20">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white p-2 shadow-xl shadow-black/20 sm:h-24 sm:w-32 sm:rounded-3xl sm:p-3" style={{ backgroundColor: "white" }}>
                     <img src={logo} className="h-full w-full object-contain" alt="TGMCI Logo" />
                   </div>
                   <div className="min-w-0">
@@ -187,14 +216,14 @@ export default function Login() {
                   </div>
                 </div>
 
-                <div className="mt-12 max-w-lg">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/10 px-4 py-2">
+                <div className="mt-7 max-w-lg sm:mt-12">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 sm:px-4">
                     <ShieldCheck size={16} className="text-emerald-200" />
                     <span className="text-[10px] font-black uppercase tracking-widest text-emerald-100">
                       Records Vault Portal
                     </span>
                   </div>
-                  <h1 className="mt-6 text-4xl font-black uppercase leading-none tracking-tight sm:text-5xl">
+                  <h1 className="mt-5 text-3xl font-black uppercase leading-none tracking-tight sm:mt-6 sm:text-5xl">
                     Access the records workspace.
                   </h1>
                   <p className="mt-5 max-w-md text-sm font-semibold leading-relaxed text-slate-300">
@@ -214,7 +243,7 @@ export default function Login() {
                     initial={{ opacity: 0, x: -14 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.1 + index * 0.06 }}
-                    className="rounded-2xl border border-white/10 bg-white/[0.06] p-4"
+                    className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 sm:p-4"
                   >
                     <item.icon size={18} className="mb-3 text-emerald-200" />
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
@@ -225,7 +254,7 @@ export default function Login() {
             </div>
           </aside>
 
-          <div className="flex items-center justify-center bg-slate-50 p-5 text-slate-900 sm:p-8 lg:p-10">
+          <div className="flex items-center justify-center bg-slate-50 p-4 text-slate-900 sm:p-8 lg:p-10">
             <div className="w-full max-w-md">
               <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
                 <div className="relative grid grid-cols-2 gap-1">
@@ -258,13 +287,13 @@ export default function Login() {
               </div>
 
               <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
-                <div className="border-b border-slate-100 bg-gradient-to-r from-blue-50 to-green-50 p-5">
+                <div className="border-b border-slate-100 bg-gradient-to-r from-blue-50 to-green-50 p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
                         {isCreateAccount ? "Account Setup" : "Secure Login"}
                       </p>
-                      <h2 className="mt-2 text-3xl font-black uppercase tracking-tight text-slate-950">
+                      <h2 className="mt-2 text-2xl font-black uppercase tracking-tight text-slate-950 sm:text-3xl">
                         {isCreateAccount ? "Create Account" : "Department Sign In"}
                       </h2>
                     </div>
@@ -292,12 +321,12 @@ export default function Login() {
                     >
                       {isCreateAccount && (
                         <div className="space-y-1">
-                          <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Full Name</label>
                           <div className="relative">
                             <UserRound size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
                               type="text"
                               placeholder="Juan Dela Cruz"
+                              aria-label="Full Name"
                               className="mrs-field w-full bg-white pl-11 pr-4 py-3 rounded-xl font-bold"
                               value={form.fullName}
                               onChange={(e) => updateForm("fullName", e.target.value)}
@@ -307,29 +336,31 @@ export default function Login() {
                       )}
 
                       <div className="space-y-1">
-                        <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Department Email</label>
                         <div className="relative">
                           <Mail size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
                             type="email"
                             placeholder="name@hospital.com"
+                            aria-label="Department Email"
                             className="mrs-field w-full bg-white pl-11 pr-4 py-3 rounded-xl font-bold"
                             value={form.email}
                             onChange={(e) => updateForm("email", e.target.value)}
+                            autoComplete="email"
                           />
                         </div>
                       </div>
 
                       <div className="space-y-1">
-                        <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Password</label>
                         <div className="relative">
                           <LockKeyhole size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
                             type={showPassword ? "text" : "password"}
                             placeholder="Password"
+                            aria-label="Password"
                             className="mrs-field w-full bg-white pl-11 pr-12 py-3 rounded-xl font-bold"
                             value={form.password}
                             onChange={(e) => updateForm("password", e.target.value)}
+                            autoComplete={isCreateAccount ? "new-password" : "current-password"}
                           />
                           <button
                             type="button"
@@ -344,15 +375,16 @@ export default function Login() {
 
                       {isCreateAccount && (
                         <div className="space-y-1">
-                          <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Confirm Password</label>
                           <div className="relative">
                             <LockKeyhole size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
                               type={showPassword ? "text" : "password"}
                               placeholder="Confirm password"
+                              aria-label="Confirm Password"
                               className="mrs-field w-full bg-white pl-11 pr-4 py-3 rounded-xl font-bold"
                               value={form.confirmPassword}
                               onChange={(e) => updateForm("confirmPassword", e.target.value)}
+                              autoComplete="new-password"
                             />
                           </div>
                         </div>
@@ -368,6 +400,15 @@ export default function Login() {
                           />
                           Keep signed in
                         </label>
+                        {!isCreateAccount && (
+                          <button
+                            type="button"
+                            onClick={handlePasswordReset}
+                            className="text-xs font-black uppercase text-blue-700 hover:text-blue-900"
+                          >
+                            Forgot Password?
+                          </button>
+                        )}
                       </div>
 
                       <Motion.button
@@ -413,6 +454,8 @@ export default function Login() {
         toast={
           error
             ? { type: "error", message: error }
+            : notice
+              ? { type: "success", message: notice }
             : location.state?.securityMessage && !isSecurityToastDismissed
               ? { type: "info", message: location.state.securityMessage }
             : missingFirebaseConfig.length > 0 && !isConfigToastDismissed
@@ -428,6 +471,7 @@ export default function Login() {
         duration={error ? 3200 : 0}
         onClose={() => {
           setError("");
+          setNotice("");
           setIsSecurityToastDismissed(true);
           setIsConfigToastDismissed(true);
         }}

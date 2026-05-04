@@ -23,6 +23,7 @@ test("normalizeNotification keeps audit fields for patient actions", () => {
   assert.equal(notification.userName, "MARIA RECORDS");
   assert.equal(notification.userEmail, "maria@example.com");
   assert.equal(notification.userId, "user-1");
+  assert.equal(notification.adminOnly, false);
   assert.equal(notification.createdAt, "2026-05-02T08:00:00.000Z");
 });
 
@@ -39,6 +40,17 @@ test("normalizeNotification falls back safely for general notifications", () => 
   assert.equal(notification.userName, "");
   assert.equal(notification.userEmail, "");
   assert.equal(notification.userId, "");
+  assert.equal(notification.adminOnly, false);
   assert.ok(notification.id);
   assert.ok(notification.createdAt);
+});
+
+test("normalizeNotification preserves admin-only visibility", () => {
+  const notification = normalizeNotification({
+    title: "Access Control",
+    message: "A staff account was blocked.",
+    adminOnly: true,
+  });
+
+  assert.equal(notification.adminOnly, true);
 });

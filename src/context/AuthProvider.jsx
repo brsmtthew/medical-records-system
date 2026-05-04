@@ -10,6 +10,7 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
+    // Tracks Firebase Auth state and hydrates the matching user security profile.
     if (!auth) {
       return undefined;
     }
@@ -90,6 +91,8 @@ export function AuthProvider({ children }) {
       currentUser,
       userProfile,
       userRole: userProfile?.role || "staff",
+      isAdmin: userProfile?.role === "admin",
+      isStaff: (userProfile?.role || "staff") === "staff",
       isAccountDisabled: userProfile?.accountStatus === "disabled",
       authLoading,
       isAuthenticated: Boolean(currentUser),

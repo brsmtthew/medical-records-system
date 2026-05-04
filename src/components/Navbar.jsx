@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { signOut, updateProfile } from "firebase/auth";
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  signOut,
+  updateEmail,
+  updatePassword,
+  updateProfile,
+} from "firebase/auth";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { motion as Motion, AnimatePresence } from "framer-motion";
@@ -32,8 +39,11 @@ import {
   writeStoredBellNotifications,
   writeStoredUnreadNotifications,
 } from "../utils/notificationLog";
+import { formatDisplayDate } from "../utils/dateFormatting";
 import { readSystemSettings, saveSystemSettings } from "../utils/systemSettings";
+import { isStrongPassword, normalizeEmail } from "../utils/security";
 
+// Builds the compact initials fallback for accounts without an uploaded photo.
 function getInitials(name) {
   return name
     .split(" ")
@@ -43,6 +53,7 @@ function getInitials(name) {
     .toUpperCase();
 }
 
+// Reads uploaded profile photos into a browser-safe preview string.
 function readImageAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -52,14 +63,12 @@ function readImageAsDataUrl(file) {
   });
 }
 
+// Formats notification timestamps with the app-wide date-only display.
 function formatNotificationTime(value) {
-  return new Date(value).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  return formatDisplayDate(value);
 }
 
+// Selects the icon that visually matches each notification tone.
 function notificationIcon(type) {
   if (type === "success") return CheckCircle2;
   if (type === "error") return TriangleAlert;
@@ -79,14 +88,25 @@ export default function Navbar({ onMenuClick }) {
   const [accountProfile, setAccountProfile] = useState(null);
   const [accountForm, setAccountForm] = useState({
     fullName: "",
+    email: "",
     phone: "",
     position: "",
     department: "Medical Records",
     photoDataUrl: "",
+    currentPassword: "",
+    newPassword: "",
+    confirmNewPassword: "",
   });
   const [accountMessage, setAccountMessage] = useState("");
   const [accountError, setAccountError] = useState("");
   const [appearanceMode, setAppearanceMode] = useState(() => readSystemSettings().appearanceMode);
+  const isAdminAccount = accountProfile?.role === "admin";
+  const visibleNotifications = isAdminAccount
+    ? notifications
+    : notifications.filter((notification) => !notification.adminOnly);
+  const visibleUnreadNotifications = visibleNotifications.length
+    ? Math.min(unreadNotifications, visibleNotifications.length)
+    : 0;
 
   useEffect(() => {
     if (!currentUser || !db) return undefined;
@@ -96,10 +116,14 @@ export default function Navbar({ onMenuClick }) {
       setAccountProfile(profile);
       setAccountForm({
         fullName: profile.fullName || currentUser.displayName || "",
+        email: currentUser.email || profile.email || "",
         phone: profile.phone || "",
         position: profile.position || "",
         department: profile.department || "Medical Records",
         photoDataUrl: profile.photoDataUrl || "",
+        currentPassword: "",
+        newPassword: "",
+        confirmNewPassword: "",
       });
     });
   }, [currentUser]);
@@ -113,6 +137,7 @@ export default function Navbar({ onMenuClick }) {
   }, [unreadNotifications]);
 
   useEffect(() => {
+    // Keeps the navbar toggle in sync when settings are changed on another page.
     const syncThemeMode = () => {
       setAppearanceMode(readSystemSettings().appearanceMode);
     };
@@ -126,9 +151,11 @@ export default function Navbar({ onMenuClick }) {
   }, []);
 
   useEffect(() => {
+    // Mirrors toast events into the bell dropdown and unread counter.
     const handleToast = (event) => {
       const notification = normalizeNotification(event.detail || {});
       if (!notification?.message) return;
+      if (notification.adminOnly && !isAdminAccount) return;
 
       setNotifications((current) => [notification, ...current].slice(0, maxNotificationLogItems));
       setUnreadNotifications((current) => current + 1);
@@ -144,8 +171,9 @@ export default function Navbar({ onMenuClick }) {
       window.removeEventListener("mrs-toast", handleToast);
       window.removeEventListener("mrs-notifications-cleared", handleNotificationsCleared);
     };
-  }, []);
+  }, [isAdminAccount]);
 
+  // Ends the Firebase session and sends the user back to the login page.
   const handleSignOut = async () => {
     if (auth) {
       await signOut(auth);
@@ -154,6 +182,7 @@ export default function Navbar({ onMenuClick }) {
     navigate("/", { replace: true });
   };
 
+  // Clears the bell dropdown history and unread badge.
   const clearNotifications = () => {
     setNotifications([]);
     setUnreadNotifications(0);
@@ -161,6 +190,7 @@ export default function Navbar({ onMenuClick }) {
     setShowNotifications(false);
   };
 
+  // Switches between saved light and dark display modes.
   const toggleAppearanceMode = () => {
     const currentSettings = readSystemSettings();
     const nextMode = currentSettings.appearanceMode === "dark" ? "light" : "dark";
@@ -176,6 +206,7 @@ export default function Navbar({ onMenuClick }) {
     window.dispatchEvent(new CustomEvent("mrs-settings-updated"));
   };
 
+  // Validates and previews a profile photo before saving it to Firestore.
   const handlePhotoChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -194,6 +225,7 @@ export default function Navbar({ onMenuClick }) {
     setAccountMessage("");
   };
 
+  // Persists account profile details to both Firebase Auth and the user document.
   const handleAccountSave = async (event) => {
     event.preventDefault();
     if (!currentUser || !db) {
@@ -204,8 +236,34 @@ export default function Navbar({ onMenuClick }) {
       setAccountError("Full name is required.");
       return;
     }
+    const nextEmail = normalizeEmail(accountForm.email);
+    const isEmailChanged = nextEmail && nextEmail !== normalizeEmail(currentUser.email || "");
+    const isPasswordChanged = Boolean(accountForm.newPassword);
+
+    if ((isEmailChanged || isPasswordChanged) && !accountForm.currentPassword) {
+      setAccountError("Enter your current password before changing email or password.");
+      return;
+    }
+    if (isPasswordChanged && !isStrongPassword(accountForm.newPassword)) {
+      setAccountError("Use at least 8 characters with uppercase, lowercase, and a number for the new password.");
+      return;
+    }
+    if (isPasswordChanged && accountForm.newPassword !== accountForm.confirmNewPassword) {
+      setAccountError("New passwords do not match.");
+      return;
+    }
 
     try {
+      if (isEmailChanged || isPasswordChanged) {
+        const credential = EmailAuthProvider.credential(currentUser.email || "", accountForm.currentPassword);
+        await reauthenticateWithCredential(currentUser, credential);
+      }
+      if (isEmailChanged) {
+        await updateEmail(currentUser, nextEmail);
+      }
+      if (isPasswordChanged) {
+        await updatePassword(currentUser, accountForm.newPassword);
+      }
       await updateProfile(currentUser, {
         displayName: accountForm.fullName.trim(),
       });
@@ -214,7 +272,7 @@ export default function Navbar({ onMenuClick }) {
         {
           uid: currentUser.uid,
           fullName: accountForm.fullName.trim(),
-          email: currentUser.email || "",
+          email: nextEmail || currentUser.email || "",
           phone: accountForm.phone.trim(),
           position: accountForm.position.trim(),
           department: accountForm.department.trim() || "Medical Records",
@@ -225,9 +283,21 @@ export default function Navbar({ onMenuClick }) {
       );
       setAccountMessage("Account settings saved.");
       setAccountError("");
+      setAccountForm((current) => ({
+        ...current,
+        currentPassword: "",
+        newPassword: "",
+        confirmNewPassword: "",
+      }));
       setShowAccountSettings(false);
     } catch (error) {
-      setAccountError(error.message || "Unable to save account settings.");
+      const credentialMessages = {
+        "auth/email-already-in-use": "That email is already used by another account.",
+        "auth/invalid-credential": "The current password is incorrect.",
+        "auth/requires-recent-login": "Enter your current password and try again.",
+        "auth/wrong-password": "The current password is incorrect.",
+      };
+      setAccountError(credentialMessages[error.code] || error.message || "Unable to save account settings.");
     }
   };
 
@@ -238,22 +308,24 @@ export default function Navbar({ onMenuClick }) {
 
   return (
     <>
-    <div className="mrs-navbar w-full border-b border-blue-100/80 bg-gradient-to-r from-blue-50/95 via-white/95 to-green-50/90 px-3 py-2.5 backdrop-blur-xl sm:px-4 md:px-5 2xl:px-6 2xl:py-3 flex justify-between items-center sticky top-0 z-50">
-      <div className="flex items-center gap-3 md:gap-4 min-w-0">
+    <div className="mrs-navbar sticky top-0 z-50 flex w-full items-center justify-between gap-2 border-b border-blue-100/80 bg-gradient-to-r from-blue-50/95 via-white/95 to-green-50/90 px-3 py-2.5 backdrop-blur-xl sm:px-4 md:px-5 2xl:px-6 2xl:py-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 md:gap-4">
         <Motion.button
+          whileHover={{ y: -1 }}
           whileTap={{ scale: 0.94 }}
           onClick={onMenuClick}
-          className="lg:hidden shrink-0 p-2.5 mrs-soft-button rounded-xl"
+          className="mrs-icon-button mrs-mobile-menu-button shrink-0 lg:hidden"
           aria-label="Open menu"
         >
-          <Menu size={22} className="text-slate-800" />
+          <Menu size={22} />
         </Motion.button>
 
-        <div className="flex flex-col min-w-0">
+        <div className="flex min-w-0 flex-col">
           <h1 className="text-[12px] sm:text-base 2xl:text-lg font-black tracking-tight text-slate-900 leading-tight sm:leading-none truncate">
-            TAGUM GLOBAL <span className="text-blue-700">MEDICAL CENTER</span> INC.
+            <span className="sm:hidden">TGMCI</span>
+            <span className="hidden sm:inline">TAGUM GLOBAL <span className="text-blue-700">MEDICAL CENTER</span> INC.</span>
           </h1>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="mt-1 flex items-center gap-2">
             <span className="hidden sm:inline bg-slate-100 text-slate-600 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest">
               MEDICAL RECORDS MANAGEMENT SYSTEM
             </span>
@@ -261,15 +333,15 @@ export default function Navbar({ onMenuClick }) {
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 sm:gap-3 2xl:gap-6">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 2xl:gap-6">
         <div className="hidden xl:flex items-center gap-2 text-slate-500 px-3 2xl:px-4 border-r border-slate-200">
           <Calendar size={16} />
           <span className="text-xs font-bold uppercase tracking-wider">
             {new Date().toLocaleDateString("en-US", {
-              month: "short",
+              month: "long",
               day: "numeric",
               year: "numeric",
-            })}
+            }).toUpperCase()}
           </span>
         </div>
 
@@ -285,9 +357,9 @@ export default function Navbar({ onMenuClick }) {
             aria-label="Open notifications"
           >
             <Bell size={19} />
-            {unreadNotifications > 0 && (
+            {visibleUnreadNotifications > 0 && (
               <span className="absolute -right-1.5 -top-1.5 flex min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-black leading-4 text-white shadow-sm">
-                {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                {visibleUnreadNotifications > 9 ? "9+" : visibleUnreadNotifications}
               </span>
             )}
           </button>
@@ -307,7 +379,7 @@ export default function Navbar({ onMenuClick }) {
                       Recent system messages
                     </p>
                   </div>
-                  {notifications.length > 0 && (
+                  {visibleNotifications.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setShowClearNotificationsConfirm(true)}
@@ -319,7 +391,7 @@ export default function Navbar({ onMenuClick }) {
                 </div>
 
                 <div className="max-h-[min(12.5rem,calc(100dvh-9rem))] divide-y divide-slate-100 overflow-y-auto">
-                  {notifications.length === 0 ? (
+                  {visibleNotifications.length === 0 ? (
                     <div className="p-6 text-center">
                       <Bell size={28} className="mx-auto mb-2 text-slate-300" />
                       <p className="text-sm font-black uppercase text-slate-700">No notifications yet</p>
@@ -328,7 +400,7 @@ export default function Navbar({ onMenuClick }) {
                       </p>
                     </div>
                   ) : (
-                    notifications.slice(0, 2).map((notification) => {
+                    visibleNotifications.slice(0, 2).map((notification) => {
                       const Icon = notificationIcon(notification.type);
                       const iconClass = notification.type === "success"
                         ? "bg-green-50 text-green-700 border-green-200"
@@ -353,6 +425,11 @@ export default function Navbar({ onMenuClick }) {
                             <p className="mt-1 break-words text-xs font-semibold leading-relaxed text-slate-500">
                               {notification.message}
                             </p>
+                            {(notification.patientName || notification.caseNumber) && (
+                              <p className="mt-1 break-words text-[10px] font-black uppercase text-slate-400">
+                                {[notification.patientName, notification.caseNumber].filter(Boolean).join(" - ")}
+                              </p>
+                            )}
                           </div>
                         </div>
                       );
@@ -367,7 +444,7 @@ export default function Navbar({ onMenuClick }) {
         <button
           type="button"
           onClick={toggleAppearanceMode}
-          className="flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50"
+          className="mrs-icon-button hidden size-10 border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 sm:inline-flex"
           aria-label={appearanceMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           title={appearanceMode === "dark" ? "Light mode" : "Dark mode"}
         >
@@ -381,7 +458,7 @@ export default function Navbar({ onMenuClick }) {
               setShowProfile((value) => !value);
               setShowNotifications(false);
             }}
-            className="flex items-center gap-3 bg-white border border-slate-200 p-1.5 pr-3 rounded-xl cursor-pointer shadow-sm hover:border-green-200 hover:bg-green-50/50"
+            className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm hover:border-green-200 hover:bg-green-50/50 sm:gap-3 sm:pr-3"
           >
             <div className="w-8 h-8 bg-green-700 rounded-lg flex items-center justify-center text-white font-black text-xs shadow-sm overflow-hidden">
               {photoDataUrl ? (
@@ -476,7 +553,7 @@ export default function Navbar({ onMenuClick }) {
               initial={{ opacity: 0, y: 12, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.97 }}
-              className="mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-xl overflow-y-auto rounded-2xl p-5 sm:p-6"
+              className="mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl overflow-y-auto rounded-2xl p-4 sm:p-5"
             >
               <button
                 onClick={() => setShowAccountSettings(false)}
@@ -486,69 +563,131 @@ export default function Navbar({ onMenuClick }) {
                 <X size={20} />
               </button>
 
-              <h2 className="pr-9 text-xl font-black text-slate-800 uppercase mb-1 sm:text-2xl">Account Settings</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase mb-5">
+              <h2 className="pr-9 text-lg font-black text-slate-800 uppercase mb-1 sm:text-xl">Account Settings</h2>
+              <p className="text-xs font-bold text-slate-400 uppercase mb-4">
                 Update your profile details and account photo.
               </p>
 
-              <form onSubmit={handleAccountSave} className="space-y-5">
-                <div className="flex flex-col sm:flex-row gap-5 sm:items-center">
-                  <label className="group relative flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-2xl bg-green-700 text-2xl font-black text-white shadow-lg shadow-green-900/10">
-                    {accountForm.photoDataUrl ? (
-                      <img src={accountForm.photoDataUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      initials || "AD"
-                    )}
-                    <span className="absolute inset-0 flex items-center justify-center bg-slate-950/55 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Camera size={22} />
-                    </span>
-                    <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-                  </label>
-                  <label className="mrs-soft-button inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase">
-                    <Camera size={17} />
-                    Change Photo
-                    <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-                  </label>
+              <form onSubmit={handleAccountSave} className="space-y-4">
+                <div className="grid gap-4 lg:grid-cols-[12rem_1fr]">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <label className="group relative mx-auto flex h-28 w-28 cursor-pointer items-center justify-center overflow-hidden rounded-2xl bg-green-700 text-3xl font-black text-white shadow-lg shadow-green-900/10">
+                      {accountForm.photoDataUrl ? (
+                        <img src={accountForm.photoDataUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        initials || "AD"
+                      )}
+                      <span className="absolute inset-0 flex items-center justify-center bg-slate-950/55 opacity-0 transition-opacity group-hover:opacity-100">
+                        <Camera size={22} />
+                      </span>
+                      <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                    </label>
+                    <label className="mrs-soft-button mt-3 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black uppercase">
+                      <Camera size={16} />
+                      Photo
+                      <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                    </label>
+                    <p className="mt-3 text-center text-[10px] font-bold uppercase leading-relaxed text-slate-400">
+                      JPG or PNG under 750 KB
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="text-[10px] font-black uppercase text-slate-400">Full Name</span>
+                        <input
+                          value={accountForm.fullName}
+                          onChange={(event) => setAccountForm({ ...accountForm, fullName: event.target.value })}
+                          className="mrs-field w-full rounded-xl p-2.5 font-bold"
+                          autoComplete="name"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[10px] font-black uppercase text-slate-400">Email</span>
+                        <input
+                          type="email"
+                          value={accountForm.email}
+                          onChange={(event) => setAccountForm({ ...accountForm, email: event.target.value })}
+                          className="mrs-field w-full rounded-xl p-2.5 font-bold"
+                          autoComplete="email"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[10px] font-black uppercase text-slate-400">Position</span>
+                        <input
+                          value={accountForm.position}
+                          onChange={(event) => setAccountForm({ ...accountForm, position: event.target.value })}
+                          placeholder="Records Staff"
+                          className="mrs-field w-full rounded-xl p-2.5 font-bold"
+                          autoComplete="organization-title"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[10px] font-black uppercase text-slate-400">Phone</span>
+                        <input
+                          value={accountForm.phone}
+                          onChange={(event) => setAccountForm({ ...accountForm, phone: event.target.value })}
+                          placeholder="Contact number"
+                          className="mrs-field w-full rounded-xl p-2.5 font-bold"
+                          autoComplete="tel"
+                        />
+                      </label>
+                      <label className="space-y-1 sm:col-span-2">
+                        <span className="text-[10px] font-black uppercase text-slate-400">Department</span>
+                        <input
+                          value={accountForm.department}
+                          onChange={(event) => setAccountForm({ ...accountForm, department: event.target.value })}
+                          className="mrs-field w-full rounded-xl p-2.5 font-bold"
+                          autoComplete="organization"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                        <p className="text-sm font-black uppercase text-slate-800">Security</p>
+                        <p className="text-[11px] font-semibold text-slate-500">
+                          Required only for email or password changes.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <label className="space-y-1">
+                          <span className="text-[10px] font-black uppercase text-slate-400">Current Password</span>
+                          <input
+                            type="password"
+                            value={accountForm.currentPassword}
+                            onChange={(event) => setAccountForm({ ...accountForm, currentPassword: event.target.value })}
+                            className="mrs-field w-full rounded-xl p-2.5 font-bold"
+                            autoComplete="current-password"
+                          />
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-[10px] font-black uppercase text-slate-400">New Password</span>
+                          <input
+                            type="password"
+                            value={accountForm.newPassword}
+                            onChange={(event) => setAccountForm({ ...accountForm, newPassword: event.target.value })}
+                            className="mrs-field w-full rounded-xl p-2.5 font-bold"
+                            autoComplete="new-password"
+                          />
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-[10px] font-black uppercase text-slate-400">Confirm Password</span>
+                          <input
+                            type="password"
+                            value={accountForm.confirmNewPassword}
+                            onChange={(event) => setAccountForm({ ...accountForm, confirmNewPassword: event.target.value })}
+                            className="mrs-field w-full rounded-xl p-2.5 font-bold"
+                            autoComplete="new-password"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <label className="space-y-1 sm:col-span-2">
-                    <span className="text-[10px] font-black uppercase text-slate-400">Full Name</span>
-                    <input
-                      value={accountForm.fullName}
-                      onChange={(event) => setAccountForm({ ...accountForm, fullName: event.target.value })}
-                      className="mrs-field w-full rounded-xl p-3 font-bold"
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-[10px] font-black uppercase text-slate-400">Position</span>
-                    <input
-                      value={accountForm.position}
-                      onChange={(event) => setAccountForm({ ...accountForm, position: event.target.value })}
-                      placeholder="Records Staff"
-                      className="mrs-field w-full rounded-xl p-3 font-bold"
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-[10px] font-black uppercase text-slate-400">Phone</span>
-                    <input
-                      value={accountForm.phone}
-                      onChange={(event) => setAccountForm({ ...accountForm, phone: event.target.value })}
-                      placeholder="Contact number"
-                      className="mrs-field w-full rounded-xl p-3 font-bold"
-                    />
-                  </label>
-                  <label className="space-y-1 sm:col-span-2">
-                    <span className="text-[10px] font-black uppercase text-slate-400">Department</span>
-                    <input
-                      value={accountForm.department}
-                      onChange={(event) => setAccountForm({ ...accountForm, department: event.target.value })}
-                      className="mrs-field w-full rounded-xl p-3 font-bold"
-                    />
-                  </label>
-                </div>
-
-                <div className="flex flex-col sm:flex-row justify-end gap-3">
+                <div className="flex flex-col sm:flex-row justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => setShowAccountSettings(false)}

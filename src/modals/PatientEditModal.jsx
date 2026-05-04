@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { motion as Motion } from "framer-motion";
 import { Save, UserPen, X } from "lucide-react";
 
+// Edits basic patient details when this reusable modal is mounted by a page.
 export default function PatientEditModal({ patient, onSave, onClose }) {
   const [form, setForm] = useState(patient);
 
@@ -11,6 +12,7 @@ export default function PatientEditModal({ patient, onSave, onClose }) {
 
   if (!patient || !form) return null;
 
+  // Normalizes patient name and case number before handing the form back to the parent.
   const handleSubmit = (event) => {
     event.preventDefault();
     onSave({

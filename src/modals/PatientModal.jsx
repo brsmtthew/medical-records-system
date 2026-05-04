@@ -2,6 +2,7 @@ import React from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 
+// Provides a shared animated modal shell for patient-related content.
 export default function PatientModal({ isOpen, onClose, title = "Patient Record", children }) {
   return (
     <AnimatePresence>

@@ -12,23 +12,28 @@ const chartViewingSession = {
   folderName: "",
 };
 
+// Reads the in-memory folder preview state used while navigating inside the app.
 function readChartViewingSession() {
   return chartViewingSession;
 }
 
+// Updates the in-memory folder preview state without persisting local file paths.
 function updateChartViewingSession(updates) {
   Object.assign(chartViewingSession, updates);
 }
 
+// Accepts only PDF and browser-previewable image scans.
 function isSupportedChart(file) {
   return supportedTypes.includes(file.type);
 }
 
+// Formats file sizes for the chart list.
 function formatFileSize(size) {
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// Releases object URLs when replacing or clearing the selected folder.
 function revokeChartUrls(charts) {
   charts.forEach((chart) => URL.revokeObjectURL(chart.url));
 }
@@ -48,16 +53,19 @@ export default function ChartViewing() {
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [notice, setNotice] = useState(null);
 
+  // Selects a chart preview and remembers it for the current session.
   const selectChart = (chart) => {
     setSelectedChart(chart);
     updateChartViewingSession({ selectedPath: chart?.path || "" });
   };
 
+  // Updates chart search text and keeps it in the current session state.
   const updateSearchQuery = (value) => {
     setSearchQuery(value);
     updateChartViewingSession({ searchQuery: value });
   };
 
+  // Builds preview rows for supported files selected from a local folder.
   const loadFiles = (fileList) => {
     const selectedFiles = Array.from(fileList).filter(isSupportedChart);
     if (selectedFiles.length === 0) {
@@ -88,6 +96,7 @@ export default function ChartViewing() {
     setFolderName(nextFolderName);
   };
 
+  // Captures a chosen folder and asks for confirmation before replacing previews.
   const handleFolderChange = (event) => {
     const selectedFiles = Array.from(event.target.files || []);
     if (selectedFiles.length === 0) {
@@ -99,6 +108,7 @@ export default function ChartViewing() {
     event.target.value = "";
   };
 
+  // Clears all local chart previews and releases their object URLs.
   const clearFolder = () => {
     if (charts.length === 0) {
       setNotice({ type: "info", message: "No chart folder is currently loaded." });
@@ -120,6 +130,7 @@ export default function ChartViewing() {
     setNotice({ type: "info", message: "Chart folder was cleared." });
   };
 
+  // Clears chart search text with feedback when already empty.
   const resetSearch = () => {
     if (!searchQuery) {
       setNotice({ type: "info", message: "No chart search to reset." });
@@ -129,6 +140,7 @@ export default function ChartViewing() {
     setNotice({ type: "info", message: "Chart search was reset." });
   };
 
+  // Loads the pending folder after the user confirms replacement.
   const confirmFolderLoad = () => {
     if (!pendingFiles) return;
     loadFiles(pendingFiles);

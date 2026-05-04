@@ -7,6 +7,7 @@ import {
   readStoredNotifications,
   writeStoredNotifications,
 } from "../utils/notificationLog";
+import { addAuditLog } from "../services/recordsService";
 
 const toastConfig = {
   success: {
@@ -27,10 +28,11 @@ const toastConfig = {
 };
 
 export default function FloatingToast({ toast, onClose, duration = 3200 }) {
-  const { currentUser } = useAuth();
+  const { currentUser, userProfile } = useAuth();
   const lastPublishedToastRef = useRef("");
 
   useEffect(() => {
+    // Auto-dismisses temporary toasts while allowing persistent setup warnings.
     if (!toast || duration === 0) return undefined;
 
     const timeoutId = window.setTimeout(() => {
@@ -41,9 +43,10 @@ export default function FloatingToast({ toast, onClose, duration = 3200 }) {
   }, [duration, onClose, toast]);
 
   useEffect(() => {
-    if (!toast?.message) return;
+    // Publishes only audited toasts into notification history and centralized staff logs.
+    if (!toast?.message || !toast.audit) return;
 
-    const toastKey = `${toast.type || "info"}|${toast.title || ""}|${toast.message}`;
+    const toastKey = `${toast.type || "info"}|${toast.title || ""}|${toast.message}|${toast.patientName || ""}|${toast.caseNumber || ""}`;
     if (lastPublishedToastRef.current === toastKey) return;
 
     lastPublishedToastRef.current = toastKey;
@@ -56,14 +59,23 @@ export default function FloatingToast({ toast, onClose, duration = 3200 }) {
       patientName: toast.patientName || "",
       caseNumber: toast.caseNumber || "",
       action: toast.action || toast.title || "",
-      userName: currentUser?.displayName || currentUser?.email || "Unknown User",
+      userName: userProfile?.fullName || currentUser?.displayName || currentUser?.email || "Unknown User",
       userEmail: currentUser?.email || "",
       userId: currentUser?.uid || "",
+      adminOnly: Boolean(toast.adminOnly),
     });
 
-    writeStoredNotifications([notification, ...readStoredNotifications()]);
-    window.dispatchEvent(new CustomEvent("mrs-toast", { detail: notification }));
-  }, [currentUser, toast]);
+    try {
+      writeStoredNotifications([notification, ...readStoredNotifications()]);
+      window.dispatchEvent(new CustomEvent("mrs-toast", { detail: notification }));
+    } catch (error) {
+      console.error("Unable to publish local notification:", error);
+    }
+
+    addAuditLog(notification).catch((error) => {
+      console.error("Unable to write audit notification:", error);
+    });
+  }, [currentUser, toast, userProfile]);
 
   const type = toast?.type || "info";
   const config = toastConfig[type] || toastConfig.info;
@@ -89,6 +101,11 @@ export default function FloatingToast({ toast, onClose, duration = 3200 }) {
                 {toast.title || config.title}
               </p>
               <p className="mt-0.5 break-words text-xs font-bold leading-relaxed text-slate-500">{toast.message}</p>
+              {(toast.patientName || toast.caseNumber) && (
+                <p className="mt-1 break-words text-[10px] font-black uppercase leading-snug text-slate-400">
+                  {[toast.patientName, toast.caseNumber].filter(Boolean).join(" - ")}
+                </p>
+              )}
             </div>
             <button
               type="button"

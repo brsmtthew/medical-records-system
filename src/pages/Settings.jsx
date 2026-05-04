@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
 import {
@@ -11,8 +11,11 @@ import {
   RotateCcw,
   Save,
   Settings as SettingsIcon,
+  ShieldCheck,
   Sun,
   Trash2,
+  UserCheck,
+  UserX,
   X,
 } from "lucide-react";
 import {
@@ -25,28 +28,30 @@ import {
   fallbackAdmissionLocations,
   fallbackDepartments,
   fallbackOutpatientDepartments,
+  deleteAuditLog,
   subscribeToAdmissionLocations,
+  subscribeToAuditLogs,
   subscribeToDepartments,
   subscribeToOutpatientDepartments,
+  subscribeToUsers,
   updateAdmissionLocation,
   updateDepartment,
   updateOutpatientDepartment,
+  updateUserAccess,
 } from "../services/recordsService";
 import {
   defaultSystemSettings,
   readSystemSettings,
   saveSystemSettings,
 } from "../utils/systemSettings";
-import {
-  normalizeNotification,
-  readStoredNotifications,
-  writeStoredNotifications,
-  writeStoredUnreadNotifications,
-} from "../utils/notificationLog";
+import { writeStoredUnreadNotifications } from "../utils/notificationLog";
+import { formatDisplayDate } from "../utils/dateFormatting";
+import { useAuth } from "../context/useAuth";
 
 const tabs = [
   { id: "rules", label: "System Settings", icon: SettingsIcon },
   { id: "departmentEditor", label: "Department Editor", icon: Building2 },
+  { id: "access", label: "Access Control", icon: ShieldCheck },
   { id: "notifications", label: "Notification Action Log", icon: Bell },
 ];
 
@@ -56,18 +61,13 @@ const departmentEditorSections = [
   { id: "outpatients", label: "Outpatient Departments" },
 ];
 
+// Formats notification log timestamps with the date style used across dashboard tables.
 function formatLogTimestamp(value) {
   if (!value) return "N/A";
-  return new Date(value).toLocaleString([], {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  return formatDisplayDate(value);
 }
 
+// Renders a settings form field with a consistent label, control, and helper hint.
 function Field({ label, children, hint }) {
   return (
     <label className="block">
@@ -81,6 +81,7 @@ function Field({ label, children, hint }) {
 }
 
 export default function Settings() {
+  const { currentUser, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState("rules");
   const [departmentEditorTab, setDepartmentEditorTab] = useState("departments");
   const [settings, setSettings] = useState(readSystemSettings);
@@ -99,67 +100,82 @@ export default function Settings() {
   const [editingOutpatientDepartment, setEditingOutpatientDepartment] = useState(null);
   const [outpatientDepartmentError, setOutpatientDepartmentError] = useState("");
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
-  const [notificationLogs, setNotificationLogs] = useState(readStoredNotifications);
+  const [notificationLogs, setNotificationLogs] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [restrictionReasons, setRestrictionReasons] = useState({});
+  const [accessError, setAccessError] = useState("");
+  const [accessMessage, setAccessMessage] = useState("");
+  const [pendingAccessAction, setPendingAccessAction] = useState(null);
+  const visibleTabs = useMemo(
+    () => (isAdmin ? tabs : tabs.filter((tab) => tab.id === "rules")),
+    [isAdmin],
+  );
 
   useEffect(() => {
-    const unsubscribeDepartments = subscribeToDepartments(
-      setDepartments,
-      (error) => setDepartmentError(error.message || "Unable to load departments from Firebase."),
-    );
+    // Loads admin-only editable lists and audit/account data from Firestore.
+    const unsubscribeDepartments = isAdmin
+      ? subscribeToDepartments(
+          setDepartments,
+          (error) => setDepartmentError(error.message || "Unable to load departments from Firebase."),
+        )
+      : () => {};
 
-    const unsubscribeAdmissionLocations = subscribeToAdmissionLocations(
-      setAdmissionLocations,
-      (error) => setAdmissionLocationError(error.message || "Unable to load admission locations from Firebase."),
-    );
+    const unsubscribeAdmissionLocations = isAdmin
+      ? subscribeToAdmissionLocations(
+          setAdmissionLocations,
+          (error) => setAdmissionLocationError(error.message || "Unable to load admission locations from Firebase."),
+        )
+      : () => {};
 
-    const unsubscribeOutpatientDepartments = subscribeToOutpatientDepartments(
-      setOutpatientDepartments,
-      (error) => setOutpatientDepartmentError(error.message || "Unable to load outpatient departments from Firebase."),
-    );
+    const unsubscribeOutpatientDepartments = isAdmin
+      ? subscribeToOutpatientDepartments(
+          setOutpatientDepartments,
+          (error) => setOutpatientDepartmentError(error.message || "Unable to load outpatient departments from Firebase."),
+        )
+      : () => {};
+
+    const unsubscribeUsers = isAdmin
+      ? subscribeToUsers(
+          setUsers,
+          (error) => setAccessError(error.message || "Unable to load users from Firebase."),
+        )
+      : () => {};
+
+    const unsubscribeAuditLogs = isAdmin
+      ? subscribeToAuditLogs(
+          setNotificationLogs,
+          (error) => setAccessError(error.message || "Unable to load audit logs from Firebase."),
+        )
+      : () => {};
 
     return () => {
       unsubscribeDepartments();
       unsubscribeAdmissionLocations();
       unsubscribeOutpatientDepartments();
+      unsubscribeUsers();
+      unsubscribeAuditLogs();
     };
-  }, []);
+  }, [isAdmin]);
 
-  useEffect(() => {
-    const handleToastLog = (event) => {
-      const notification = normalizeNotification(event.detail || {});
-      if (!notification.message) return;
-      setNotificationLogs((current) => [notification, ...current].slice(0, 50));
-    };
-    const handleNotificationsCleared = (event) => {
-      if (event.detail?.scope === "notification-log") {
-        setNotificationLogs([]);
-      }
-    };
-
-    window.addEventListener("mrs-toast", handleToastLog);
-    window.addEventListener("mrs-notifications-cleared", handleNotificationsCleared);
-    return () => {
-      window.removeEventListener("mrs-toast", handleToastLog);
-      window.removeEventListener("mrs-notifications-cleared", handleNotificationsCleared);
-    };
-  }, []);
-
-  useEffect(() => {
-    writeStoredNotifications(notificationLogs);
-  }, [notificationLogs]);
-
-  const clearNotificationLogs = () => {
-    setNotificationLogs([]);
-    writeStoredNotifications([]);
-    writeStoredUnreadNotifications(0);
-    window.dispatchEvent(new CustomEvent("mrs-notifications-cleared", {
-      detail: { scope: "notification-log" },
-    }));
+  // Clears centralized audit logs and resets the local navbar unread badge.
+  const clearNotificationLogs = async () => {
+    try {
+      await Promise.all(notificationLogs.map((log) => deleteAuditLog(log.id)));
+      writeStoredUnreadNotifications(0);
+      window.dispatchEvent(new CustomEvent("mrs-notifications-cleared", {
+        detail: { scope: "notification-log" },
+      }));
+      setAccessMessage("Audit logs were cleared.");
+    } catch (error) {
+      setAccessError(error.message || "Unable to clear audit logs.");
+    }
   };
 
-  const activeTabMeta = tabs.find((tab) => tab.id === activeTab) || tabs[0];
+  const safeActiveTab = visibleTabs.some((tab) => tab.id === activeTab) ? activeTab : "rules";
+  const activeTabMeta = visibleTabs.find((tab) => tab.id === safeActiveTab) || visibleTabs[0];
   const ActiveIcon = activeTabMeta.icon;
 
+  // Updates system settings state and immediately applies theme-related changes.
   const handleChange = (key, value) => {
     setSettings((current) => {
       const nextSettings = { ...current, [key]: value };
@@ -181,6 +197,7 @@ export default function Settings() {
     }
   };
 
+  // Restores all settings to the built-in defaults.
   const resetSettings = () => {
     setSettings(defaultSystemSettings);
     saveSystemSettings(defaultSystemSettings);
@@ -194,14 +211,12 @@ export default function Settings() {
     setIsResetConfirmOpen(false);
   };
 
+  // Sanitizes and saves the settings form into local storage.
   const saveSettings = () => {
     const cleanedSettings = {
       ...settings,
       reportExportFileName: settings.reportExportFileName.trim() || "chart-activity-report",
-      sessionTimeoutMinutes: Math.min(
-        240,
-        Math.max(5, Number(settings.sessionTimeoutMinutes) || defaultSystemSettings.sessionTimeoutMinutes),
-      ),
+      sessionTimeoutMinutes: defaultSystemSettings.sessionTimeoutMinutes,
     };
     setSettings(cleanedSettings);
     saveSystemSettings(cleanedSettings);
@@ -209,6 +224,7 @@ export default function Settings() {
     setSavedMessage("Settings saved.");
   };
 
+  // Checks duplicate borrowing departments while allowing the row being edited.
   const departmentExists = (name, ignoredId = "") => {
     return departments.some(
       (department) =>
@@ -217,6 +233,7 @@ export default function Settings() {
     );
   };
 
+  // Checks duplicate admission locations while allowing the row being edited.
   const admissionLocationExists = (name, ignoredId = "") => {
     return admissionLocations.some(
       (location) =>
@@ -225,6 +242,7 @@ export default function Settings() {
     );
   };
 
+  // Checks duplicate outpatient departments while allowing the row being edited.
   const outpatientDepartmentExists = (name, ignoredId = "") => {
     return outpatientDepartments.some(
       (department) =>
@@ -233,6 +251,7 @@ export default function Settings() {
     );
   };
 
+  // Adds a borrowing department after local duplicate validation.
   const handleAddDepartment = async (event) => {
     event.preventDefault();
     const name = departmentName.trim();
@@ -252,6 +271,7 @@ export default function Settings() {
     }
   };
 
+  // Saves an edited borrowing department name.
   const handleUpdateDepartment = async (event) => {
     event.preventDefault();
     const name = editingDepartment?.name.trim();
@@ -271,6 +291,7 @@ export default function Settings() {
     }
   };
 
+  // Deletes a borrowing department by Firestore id.
   const handleDeleteDepartment = async (id) => {
     const departmentName = departments.find((department) => department.id === id)?.name || "Department";
     try {
@@ -282,6 +303,7 @@ export default function Settings() {
     }
   };
 
+  // Adds an inpatient admission location after duplicate validation.
   const handleAddAdmissionLocation = async (event) => {
     event.preventDefault();
     const name = admissionLocationName.trim();
@@ -301,6 +323,7 @@ export default function Settings() {
     }
   };
 
+  // Saves an edited inpatient admission location.
   const handleUpdateAdmissionLocation = async (event) => {
     event.preventDefault();
     const name = editingAdmissionLocation?.name.trim();
@@ -320,6 +343,7 @@ export default function Settings() {
     }
   };
 
+  // Deletes an inpatient admission location by Firestore id.
   const handleDeleteAdmissionLocation = async (id) => {
     const locationName = admissionLocations.find((location) => location.id === id)?.name || "Admission location";
     try {
@@ -331,6 +355,7 @@ export default function Settings() {
     }
   };
 
+  // Adds an outpatient department after duplicate validation.
   const handleAddOutpatientDepartment = async (event) => {
     event.preventDefault();
     const name = outpatientDepartmentName.trim();
@@ -350,6 +375,7 @@ export default function Settings() {
     }
   };
 
+  // Saves an edited outpatient department.
   const handleUpdateOutpatientDepartment = async (event) => {
     event.preventDefault();
     const name = editingOutpatientDepartment?.name.trim();
@@ -369,6 +395,7 @@ export default function Settings() {
     }
   };
 
+  // Deletes an outpatient department by Firestore id.
   const handleDeleteOutpatientDepartment = async (id) => {
     const departmentName = outpatientDepartments.find((department) => department.id === id)?.name || "Outpatient department";
     try {
@@ -377,6 +404,76 @@ export default function Settings() {
       setSuccessMessage(`${departmentName} was deleted from outpatient departments.`);
     } catch (error) {
       setOutpatientDepartmentError(error.message || "Unable to delete outpatient department. Check Firebase write permission for departments.");
+    }
+  };
+
+  // Updates a user's role while preventing the signed-in admin from demoting their own account.
+  const handleRoleChange = async (user, role) => {
+    const userId = user.uid || user.id;
+    if (userId === currentUser?.uid && role !== "admin") {
+      setAccessError("You cannot remove admin access from your own signed-in account.");
+      return;
+    }
+
+    try {
+      await updateUserAccess(userId, { role });
+      setAccessError("");
+      setAccessMessage(`${user.fullName || user.email || "User"} role updated to ${role}.`);
+    } catch (error) {
+      setAccessError(error.message || "Unable to update user role.");
+    }
+  };
+
+  // Opens a confirmation before blocking a staff account with a required reason.
+  const handleBlockUser = (user) => {
+    const userId = user.uid || user.id;
+    if (userId === currentUser?.uid) {
+      setAccessError("You cannot block your own signed-in account.");
+      return;
+    }
+
+    const reason = (restrictionReasons[userId] || "").trim();
+    if (!reason) {
+      setAccessError("Enter a reason before blocking this account.");
+      return;
+    }
+
+    setAccessError("");
+    setPendingAccessAction({ type: "block", user, reason });
+  };
+
+  // Opens a confirmation before re-activating a blocked staff account.
+  const handleActivateUser = (user) => {
+    setAccessError("");
+    setPendingAccessAction({ type: "activate", user });
+  };
+
+  // Applies the confirmed block or activate account-control change.
+  const confirmAccessAction = async () => {
+    if (!pendingAccessAction) return;
+
+    const { type, user, reason = "" } = pendingAccessAction;
+    const userId = user.uid || user.id;
+    const userName = user.fullName || user.email || "User";
+
+    try {
+      if (type === "block") {
+        await updateUserAccess(userId, {
+          accountStatus: "disabled",
+          restrictionReason: reason,
+        });
+      } else {
+        await updateUserAccess(userId, {
+          accountStatus: "active",
+          restrictionReason: "",
+        });
+      }
+      setAccessError("");
+      setAccessMessage(`${userName} was ${type === "block" ? "blocked" : "activated"}.`);
+      setPendingAccessAction(null);
+    } catch (error) {
+      setAccessError(error.message || `Unable to ${type} user.`);
+      setPendingAccessAction(null);
     }
   };
 
@@ -389,18 +486,23 @@ export default function Settings() {
               System <span className="text-green-700">Settings</span>
             </h1>
             <p className="text-slate-500 font-medium">
-              Manage system defaults, department lists, report exports, and action logs.
+              {isAdmin
+                ? "Manage system defaults, department lists, report exports, and action logs."
+                : "Staff can access system settings only. Department lists, access control, and logs stay admin-only."}
             </p>
           </div>
 
+          {isAdmin && (
           <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={() => setIsResetConfirmOpen(true)}
-              className="mrs-soft-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase"
-            >
-              <RotateCcw size={17} />
-              Defaults
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setIsResetConfirmOpen(true)}
+                className="mrs-soft-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase"
+              >
+                <RotateCcw size={17} />
+                Defaults
+              </button>
+            )}
             <button
               onClick={saveSettings}
               className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase transition"
@@ -409,15 +511,16 @@ export default function Settings() {
               Save Settings
             </button>
           </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0 overflow-visible lg:overflow-hidden">
           <div className="lg:col-span-3 min-h-0">
             <div className="mrs-panel rounded-2xl p-3">
               <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-2">
-              {tabs.map((tab) => {
+              {visibleTabs.map((tab) => {
                 const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
+                const isActive = safeActiveTab === tab.id;
                 return (
                   <button
                     key={tab.id}
@@ -449,9 +552,9 @@ export default function Settings() {
               </div>
 
               <div className="p-3 sm:p-4 flex-1 min-h-0 overflow-visible lg:overflow-hidden">
-                {activeTab === "rules" && (
+                {safeActiveTab === "rules" && (
                   <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-                    <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-3">
+                    <div className={`rounded-xl border-2 border-slate-100 bg-slate-50 p-3 ${isAdmin ? "" : "xl:col-span-3"}`}>
                       <p className="text-sm font-black uppercase text-slate-700">Appearance</p>
                       <p className="mt-1 text-[11px] font-semibold text-slate-500">
                         Choose the display mode for this workstation.
@@ -506,6 +609,7 @@ export default function Settings() {
                         </div>
                       </div>
                     </div>
+                    {isAdmin && (
                     <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-3">
                       <p className="text-sm font-black uppercase text-slate-700">Report Defaults</p>
                       <p className="mt-1 text-[11px] font-semibold text-slate-500">
@@ -533,49 +637,47 @@ export default function Settings() {
                         </Field>
                       </div>
                     </div>
+                    )}
+                    {isAdmin && (
                     <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-3">
                       <p className="text-sm font-black uppercase text-slate-700">Security Defaults</p>
                       <p className="mt-1 text-[11px] font-semibold text-slate-500">
                         Protect open workstations by locking inactive sessions.
                       </p>
                       <div className="mt-3 grid grid-cols-1 gap-2">
-                        <Field label="Auto Lock After Inactivity" hint="Minimum 5 minutes. Maximum 240 minutes.">
-                          <input
-                            type="number"
-                            min="5"
-                            max="240"
-                            value={settings.sessionTimeoutMinutes}
-                            onChange={(event) => handleChange("sessionTimeoutMinutes", event.target.value)}
-                            className="mrs-field w-full rounded-xl p-2.5 font-bold"
-                          />
-                        </Field>
-                        <div className="rounded-xl border border-green-100 bg-green-50 px-3 py-2">
-                          <p className="text-[10px] font-black uppercase text-green-700">Role Ready</p>
-                          <p className="text-xs font-semibold text-green-700">
-                            Staff and head rules can use the saved user role tomorrow.
+                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            Auto Lock After Inactivity
+                          </p>
+                          <p className="mt-1 text-lg font-black text-slate-800">10 Minutes</p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            Fixed security policy for all accounts.
                           </p>
                         </div>
                       </div>
                     </div>
-                    <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-3 xl:col-span-3">
-                      <p className="text-sm font-black uppercase text-slate-700">Workspace Summary</p>
-                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        {[
-                          { label: "Borrowing Departments", value: departments.length || fallbackDepartments.length },
-                          { label: "Admission Departments", value: admissionLocations.length || fallbackAdmissionLocations.length },
-                          { label: "Outpatient Departments", value: outpatientDepartments.length || fallbackOutpatientDepartments.length },
-                        ].map((item) => (
-                          <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-2.5">
-                            <p className="text-[10px] font-black uppercase text-slate-400">{item.label}</p>
-                            <p className="mt-0.5 text-xl font-black text-slate-800">{item.value}</p>
-                          </div>
-                        ))}
+                    )}
+                    {isAdmin && (
+                      <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-3 xl:col-span-3">
+                        <p className="text-sm font-black uppercase text-slate-700">Workspace Summary</p>
+                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          {[
+                            { label: "Borrowing Departments", value: departments.length || fallbackDepartments.length },
+                            { label: "Admission Departments", value: admissionLocations.length || fallbackAdmissionLocations.length },
+                            { label: "Outpatient Departments", value: outpatientDepartments.length || fallbackOutpatientDepartments.length },
+                          ].map((item) => (
+                            <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-2.5">
+                              <p className="text-[10px] font-black uppercase text-slate-400">{item.label}</p>
+                              <p className="mt-0.5 text-xl font-black text-slate-800">{item.value}</p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
-                {activeTab === "departmentEditor" && (
+                {safeActiveTab === "departmentEditor" && (
                   <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     {departmentEditorSections.map((section) => (
                       <button
@@ -594,7 +696,7 @@ export default function Settings() {
                   </div>
                 )}
 
-                {activeTab === "departmentEditor" && departmentEditorTab === "departments" && (
+                {safeActiveTab === "departmentEditor" && departmentEditorTab === "departments" && (
                   <div className="lg:h-full min-h-0 flex flex-col gap-4">
                     <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
                       <p className="text-sm font-black text-slate-700 uppercase">Borrowing Departments</p>
@@ -679,7 +781,7 @@ export default function Settings() {
                   </div>
                 )}
 
-                {activeTab === "departmentEditor" && departmentEditorTab === "admissions" && (
+                {safeActiveTab === "departmentEditor" && departmentEditorTab === "admissions" && (
                   <div className="lg:h-full min-h-0 flex flex-col gap-4">
                     <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
                       <p className="text-sm font-black text-slate-700 uppercase">Patient Admission Locations</p>
@@ -765,7 +867,7 @@ export default function Settings() {
                   </div>
                 )}
 
-                {activeTab === "departmentEditor" && departmentEditorTab === "outpatients" && (
+                {safeActiveTab === "departmentEditor" && departmentEditorTab === "outpatients" && (
                   <div className="lg:h-full min-h-0 flex flex-col gap-4">
                     <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
                       <p className="text-sm font-black text-slate-700 uppercase">Outpatient Departments</p>
@@ -851,7 +953,125 @@ export default function Settings() {
                   </div>
                 )}
 
-                {activeTab === "notifications" && (
+                {safeActiveTab === "access" && (
+                  <div className="lg:h-full min-h-0 flex flex-col gap-4">
+                    <div className="grid gap-3 xl:grid-cols-3">
+                      <div className="rounded-xl border-2 border-green-100 bg-green-50 p-4 xl:col-span-2">
+                        <div className="flex items-start gap-3">
+                          <div className="rounded-xl bg-white p-2 text-green-700">
+                            <ShieldCheck size={21} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black uppercase text-slate-800">Secure Admin Creation</p>
+                            <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600">
+                              Keep public sign-up as staff only. Create admins from Firebase Console or a one-time protected seed script, then set their user document role to admin and protect that field with Firestore rules.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border-2 border-blue-100 bg-blue-50 p-4">
+                        <p className="text-sm font-black uppercase text-blue-800">Staff Restrictions</p>
+                        <p className="mt-1 text-xs font-semibold leading-relaxed text-blue-700">
+                          Staff can open limited Settings, but cannot clear logs, delete report rows, manage accounts, or edit department lists from the UI.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-visible lg:overflow-y-auto xl:grid-cols-2">
+                      {users.map((user) => {
+                        const userId = user.uid || user.id;
+                        const isSelf = userId === currentUser?.uid;
+                        const isDisabled = user.accountStatus === "disabled";
+
+                        return (
+                          <div key={userId} className="mrs-card rounded-2xl p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <p className="break-words text-sm font-black uppercase text-slate-800">
+                                  {user.fullName || user.displayName || "Unnamed User"}
+                                </p>
+                                <p className="mt-1 break-words text-[10px] font-bold text-slate-400">
+                                  {user.email || "No email saved"}
+                                </p>
+                              </div>
+                              <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-[10px] font-black uppercase ${
+                                isDisabled
+                                  ? "border-red-200 bg-red-50 text-red-700"
+                                  : "border-green-200 bg-green-50 text-green-700"
+                              }`}>
+                                {isDisabled ? "Blocked" : "Active"}
+                              </span>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[10rem_1fr]">
+                              <label className="space-y-1">
+                                <span className="text-[10px] font-black uppercase text-slate-400">Role</span>
+                                <select
+                                  value={user.role || "staff"}
+                                  onChange={(event) => handleRoleChange(user, event.target.value)}
+                                  disabled={isSelf}
+                                  className="mrs-field w-full rounded-xl px-3 py-2 text-xs font-black uppercase disabled:opacity-60"
+                                  aria-label={`Role for ${user.email || user.fullName || "user"}`}
+                                >
+                                  <option value="staff">Staff</option>
+                                  <option value="admin">Admin</option>
+                                </select>
+                              </label>
+                              <label className="space-y-1">
+                                <span className="text-[10px] font-black uppercase text-slate-400">Restriction Reason</span>
+                                <input
+                                  value={restrictionReasons[userId] ?? user.restrictionReason ?? ""}
+                                  onChange={(event) => setRestrictionReasons((current) => ({
+                                    ...current,
+                                    [userId]: event.target.value,
+                                  }))}
+                                  placeholder="Required before blocking"
+                                  className="mrs-field w-full rounded-xl px-3 py-2 text-xs font-bold"
+                                  disabled={isSelf}
+                                />
+                              </label>
+                            </div>
+
+                            <div className="mt-4 flex justify-end">
+                              {isDisabled ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleActivateUser(user)}
+                                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-xs font-black uppercase text-green-700"
+                                >
+                                  <UserCheck size={16} />
+                                  Activate
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleBlockUser(user)}
+                                  disabled={isSelf}
+                                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-black uppercase text-red-600 disabled:opacity-50"
+                                >
+                                  <UserX size={16} />
+                                  Block
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {users.length === 0 && (
+                        <div className="mrs-card rounded-2xl p-10 text-center xl:col-span-2">
+                          <ShieldCheck size={38} className="mx-auto mb-3 text-slate-300" />
+                          <p className="font-black uppercase text-slate-700">No user profiles yet</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-400">
+                            Profiles appear after users sign in or create a staff account.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {safeActiveTab === "notifications" && (
                   <div className="lg:h-full min-h-0 flex flex-col gap-4">
                     <div className="flex flex-col gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                       <div>
@@ -929,31 +1149,33 @@ export default function Settings() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 shrink-0">
-              {[
-                { label: "Borrowing Departments", value: departments.length || fallbackDepartments.length, icon: Building2 },
-                { label: "Admission Departments", value: admissionLocations.length || fallbackAdmissionLocations.length, icon: Building2 },
-                { label: "Outpatient Departments", value: outpatientDepartments.length || fallbackOutpatientDepartments.length, icon: Building2 },
-                { label: "Report Filter", value: settings.defaultReportFilter, icon: SettingsIcon },
-              ].map((item) => (
-                <div key={item.label} className="mrs-card rounded-2xl p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-green-50 text-green-700 border border-green-100">
-                      <item.icon size={19} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-400">{item.label}</p>
-                      <p className="font-black text-slate-800">{item.value}</p>
+            {isAdmin && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 shrink-0">
+                {[
+                  { label: "Borrowing Departments", value: departments.length || fallbackDepartments.length, icon: Building2 },
+                  { label: "Admission Departments", value: admissionLocations.length || fallbackAdmissionLocations.length, icon: Building2 },
+                  { label: "Outpatient Departments", value: outpatientDepartments.length || fallbackOutpatientDepartments.length, icon: Building2 },
+                  { label: "Report Filter", value: settings.defaultReportFilter, icon: SettingsIcon },
+                ].map((item) => (
+                  <div key={item.label} className="mrs-card rounded-2xl p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-green-50 text-green-700 border border-green-100">
+                        <item.icon size={19} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-slate-400">{item.label}</p>
+                        <p className="font-black text-slate-800">{item.value}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {isResetConfirmOpen && (
+      {isAdmin && isResetConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
           <div
             className="absolute inset-0 bg-black/50"
@@ -986,6 +1208,59 @@ export default function Settings() {
           </div>
         </div>
       )}
+
+      {isAdmin && pendingAccessAction && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setPendingAccessAction(null)}
+          />
+          <div className="mrs-panel relative w-full max-w-md rounded-2xl p-6">
+            <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${
+              pendingAccessAction.type === "block"
+                ? "bg-red-50 text-red-600"
+                : "bg-green-50 text-green-700"
+            }`}>
+              {pendingAccessAction.type === "block" ? <UserX size={26} /> : <UserCheck size={26} />}
+            </div>
+            <h2 className="text-xl font-black uppercase text-slate-800">
+              {pendingAccessAction.type === "block" ? "Block Staff Account?" : "Activate Staff Account?"}
+            </h2>
+            <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-500">
+              {pendingAccessAction.type === "block"
+                ? `This will stop ${pendingAccessAction.user.fullName || pendingAccessAction.user.email || "this user"} from accessing the system.`
+                : `This will restore access for ${pendingAccessAction.user.fullName || pendingAccessAction.user.email || "this user"}.`}
+            </p>
+            {pendingAccessAction.type === "block" && (
+              <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-500">Restriction Reason</p>
+                <p className="mt-1 text-sm font-bold text-red-700">{pendingAccessAction.reason}</p>
+              </div>
+            )}
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingAccessAction(null)}
+                className="rounded-xl px-4 py-3 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmAccessAction}
+                className={`rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg ${
+                  pendingAccessAction.type === "block"
+                    ? "bg-red-600 shadow-red-500/20"
+                    : "bg-green-600 shadow-green-500/20"
+                }`}
+              >
+                {pendingAccessAction.type === "block" ? "Block" : "Activate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <FloatingToast
         toast={
           departmentError
@@ -994,17 +1269,23 @@ export default function Settings() {
               ? { type: "error", message: admissionLocationError }
               : outpatientDepartmentError
                 ? { type: "error", message: outpatientDepartmentError }
-                : savedMessage
-                  ? { type: "success", title: "Settings Updated", message: savedMessage }
-                  : successMessage
-                    ? { type: "success", title: "List Updated", message: successMessage }
-                  : null
+                : accessError
+                  ? { type: "error", message: accessError }
+                  : savedMessage
+                    ? { type: "success", title: "Settings Updated", message: savedMessage, action: "Settings Updated", audit: true, adminOnly: isAdmin }
+                    : accessMessage
+                      ? { type: "success", title: "Access Control", message: accessMessage, action: "Access Control Updated", audit: true, adminOnly: true }
+                      : successMessage
+                        ? { type: "success", title: "List Updated", message: successMessage, action: "Settings List Updated", audit: true, adminOnly: isAdmin }
+                    : null
         }
         onClose={() => {
           setDepartmentError("");
           setAdmissionLocationError("");
           setOutpatientDepartmentError("");
+          setAccessError("");
           setSavedMessage("");
+          setAccessMessage("");
           setSuccessMessage("");
         }}
       />

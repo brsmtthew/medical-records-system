@@ -28,20 +28,25 @@ import {
   subscribeToPatients,
   updatePatient as updatePatientRecord,
 } from "../services/recordsService";
+import { useAuth } from "../context/useAuth";
 import { recordTimeValue } from "../utils/recordSorting";
 
+// Keeps patient case numbers consistent whether typed manually or scanned.
 function normalizeCaseNumber(value) {
   return value.trim().toUpperCase();
 }
 
+// Normalizes patient names before duplicate and readmission checks.
 function normalizePatientName(value) {
   return value.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
+// Converts nullable patient fields into search-safe text.
 function searchable(value) {
   return String(value || "").toLowerCase();
 }
 
+// Keeps outpatient discharge dates aligned with the admission date used by the form.
 function normalizePatientDates(patient) {
   const admissionDate = patient.admissionDate || "";
   const dischargeDate = patient.type === "outpatient"
@@ -56,12 +61,14 @@ function normalizePatientDates(patient) {
   };
 }
 
+// Converts yyyy-mm-dd form values into timestamps for overlap comparisons.
 function dateValue(value) {
   if (!value) return 0;
   const date = new Date(`${value}T00:00:00`);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+// Builds an admission-to-discharge range used to detect overlapping inpatient stays.
 function patientStayRange(patient) {
   const normalizedPatient = normalizePatientDates(patient);
   const admissionTime = dateValue(normalizedPatient.admissionDate);
@@ -73,6 +80,7 @@ function patientStayRange(patient) {
   };
 }
 
+// Detects inpatient date ranges that would conflict for the same patient.
 function patientStayOverlaps(firstPatient, secondPatient) {
   if (firstPatient.type !== "inpatient" || secondPatient.type !== "inpatient") {
     return false;
@@ -88,10 +96,12 @@ function patientStayOverlaps(firstPatient, secondPatient) {
   return firstRange.admissionTime < secondRange.dischargeTime && secondRange.admissionTime < firstRange.dischargeTime;
 }
 
+// Falls back through record timestamps to find the earliest saved patient row.
 function earliestRecordTime(patient) {
   return recordTimeValue(patient.createdAt) || recordTimeValue(patient.updatedAt);
 }
 
+// Finds the earliest admission for a patient while optionally ignoring the row being edited.
 function firstAdmissionTime(patientRows, patientName, ignoredPatientId = "") {
   const matchingRows = patientRows
     .filter((patient) => {
@@ -108,6 +118,7 @@ function firstAdmissionTime(patientRows, patientName, ignoredPatientId = "") {
   return matchingRows[0] ? dateValue(matchingRows[0].admissionDate) : 0;
 }
 
+// Finds the first saved admission row so record-type labels can stay read-only and automatic.
 function firstAdmissionRecordId(patientRows, patientName) {
   const matchingRows = patientRows
     .filter((patient) => normalizePatientName(patient.name || "") === patientName && dateValue(patient.admissionDate))
@@ -122,12 +133,14 @@ function firstAdmissionRecordId(patientRows, patientName) {
   return matchingRows[0]?.id || matchingRows[0]?.caseNumber || "";
 }
 
+// Labels a patient as the first admission unless an older row already exists.
 function isFirstAdmissionRecord(patientRows, patient) {
   const patientName = normalizePatientName(patient.name || "");
   const firstRecordId = firstAdmissionRecordId(patientRows, patientName);
   return !firstRecordId || firstRecordId === patient.id || firstRecordId === patient.caseNumber;
 }
 
+// Prevents readmission rows from being dated before the first known hospital record.
 function hasAdmissionBeforeFirstRecord(patientRows, candidate, ignoredPatientId = "") {
   const normalizedCandidate = normalizePatientDates(candidate);
   const candidateName = normalizePatientName(normalizedCandidate.name || "");
@@ -137,6 +150,7 @@ function hasAdmissionBeforeFirstRecord(patientRows, candidate, ignoredPatientId 
   return Boolean(earliestExistingTime && candidateAdmissionTime && candidateAdmissionTime < earliestExistingTime);
 }
 
+// Checks whether a proposed inpatient row overlaps an existing inpatient stay.
 function hasOverlappingPatientStay(patientRows, candidate, ignoredPatientId = "") {
   const normalizedCandidate = normalizePatientDates(candidate);
   const candidateName = normalizePatientName(normalizedCandidate.name || "");
@@ -154,6 +168,7 @@ function hasOverlappingPatientStay(patientRows, candidate, ignoredPatientId = ""
 }
 
 export default function Patients() {
+  const { isAdmin } = useAuth();
   const [patients, setPatients] = useState([]);
   const [admissionLocations, setAdmissionLocations] = useState([]);
   const [outpatientDepartments, setOutpatientDepartments] = useState([]);
@@ -224,6 +239,7 @@ export default function Patients() {
     : outpatientDepartmentOptions;
   const editDepartmentLabel = editPatient?.type === "inpatient" ? "Admitted Location" : "Outpatient Department";
 
+  // Validates registration form fields and prepares a sanitized patient payload.
   const buildPatientFromForm = () => {
     const caseNumber = normalizeCaseNumber(form.caseNumber);
     if (!form.name.trim() || !caseNumber || !form.department || !form.admissionDate) {
@@ -264,6 +280,7 @@ export default function Patients() {
     return patientCandidate;
   };
 
+  // Opens the final create confirmation after the form passes validation.
   const handleSubmit = (e) => {
     e.preventDefault();
     const newPatient = buildPatientFromForm();
@@ -271,6 +288,7 @@ export default function Patients() {
     setConfirmPatient(newPatient);
   };
 
+  // Saves the confirmed patient and clears the registration form.
   const handleConfirmCreate = async () => {
     if (!confirmPatient) return;
     try {
@@ -290,6 +308,7 @@ export default function Patients() {
         patientName: confirmPatient.name,
         caseNumber: confirmPatient.caseNumber,
         action: "Patient Created",
+        audit: true,
       });
       setConfirmPatient(null);
     } catch (error) {
@@ -298,6 +317,7 @@ export default function Patients() {
     }
   };
 
+  // Validates and saves changes from the edit patient dialog.
   const handleUpdate = async (e) => {
     e.preventDefault();
     const caseNumber = normalizeCaseNumber(editPatient.caseNumber);
@@ -353,12 +373,14 @@ export default function Patients() {
         patientName,
         caseNumber,
         action: "Patient Updated",
+        audit: true,
       });
     } catch (error) {
       setEditError(error.message || "Unable to update patient in Firebase.");
     }
   };
 
+  // Deletes a patient record after the delete dialog is confirmed.
   const handleDelete = async (caseNumber) => {
     const patientName = deletePatient?.name || "";
     try {
@@ -369,12 +391,14 @@ export default function Patients() {
         patientName,
         caseNumber,
         action: "Patient Deleted",
+        audit: true,
       });
     } catch (error) {
       setFormError(error.message || "Unable to delete patient from Firebase.");
     }
   };
 
+  // Converts the rendered barcode SVG into a downloadable PNG.
   const downloadBarcode = (caseNumber) => {
     const svg = document.getElementById(`barcode-${caseNumber}`);
     if (!svg) return;
@@ -423,6 +447,7 @@ export default function Patients() {
     { label: "Outpatients", value: patients.filter((p) => p.type === "outpatient").length, icon: UserRound, color: "bg-blue-100 text-blue-700" },
   ];
 
+  // Clears all patient table filters with a notice when there is nothing to reset.
   const resetFilters = () => {
     if (!searchTerm && typeFilter === "all" && !admissionDateFilter && !dischargeDateFilter) {
       setInfoMessage("No patient filters to reset.");
@@ -498,7 +523,7 @@ export default function Patients() {
                 />
                 {formNameMatchesExistingPatient && (
                   <p className="text-[10px] font-black uppercase text-amber-600 px-1">
-                    Existing patient name found. This record will be marked old/readmission.
+                    Existing patient name found.
                   </p>
                 )}
               </div>
@@ -642,25 +667,35 @@ export default function Patients() {
                 />
               </div>
 
-              <input
-                type="date"
-                value={admissionDateFilter}
-                onChange={(event) => setAdmissionDateFilter(event.target.value)}
-                className="mrs-field rounded-xl px-4 py-3 text-sm font-black"
-                aria-label="Filter by admission date"
-              />
+              <label className="block">
+                <span className="mb-1 block px-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Filter Admission
+                </span>
+                <input
+                  type="date"
+                  value={admissionDateFilter}
+                  onChange={(event) => setAdmissionDateFilter(event.target.value)}
+                  className="mrs-field w-full rounded-xl px-4 py-3 text-sm font-black"
+                  aria-label="Filter by admission date"
+                />
+              </label>
 
-              <input
-                type="date"
-                value={dischargeDateFilter}
-                onChange={(event) => setDischargeDateFilter(event.target.value)}
-                className="mrs-field rounded-xl px-4 py-3 text-sm font-black"
-                aria-label="Filter by discharge date"
-              />
+              <label className="block">
+                <span className="mb-1 block px-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Filter Discharge
+                </span>
+                <input
+                  type="date"
+                  value={dischargeDateFilter}
+                  onChange={(event) => setDischargeDateFilter(event.target.value)}
+                  className="mrs-field w-full rounded-xl px-4 py-3 text-sm font-black"
+                  aria-label="Filter by discharge date"
+                />
+              </label>
 
               <button
                 onClick={resetFilters}
-                className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-slate-200 text-xs font-black uppercase text-slate-500 hover:border-black hover:text-black transition-colors"
+                className="inline-flex items-center justify-center gap-2 self-end px-4 py-3 rounded-xl border-2 border-slate-200 text-xs font-black uppercase text-slate-500 hover:border-black hover:text-black transition-colors"
               >
                 <X size={16} />
                 Reset
@@ -719,9 +754,11 @@ export default function Patients() {
                         <button onClick={() => { setEditPatient({ ...p, previousCaseNumber: p.caseNumber }); setEditError(""); }} className="p-2 border-2 border-transparent hover:border-black hover:bg-gray-50 rounded-xl transition-all">
                           <Edit size={18} />
                         </button>
-                        <button onClick={() => setDeletePatient(p)} className="p-2 border-2 border-transparent hover:border-black hover:bg-red-50 text-red-500 rounded-xl transition-all">
-                          <Trash2 size={18} />
-                        </button>
+                        {isAdmin && (
+                          <button onClick={() => setDeletePatient(p)} className="p-2 border-2 border-transparent hover:border-black hover:bg-red-50 text-red-500 rounded-xl transition-all">
+                            <Trash2 size={18} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -829,14 +866,9 @@ export default function Patients() {
                   </div>
                   <div className="space-y-1 col-span-2">
                     <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Patient Record</label>
-                    <select
-                      className="w-full border-2 border-black p-4 rounded-xl font-bold"
-                      value={editPatient.recordType || "new"}
-                      onChange={(e) => setEditPatient({ ...editPatient, recordType: e.target.value })}
-                    >
-                      <option value="new">New Patient</option>
-                      <option value="old">Old Patient / Readmission</option>
-                    </select>
+                    <div className="w-full border-2 border-black p-4 rounded-xl font-bold bg-slate-50 text-slate-700">
+                      {isFirstAdmissionRecord(patients, editPatient) ? "First Admission" : "Old Patient / Readmission"}
+                    </div>
                   </div>
                   <div className="space-y-1 col-span-2">
                     <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Care Status</label>
@@ -893,7 +925,7 @@ export default function Patients() {
                   <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
                     <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Record</p>
                     <p className="font-black text-gray-900 uppercase">
-                      {(viewPatient.recordType || "new") === "old" ? "Old / Readmission" : "New Patient"}
+                      {isFirstAdmissionRecord(patients, viewPatient) ? "First Admission" : "Old / Readmission"}
                     </p>
                   </div>
                   <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
@@ -968,7 +1000,7 @@ export default function Patients() {
                   <div>
                     <p className="text-[10px] font-black uppercase text-slate-400">Record</p>
                     <p className="font-black text-slate-800 uppercase">
-                      {confirmPatient.recordType === "old" ? "Old / Readmission" : "New Patient"}
+                      {confirmPatient.recordType === "old" ? "Old / Readmission" : "First Admission"}
                     </p>
                   </div>
                   <div>

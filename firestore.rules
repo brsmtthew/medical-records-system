@@ -1,0 +1,78 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userProfile().data.role == "admin"
+        && userProfile().data.accountStatus != "disabled";
+    }
+
+    function isActiveStaff() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userProfile().data.accountStatus != "disabled";
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.role == "staff"
+        && request.resource.data.accountStatus == "active";
+
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "fullName",
+            "email",
+            "phone",
+            "position",
+            "department",
+            "photoDataUrl",
+            "updatedAt"
+          ])
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.accountStatus == resource.data.accountStatus
+        );
+      allow delete: if false;
+    }
+
+    match /patients/{caseNumber} {
+      allow read, create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /charts/{caseNumber} {
+      allow read, create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /chartLogs/{logId} {
+      allow read, create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /departments/{departmentId} {
+      allow read: if isActiveStaff();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow create: if isActiveStaff() && request.resource.data.userId == request.auth.uid;
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }
+  }
+}

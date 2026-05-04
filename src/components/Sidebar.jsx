@@ -23,7 +23,7 @@ export default function Sidebar({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
-
+  // Defines the app sections used by both desktop and mobile navigation.
   const navItems = [
     { name: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
     { name: "Patients", icon: Users, path: "/patients" },
@@ -52,13 +52,15 @@ export default function Sidebar({
         </div>
 
         {showCloseButton && (
-          <button
+          <Motion.button
+            whileHover={{ rotate: 90, scale: 1.03 }}
+            whileTap={{ scale: 0.92 }}
             onClick={onClose}
-            className="ml-auto p-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+            className="mrs-icon-button mrs-mobile-close-button ml-auto shrink-0"
             aria-label="Close menu"
           >
             <X size={18} />
-          </button>
+          </Motion.button>
         )}
       </div>
 

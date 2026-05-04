@@ -1,3 +1,4 @@
+// Builds the report-log payload used when a borrowed chart is returned.
 export function buildReturnedChartLog({ chart, caseNumber, returner, returnedAt, remarks = "Chart returned" }) {
   return {
     action: "returned",
@@ -14,6 +15,7 @@ export function buildReturnedChartLog({ chart, caseNumber, returner, returnedAt,
   };
 }
 
+// Builds the chart document update that marks a returned chart as available.
 export function buildReturnedChartUpdate({ chart, returner, returnedAt }) {
   return {
     status: "available",

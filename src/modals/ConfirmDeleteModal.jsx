@@ -2,6 +2,7 @@ import React from "react";
 import { motion as Motion } from "framer-motion";
 import { AlertTriangle, Trash2, X } from "lucide-react";
 
+// Shows the final confirmation before a patient record is deleted.
 export default function ConfirmDeleteModal({ patient, onConfirm, onClose }) {
   if (!patient) return null;
 

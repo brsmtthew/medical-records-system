@@ -14,6 +14,7 @@ import { readSystemSettings } from "./utils/systemSettings";
 
 export default function App() {
   useLayoutEffect(() => {
+    // Applies saved theme classes before routes paint so pages do not flash the wrong mode.
     const applyTheme = () => {
       const { appearanceMode, lightComfortMode } = readSystemSettings();
       document.documentElement.classList.toggle("dark", appearanceMode === "dark");

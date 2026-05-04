@@ -5,10 +5,11 @@ export const defaultSystemSettings = {
   reportExportFileName: "chart-activity-report",
   appearanceMode: "dark",
   lightComfortMode: "normal",
-  sessionTimeoutMinutes: 30,
+  sessionTimeoutMinutes: 10,
   themeDefaultVersion: "dark-default-2026-05-03",
 };
 
+// Reads saved workstation settings and refreshes theme defaults when the version changes.
 export function readSystemSettings() {
   try {
     const storedSettings = localStorage.getItem(settingsStorageKey);
@@ -34,6 +35,7 @@ export function readSystemSettings() {
   }
 }
 
+// Saves only supported workstation setting keys into local storage.
 export function saveSystemSettings(settings) {
   const cleanedSettings = Object.keys(defaultSystemSettings).reduce((values, key) => ({
     ...values,

@@ -1,3 +1,4 @@
+// Converts Firestore, Date, and string timestamps into sortable millisecond values.
 export function recordTimeValue(value) {
   if (!value) return 0;
   if (typeof value.toMillis === "function") return value.toMillis();
@@ -8,6 +9,7 @@ export function recordTimeValue(value) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+// Finds the most recent activity timestamp available on a record row.
 export function latestRecordTime(row) {
   return Math.max(
     recordTimeValue(row.updatedAt),
@@ -18,6 +20,7 @@ export function latestRecordTime(row) {
   );
 }
 
+// Sorts records newest-first with a stable id/case-number fallback.
 export function sortNewestFirst(rows) {
   return [...rows].sort((first, second) => {
     const timeDifference = latestRecordTime(second) - latestRecordTime(first);

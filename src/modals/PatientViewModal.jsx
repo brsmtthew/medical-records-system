@@ -2,6 +2,7 @@ import React from "react";
 import { motion as Motion } from "framer-motion";
 import { CalendarDays, ClipboardList, UserCircle, X } from "lucide-react";
 
+// Displays a read-only patient detail summary.
 export default function PatientViewModal({ patient, onClose }) {
   if (!patient) return null;
 

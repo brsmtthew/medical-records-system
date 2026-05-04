@@ -22,6 +22,7 @@ import {
   updateChartLogIfExists,
 } from "../services/recordsService";
 import { buildReturnedChartLog, buildReturnedChartUpdate } from "../utils/chartTransactions";
+import { formatDisplayDate } from "../utils/dateFormatting";
 
 const today = new Date();
 const transactionModes = [
@@ -41,18 +42,22 @@ const transactionModes = [
   },
 ];
 
+// Keeps manually typed or scanned case numbers in one searchable format.
 function normalizeCaseNumber(value) {
   return value.trim().toUpperCase();
 }
 
+// Normalizes chart patient names before grouping records for read-only labels.
 function normalizePatientName(value = "") {
   return value.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
+// Converts nullable table fields into search-safe text.
 function searchable(value) {
   return String(value || "").toLowerCase();
 }
 
+// Picks the oldest available timestamp for record-type calculations.
 function chartCreatedValue(chart) {
   if (chart.createdAt?.toMillis) return chart.createdAt.toMillis();
   if (chart.createdAt?.seconds) return chart.createdAt.seconds * 1000;
@@ -60,6 +65,7 @@ function chartCreatedValue(chart) {
   return Number.MAX_SAFE_INTEGER;
 }
 
+// Determines whether the chart is the first record for the patient or a readmission.
 function determineChartRecordType(chart, charts) {
   if (chart.recordType === "old") return "old";
   if (chart.recordType === "new") return "new";
@@ -76,6 +82,7 @@ function determineChartRecordType(chart, charts) {
   return relatedCharts.findIndex((item) => item.caseNumber === chart.caseNumber) > 0 ? "old" : "new";
 }
 
+// Counts whole calendar days since a chart was checked out.
 function daysBorrowed(date) {
   if (!date) return 0;
   const borrowedDate = new Date(date);
@@ -111,12 +118,14 @@ export default function Charts() {
   const [notice, setNotice] = useState(null);
   const [transactionToast, setTransactionToast] = useState(null);
 
+  // Shows an inline toast-style notice for transaction validation.
   const setTransactionNotice = (type, message) => {
     setNotice({ type, message });
   };
 
+  // Publishes successful borrow/return actions to the shared notification log.
   const showTransactionToast = (title, message, details = {}) => {
-    setTransactionToast({ title, message, ...details });
+    setTransactionToast({ title, message, audit: true, ...details });
   };
 
   useEffect(() => {
@@ -148,12 +157,14 @@ export default function Charts() {
   const activeTransaction = transactionModes.find((mode) => mode.id === transactionMode);
   const activeCaseNumber = transactionMode === "return" ? returnCaseNumber : borrowCaseNumber;
 
+  // Selects borrow or return mode and primes the matching table filter.
   const selectTransactionMode = (mode) => {
     setTransactionMode(mode);
     setStatusFilter(mode === "borrow" ? "available" : "borrowed");
     setNotice(null);
   };
 
+  // Routes case-number input into the active transaction form.
   const setCaseNumberForActiveMode = (caseNumber) => {
     const normalizedCaseNumber = normalizeCaseNumber(caseNumber);
     if (transactionMode === "return") {
@@ -163,6 +174,7 @@ export default function Charts() {
     }
   };
 
+  // Clears borrow transaction fields with feedback when there is nothing to reset.
   const resetBorrowForm = () => {
     if (!borrowCaseNumber && !borrower && !department) {
       setTransactionNotice("info", "No borrow transaction details to reset.");
@@ -174,6 +186,7 @@ export default function Charts() {
     setTransactionNotice("info", "Borrow transaction details were reset.");
   };
 
+  // Clears return transaction fields with feedback when there is nothing to reset.
   const resetReturnForm = () => {
     if (!returnCaseNumber && !returner) {
       setTransactionNotice("info", "No return transaction details to reset.");
@@ -184,6 +197,7 @@ export default function Charts() {
     setTransactionNotice("info", "Return transaction details were reset.");
   };
 
+  // Lets operators click a valid chart row to fill the active case number.
   const handleChartRowSelect = (chart) => {
     if (!transactionMode) return;
     const isBorrowMode = transactionMode === "borrow";
@@ -230,6 +244,7 @@ export default function Charts() {
     });
   }, [charts, searchQuery, statusFilter]);
 
+  // Validates borrow details and opens the confirmation dialog.
   const prepareCheckout = () => {
     const caseNumber = normalizeCaseNumber(borrowCaseNumber);
     if (!caseNumber || !borrower.trim() || !department) {
@@ -257,6 +272,7 @@ export default function Charts() {
     });
   };
 
+  // Writes the borrow log and marks the selected chart as out of records.
   const handleCheckout = async () => {
     if (!confirmTransaction || confirmTransaction.type !== "borrow") return;
     const { chart, caseNumber } = confirmTransaction;
@@ -311,6 +327,7 @@ export default function Charts() {
     }
   };
 
+  // Validates return details and opens the confirmation dialog.
   const prepareCheckin = () => {
     const caseNumber = normalizeCaseNumber(returnCaseNumber);
     if (!caseNumber || !returner.trim()) {
@@ -337,6 +354,7 @@ export default function Charts() {
     });
   };
 
+  // Writes the return log and marks the selected chart as available.
   const handleCheckin = async () => {
     if (!confirmTransaction || confirmTransaction.type !== "return") return;
     const { chart, caseNumber } = confirmTransaction;
@@ -465,11 +483,11 @@ export default function Charts() {
         >
         <div className="flex flex-col lg:flex-row lg:items-end gap-3">
             <div className="space-y-1 flex-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Barcode / Case No.</label>
               <div>
                 <input
                   type="text"
                   placeholder="Scan with barcode device or click a chart row"
+                  aria-label="Barcode or case number"
                   value={activeCaseNumber}
                   onChange={(event) => setCaseNumberForActiveMode(event.target.value)}
                   className={fieldClass}
@@ -480,21 +498,21 @@ export default function Charts() {
             {transactionMode === "borrow" ? (
               <>
                 <div className="space-y-1 flex-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Borrower Name</label>
                   <input
                     type="text"
                     placeholder="Borrower name"
+                    aria-label="Borrower Name"
                     value={borrower}
                     onChange={(event) => setBorrower(event.target.value)}
                     className={fieldClass}
                   />
                 </div>
                 <div className="space-y-1 flex-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Department</label>
                   <select
                     value={department}
                     onChange={(event) => setDepartment(event.target.value)}
                     className={fieldClass}
+                    aria-label="Department"
                   >
                     <option value="">Select department</option>
                     {departmentOptions.map((name) => (
@@ -524,10 +542,10 @@ export default function Charts() {
             ) : (
               <>
                 <div className="space-y-1 flex-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Returned By</label>
                   <input
                     type="text"
                     placeholder="Name of person returning chart"
+                    aria-label="Returned By"
                     value={returner}
                     onChange={(event) => setReturner(event.target.value)}
                     className={fieldClass}
@@ -642,7 +660,7 @@ export default function Charts() {
                                 ? "bg-amber-50 text-amber-700 border-amber-200"
                                 : "bg-green-50 text-green-700 border-green-200"
                             }`}>
-                              {recordType === "old" ? "Old / Readmit" : "New"}
+                              {recordType === "old" ? "Old / Readmit" : "First Admission"}
                             </span>
                           </div>
                         </td>
@@ -841,14 +859,7 @@ export default function Charts() {
                     )}
                     <p className="text-xs font-bold text-slate-700">Department: {log.department || "N/A"}</p>
                     <p className="text-[10px] font-bold text-slate-500 uppercase">
-                      {new Date(log.date).toLocaleString([], {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                        hour12: true,
-                      })}
+                      {formatDisplayDate(log.date)}
                     </p>
                   </div>
                 ))}

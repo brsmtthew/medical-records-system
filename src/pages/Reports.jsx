@@ -14,9 +14,12 @@ import {
   deleteChartLog,
   subscribeToChartLogs,
 } from "../services/recordsService";
+import { formatDisplayDate } from "../utils/dateFormatting";
+import { useAuth } from "../context/useAuth";
 import { readSystemSettings } from "../utils/systemSettings";
 import { recordTimeValue } from "../utils/recordSorting";
 
+// Chooses the timestamp that best represents the visible activity for each log row.
 function getLogActivityDate(log) {
   if (log.action === "canceled") {
     return log.canceledAt || log.updatedAt || log.timestamp || log.borrowedAt || "";
@@ -29,26 +32,22 @@ function getLogActivityDate(log) {
   return log.borrowedAt || log.timestamp || "";
 }
 
+// Formats report timestamps as app-standard dates for table display and exports.
 function formatDateTime(value) {
   if (!value) return "N/A";
   const time = recordTimeValue(value);
   if (!time) return "N/A";
-  return new Date(time).toLocaleString([], {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  return formatDisplayDate(time);
 }
 
+// Converts a timestamp into yyyy-mm-dd for comparing date input filters.
 function toDateKey(value) {
   const time = recordTimeValue(value);
   if (!time) return "";
   return new Date(time).toISOString().slice(0, 10);
 }
 
+// Escapes values before inserting them into the Excel-compatible HTML workbook.
 function escapeExcelValue(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -57,6 +56,7 @@ function escapeExcelValue(value) {
     .replaceAll('"', "&quot;");
 }
 
+// Builds and downloads a simple Excel-compatible report from the filtered table rows.
 function downloadExcel(rows, fileName) {
   const headers = [
     "Patient",
@@ -123,6 +123,7 @@ function downloadExcel(rows, fileName) {
 }
 
 export default function Reports() {
+  const { isAdmin } = useAuth();
   const [systemSettings] = useState(readSystemSettings);
   const [reportLogs, setReportLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -186,6 +187,7 @@ export default function Reports() {
     },
   ];
 
+  // Clears report filters while showing feedback when the table is already unfiltered.
   const resetFilters = () => {
     if (actionFilter === "all" && !searchTerm && !startDate && !endDate) {
       setInfoMessage("No report filters to reset.");
@@ -198,6 +200,7 @@ export default function Reports() {
     setInfoMessage("Report filters were reset.");
   };
 
+  // Deletes one audit row after the confirmation dialog is accepted.
   const handleDeleteLog = async () => {
     if (!deleteLog) return;
     try {
@@ -207,6 +210,7 @@ export default function Reports() {
         patientName: deleteLog.patientName || "",
         caseNumber: deleteLog.caseNumber || "",
         action: "Report Row Deleted",
+        audit: true,
       });
       setDeleteLog(null);
       setLoadError("");
@@ -399,13 +403,15 @@ export default function Reports() {
                       </td>
                       <td className="p-3">
                         <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => setDeleteLog(log)}
-                            className="p-2 rounded-xl border-2 border-transparent hover:border-red-200 hover:bg-red-50 text-red-500 transition-colors"
-                            aria-label={`Delete report row ${log.caseNumber}`}
-                          >
-                            <Trash2 size={17} />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => setDeleteLog(log)}
+                              className="p-2 rounded-xl border-2 border-transparent hover:border-red-200 hover:bg-red-50 text-red-500 transition-colors"
+                              aria-label={`Delete report row ${log.caseNumber}`}
+                            >
+                              <Trash2 size={17} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

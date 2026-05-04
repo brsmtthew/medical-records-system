@@ -9,6 +9,7 @@ export default function DashboardLayout({ children }) {
     return localStorage.getItem("mrs-sidebar-collapsed") === "true";
   });
 
+  // Persists the desktop sidebar width preference between page loads.
   const toggleSidebarCollapsed = () => {
     setIsSidebarCollapsed((value) => {
       const nextValue = !value;
@@ -37,11 +38,11 @@ export default function DashboardLayout({ children }) {
               className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             />
             <Motion.aside
-              initial={{ x: -320 }}
+              initial={{ x: -320, opacity: 0.95 }}
               animate={{ x: 0 }}
-              exit={{ x: -320 }}
-              transition={{ type: "spring", stiffness: 320, damping: 34 }}
-              className="relative z-10 h-full max-w-[85vw]"
+              exit={{ x: -320, opacity: 0.95 }}
+              transition={{ type: "spring", stiffness: 280, damping: 32, mass: 0.9 }}
+              className="relative z-10 h-full w-[min(20rem,88vw)]"
             >
               <Sidebar
                 showCloseButton

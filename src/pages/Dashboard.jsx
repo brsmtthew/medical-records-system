@@ -25,14 +25,17 @@ import {
   subscribeToDepartments,
   subscribeToPatients,
 } from "../services/recordsService";
+import { formatDateInputLabel, formatDisplayDate, formatMonthInputLabel } from "../utils/dateFormatting";
 import { recordTimeValue } from "../utils/recordSorting";
 
 const periodOptions = [
+  { id: "all", label: "All" },
   { id: "today", label: "Today" },
   { id: "monthly", label: "Monthly" },
   { id: "yearly", label: "Yearly" },
 ];
 
+// Builds the yyyy-mm-dd value expected by native date inputs.
 function toDateInputValue(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -40,17 +43,20 @@ function toDateInputValue(date) {
   return `${year}-${month}-${day}`;
 }
 
+// Builds the yyyy-mm value expected by native month inputs.
 function toMonthInputValue(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
 }
 
+// Normalizes Firestore, Date, and ISO timestamp values into a Date object.
 function dateFromRecordValue(value) {
   const time = recordTimeValue(value);
   return time ? new Date(time) : null;
 }
 
+// Extracts reusable day, month, and year keys so every dashboard section follows the same period toggle.
 function datePartsFromRecordValue(value) {
   if (!value) return null;
 
@@ -92,7 +98,10 @@ function datePartsFromRecordValue(value) {
   };
 }
 
+// Checks whether a timestamp belongs to the selected Today, Monthly, or Yearly view.
 function isRecordValueInPeriod(value, period, selectedDate, selectedMonth, selectedYear) {
+  if (period === "all") return true;
+
   const parts = datePartsFromRecordValue(value);
   if (!parts) return false;
 
@@ -107,6 +116,7 @@ function isRecordValueInPeriod(value, period, selectedDate, selectedMonth, selec
   return parts.yearKey === String(selectedYear);
 }
 
+// Uses the best available patient timestamp for period-aware dashboard counts.
 function isPatientInPeriod(patient, period, selectedDate, selectedMonth, selectedYear) {
   return isRecordValueInPeriod(
     patient.admissionDate || patient.createdAt || patient.updatedAt,
@@ -117,18 +127,33 @@ function isPatientInPeriod(patient, period, selectedDate, selectedMonth, selecte
   );
 }
 
+// Uses a chart's circulation timestamp so borrowed-chart cards follow the dashboard period toggle.
+function isChartInPeriod(chart, period, selectedDate, selectedMonth, selectedYear) {
+  return isRecordValueInPeriod(
+    chart.borrowedAt || chart.updatedAt || chart.createdAt,
+    period,
+    selectedDate,
+    selectedMonth,
+    selectedYear,
+  );
+}
+
+// Finds the activity date for chart borrow events.
 function chartLogBorrowDate(log) {
   return datePartsFromRecordValue(log.borrowedAt || log.timestamp || log.createdAt);
 }
 
+// Finds the activity date for chart return events.
 function chartLogReturnDate(log) {
   return datePartsFromRecordValue(log.returnedAt);
 }
 
+// Keeps chart movement grouped even when older rows are missing a department.
 function chartLogDepartment(log) {
   return log.department || "Unassigned";
 }
 
+// Turns chart logs into period-filtered movement events used by graphs, tables, and activity rows.
 function buildChartMovementEvents(logs, period, selectedDate, selectedMonth, selectedYear) {
   return logs.flatMap((log) => {
     const events = [];
@@ -142,6 +167,7 @@ function buildChartMovementEvents(logs, period, selectedDate, selectedMonth, sel
       events.push({
         type: "borrowed",
         log,
+        patientName: log.patientName || "Unknown patient",
         department: chartLogDepartment(log),
         date: borrowedDateParts.date,
       });
@@ -154,6 +180,7 @@ function buildChartMovementEvents(logs, period, selectedDate, selectedMonth, sel
       events.push({
         type: "returned",
         log,
+        patientName: log.patientName || "Unknown patient",
         department: chartLogDepartment(log),
         date: returnedDateParts.date,
       });
@@ -163,6 +190,7 @@ function buildChartMovementEvents(logs, period, selectedDate, selectedMonth, sel
   });
 }
 
+// Renders a compact top-line metric card with a consistent animation.
 function StatCard({ item, index }) {
   return (
     <Motion.div
@@ -191,6 +219,7 @@ function StatCard({ item, index }) {
   );
 }
 
+// Groups patients by service/location and sorts the busiest departments first.
 function buildServiceAnalytics(rows) {
   return Object.entries(
     rows.reduce((counts, patient) => {
@@ -203,6 +232,7 @@ function buildServiceAnalytics(rows) {
     .sort((first, second) => second.value - first.value || first.name.localeCompare(second.name));
 }
 
+// Renders the service distribution list beside the patient mix chart.
 function ServiceList({ title, services, tone }) {
   const maxServiceCount = Math.max(...services.map((service) => service.value), 1);
   const barColor = tone === "green" ? "bg-green-600" : "bg-blue-600";
@@ -243,7 +273,7 @@ export default function Dashboard() {
   const [charts, setCharts] = useState([]);
   const [logs, setLogs] = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [selectedPeriod, setSelectedPeriod] = useState("monthly");
+  const [selectedPeriod, setSelectedPeriod] = useState("today");
   const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
   const [selectedMonth, setSelectedMonth] = useState(() => toMonthInputValue(new Date()));
   const [selectedYear, setSelectedYear] = useState(() => String(new Date().getFullYear()));
@@ -264,13 +294,12 @@ export default function Dashboard() {
 
   const periodMovementEvents = buildChartMovementEvents(logs, selectedPeriod, selectedDate, selectedMonth, selectedYear);
   const periodPatients = patients.filter((patient) => isPatientInPeriod(patient, selectedPeriod, selectedDate, selectedMonth, selectedYear));
-  const inpatientCount = patients.filter((patient) => patient.type === "inpatient").length;
-  const outpatientCount = patients.filter((patient) => patient.type === "outpatient").length;
+  const periodCharts = charts.filter((chart) => isChartInPeriod(chart, selectedPeriod, selectedDate, selectedMonth, selectedYear));
   const periodInpatientCount = periodPatients.filter((patient) => patient.type === "inpatient").length;
   const periodOutpatientCount = periodPatients.filter((patient) => patient.type === "outpatient").length;
   const newPatientCount = periodPatients.filter((patient) => (patient.recordType || "new") === "new").length;
   const oldPatientCount = periodPatients.filter((patient) => (patient.recordType || "new") === "old").length;
-  const borrowedCharts = charts.filter((chart) => chart.status === "borrowed");
+  const periodBorrowedCharts = periodCharts.filter((chart) => chart.status === "borrowed").length;
   const patientMix = [
     { name: "Inpatient", value: periodInpatientCount, color: "bg-green-600", text: "text-green-700" },
     { name: "Outpatient", value: periodOutpatientCount, color: "bg-blue-600", text: "text-blue-700" },
@@ -305,65 +334,63 @@ export default function Dashboard() {
     .slice(0, 2)
     .map((event) => ({
     action: event.type === "borrowed" ? "Borrowed" : "Returned",
+    patientName: event.patientName,
     chart: event.log.caseNumber,
     person: event.type === "returned"
       ? event.log.returnedBy || event.log.borrowedBy || "N/A"
       : event.log.borrowedBy || "N/A",
-    time: event.date
-      ? event.date.toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        })
-      : "",
+    time: event.date ? formatDisplayDate(event.date) : "",
     tone: event.type === "borrowed" ? "red" : "green",
   }));
+  const periodLabel = selectedPeriod === "today"
+    ? formatDateInputLabel(selectedDate)
+    : selectedPeriod === "monthly"
+      ? formatMonthInputLabel(selectedMonth)
+      : selectedPeriod === "yearly"
+        ? selectedYear
+        : "ALL RECORDS";
+  const allBorrowedCharts = charts.filter((chart) => chart.status === "borrowed").length;
+  const allAvailableCharts = charts.filter((chart) => chart.status === "available").length;
   const alerts = [
-    { label: "Currently borrowed charts", value: String(borrowedCharts.length), detail: "Active circulation records" },
-    { label: "Available charts", value: String(charts.filter((chart) => chart.status === "available").length), detail: "Ready for checkout" },
-    { label: "Registered patient charts", value: String(charts.length), detail: "Synced from patient registry" },
+    { label: "Currently borrowed charts", value: String(allBorrowedCharts), detail: "All active circulation records" },
+    { label: "Available charts", value: String(allAvailableCharts), detail: "All charts ready for checkout" },
+    { label: "Registered patient charts", value: String(charts.length), detail: "All charts synced from patient registry" },
   ];
 
   const stats = [
     {
       label: "Total Number of Registered Patients",
-      value: patients.length,
+      value: periodPatients.length,
       icon: Users,
       color: "bg-green-100",
-      trend: "Synced from Firebase",
+      trend: periodLabel,
       trendColor: "text-green-700",
     },
     {
       label: "Total Number of Inpatients",
-      value: inpatientCount,
+      value: periodInpatientCount,
       icon: Bed,
       color: "bg-emerald-100",
-      trend: `${registryPatientTotal ? ((inpatientCount / registryPatientTotal) * 100).toFixed(1) : "0.0"}% of registry`,
+      trend: `${registryPatientTotal ? ((periodInpatientCount / registryPatientTotal) * 100).toFixed(1) : "0.0"}% of registry`,
       trendColor: "text-slate-500",
     },
     {
       label: "Total Number of Outpatients",
-      value: outpatientCount,
+      value: periodOutpatientCount,
       icon: UserRound,
       color: "bg-blue-100",
-      trend: `${registryPatientTotal ? ((outpatientCount / registryPatientTotal) * 100).toFixed(1) : "0.0"}% of registry`,
+      trend: `${registryPatientTotal ? ((periodOutpatientCount / registryPatientTotal) * 100).toFixed(1) : "0.0"}% of registry`,
       trendColor: "text-slate-500",
     },
     {
       label: "Total Number of Borrowed Charts",
-      value: borrowedCharts.length,
+      value: periodBorrowedCharts,
       icon: Archive,
       color: "bg-amber-100",
-      trend: "",
+      trend: "Borrowed charts in view",
       trendColor: "text-amber-700",
     },
   ];
-
-  const periodLabel = selectedPeriod === "today"
-    ? selectedDate
-    : selectedPeriod === "monthly"
-      ? selectedMonth
-      : selectedYear;
 
   return (
     <DashboardLayout>
@@ -382,7 +409,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="mrs-surface flex flex-col sm:flex-row gap-2 rounded-2xl p-2">
-          <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
             {periodOptions.map((period) => (
               <button
                 key={period.id}
@@ -395,6 +422,7 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+          {selectedPeriod !== "all" && (
           <div className="min-w-40">
             {selectedPeriod === "today" && (
               <input
@@ -426,6 +454,7 @@ export default function Dashboard() {
               />
             )}
           </div>
+          )}
         </div>
       </Motion.div>
 
@@ -488,7 +517,7 @@ export default function Dashboard() {
                 Patient Analytics
               </h3>
             </div>
-            <span className="text-[10px] font-black uppercase text-slate-400">{periodLabel}</span>
+            <span className="text-[10px] font-black uppercase text-slate-400">All Totals</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {patientMix.map((item) => (
@@ -543,9 +572,9 @@ export default function Dashboard() {
             {recentActivity.map((item) => (
               <div key={`${item.action}-${item.chart}`} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-black text-slate-800 text-sm">{item.chart}</p>
+                  <p className="font-black text-slate-800 text-sm">{item.patientName}</p>
                   <p className="text-[10px] font-bold uppercase text-slate-400">
-                    {item.person} - {item.time}
+                    {item.chart} - {item.person} - {item.time}
                   </p>
                 </div>
                 <span
@@ -580,9 +609,12 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           className="mrs-panel flex min-h-[190px] flex-col overflow-hidden rounded-2xl xl:col-span-6 xl:min-h-0"
         >
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-            <ClipboardCheck size={19} className="text-amber-700" />
-            <h3 className="font-black uppercase text-slate-800">Activity STATUS</h3>
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <ClipboardCheck size={19} className="text-amber-700" />
+              <h3 className="font-black uppercase text-slate-800">Activity STATUS</h3>
+            </div>
+            <span className="text-[10px] font-black uppercase text-slate-400">{periodLabel}</span>
           </div>
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 bg-slate-50 p-3 sm:grid-cols-3">
             {alerts.map((item) => (

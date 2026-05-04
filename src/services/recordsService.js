@@ -43,6 +43,7 @@ export const duplicateCaseNumberMessage = "A patient with this case number alrea
 export const duplicatePatientStayMessage = "This inpatient record overlaps a previous inpatient admission period.";
 export const patientBeforeFirstRecordMessage = "Readmission date cannot be earlier than this patient's first hospital record.";
 
+// Returns the configured Firestore instance or fails fast with a user-facing setup message.
 function requireDb() {
   if (!db) {
     throw new Error(recordsUnavailableMessage);
@@ -50,14 +51,26 @@ function requireDb() {
   return db;
 }
 
+// Converts Firestore snapshots into plain rows with their document ids attached.
 function snapshotRows(snapshot) {
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
+// Keeps editable department lists alphabetized.
 function sortByName(rows) {
   return [...rows].sort((first, second) => String(first.name || "").localeCompare(String(second.name || "")));
 }
 
+// Keeps user access rows sorted by display name or email.
+function sortByUserName(rows) {
+  return [...rows].sort((first, second) => {
+    const firstName = first.fullName || first.displayName || first.email || "";
+    const secondName = second.fullName || second.displayName || second.email || "";
+    return String(firstName).localeCompare(String(secondName));
+  });
+}
+
+// Normalizes patient stay dates and names before admission overlap checks.
 function normalizePatientStay(patient) {
   const admissionDate = patient.admissionDate || "";
   const dischargeDate = patient.type === "outpatient"
@@ -71,10 +84,12 @@ function normalizePatientStay(patient) {
   };
 }
 
+// Cleans department names before storing them in Firestore.
 function sanitizeDepartmentName(name) {
   return sanitizeText(name, { maxLength: 120, uppercase: true });
 }
 
+// Cleans patient form data before creating or updating patient/chart documents.
 function sanitizePatientPayload(patient) {
   return sanitizeRecordPayload(patient, {
     caseNumber: { maxLength: 60, uppercase: true },
@@ -87,6 +102,7 @@ function sanitizePatientPayload(patient) {
   });
 }
 
+// Cleans chart update fields before writing circulation state.
 function sanitizeChartPayload(chart) {
   return sanitizeRecordPayload(chart, {
     caseNumber: { maxLength: 60, uppercase: true },
@@ -102,6 +118,7 @@ function sanitizeChartPayload(chart) {
   });
 }
 
+// Cleans audit log fields before writing report rows.
 function sanitizeChartLogPayload(log) {
   return sanitizeRecordPayload(log, {
     caseNumber: { maxLength: 60, uppercase: true },
@@ -117,12 +134,38 @@ function sanitizeChartLogPayload(log) {
   });
 }
 
+// Cleans audit action fields before storing staff activity history.
+function sanitizeAuditLogPayload(log) {
+  return sanitizeRecordPayload(log, {
+    type: { maxLength: 30 },
+    title: { maxLength: 120 },
+    message: { maxLength: 500 },
+    patientName: { maxLength: 160, uppercase: true },
+    caseNumber: { maxLength: 60, uppercase: true },
+    action: { maxLength: 120 },
+    userName: { maxLength: 160 },
+    userEmail: { maxLength: 254 },
+    userId: { maxLength: 120 },
+  });
+}
+
+// Cleans account-control changes before updating a user profile document.
+function sanitizeUserAccessPayload(updates) {
+  return sanitizeRecordPayload(updates, {
+    role: { maxLength: 30 },
+    accountStatus: { maxLength: 30 },
+    restrictionReason: { maxLength: 300 },
+  });
+}
+
+// Converts date inputs into comparable timestamps.
 function dateValue(value) {
   if (!value) return 0;
   const date = new Date(`${value}T00:00:00`);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+// Checks whether two inpatient stays overlap.
 function patientStayOverlaps(firstPatient, secondPatient) {
   if (firstPatient.type !== "inpatient" || secondPatient.type !== "inpatient") {
     return false;
@@ -140,6 +183,7 @@ function patientStayOverlaps(firstPatient, secondPatient) {
   return firstAdmission < secondDischarge && secondAdmission < firstDischarge;
 }
 
+// Prevents new or edited readmission dates from predating the first known record.
 async function patientAdmissionBeforeFirstRecordExists(database, patient, ignoredCaseNumber = "") {
   const candidate = normalizePatientStay(patient);
   const candidateAdmission = dateValue(candidate.admissionDate);
@@ -158,6 +202,7 @@ async function patientAdmissionBeforeFirstRecordExists(database, patient, ignore
   return Boolean(firstExistingAdmission && candidateAdmission < firstExistingAdmission);
 }
 
+// Checks Firestore for an existing inpatient stay that overlaps the candidate row.
 async function overlappingPatientStayExists(database, patient, ignoredCaseNumber = "") {
   const candidate = normalizePatientStay(patient);
   if (!candidate.name || !candidate.admissionDate) return false;
@@ -177,6 +222,7 @@ async function overlappingPatientStayExists(database, patient, ignoredCaseNumber
   });
 }
 
+// Streams patient rows sorted by most recent activity.
 export function subscribeToPatients(onRows, onError) {
   if (!db) {
     onRows([]);
@@ -188,6 +234,7 @@ export function subscribeToPatients(onRows, onError) {
   }, onError);
 }
 
+// Streams chart rows sorted by most recent activity.
 export function subscribeToCharts(onRows, onError) {
   if (!db) {
     onRows([]);
@@ -199,6 +246,7 @@ export function subscribeToCharts(onRows, onError) {
   }, onError);
 }
 
+// Streams chart audit logs sorted by most recent activity.
 export function subscribeToChartLogs(onRows, onError) {
   if (!db) {
     onRows([]);
@@ -210,6 +258,7 @@ export function subscribeToChartLogs(onRows, onError) {
   }, onError);
 }
 
+// Streams departments used by chart borrowing.
 export function subscribeToDepartments(onRows, onError) {
   if (!db) {
     onRows([]);
@@ -221,6 +270,7 @@ export function subscribeToDepartments(onRows, onError) {
   }, onError);
 }
 
+// Streams departments used as inpatient admission locations.
 export function subscribeToAdmissionLocations(onRows, onError) {
   if (!db) {
     onRows([]);
@@ -232,6 +282,7 @@ export function subscribeToAdmissionLocations(onRows, onError) {
   }, onError);
 }
 
+// Streams departments used by outpatient registration.
 export function subscribeToOutpatientDepartments(onRows, onError) {
   if (!db) {
     onRows([]);
@@ -243,6 +294,31 @@ export function subscribeToOutpatientDepartments(onRows, onError) {
   }, onError);
 }
 
+// Streams user profiles for admin account monitoring and staff access control.
+export function subscribeToUsers(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  return onSnapshot(collection(db, "users"), (snapshot) => {
+    onRows(sortByUserName(snapshotRows(snapshot)));
+  }, onError);
+}
+
+// Streams centralized audit actions so admins can review staff activity across workstations.
+export function subscribeToAuditLogs(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  return onSnapshot(collection(db, "auditLogs"), (snapshot) => {
+    onRows(sortNewestFirst(snapshotRows(snapshot)));
+  }, onError);
+}
+
+// Adds a chart borrowing department.
 export async function addDepartment(name) {
   const database = requireDb();
   const departmentName = sanitizeDepartmentName(name);
@@ -254,6 +330,7 @@ export async function addDepartment(name) {
   });
 }
 
+// Renames a chart borrowing department.
 export async function updateDepartment(id, name) {
   const database = requireDb();
   const departmentName = sanitizeDepartmentName(name);
@@ -263,11 +340,13 @@ export async function updateDepartment(id, name) {
   });
 }
 
+// Deletes a chart borrowing department.
 export async function deleteDepartment(id) {
   const database = requireDb();
   await deleteDoc(doc(database, "departments", id));
 }
 
+// Adds an inpatient admission location.
 export async function addAdmissionLocation(name) {
   const database = requireDb();
   const locationName = sanitizeDepartmentName(name);
@@ -279,6 +358,7 @@ export async function addAdmissionLocation(name) {
   });
 }
 
+// Renames an inpatient admission location.
 export async function updateAdmissionLocation(id, name) {
   const database = requireDb();
   const locationName = sanitizeDepartmentName(name);
@@ -289,11 +369,13 @@ export async function updateAdmissionLocation(id, name) {
   });
 }
 
+// Deletes an inpatient admission location.
 export async function deleteAdmissionLocation(id) {
   const database = requireDb();
   await deleteDoc(doc(database, "departments", id));
 }
 
+// Adds an outpatient department.
 export async function addOutpatientDepartment(name) {
   const database = requireDb();
   const departmentName = sanitizeDepartmentName(name);
@@ -305,6 +387,7 @@ export async function addOutpatientDepartment(name) {
   });
 }
 
+// Renames an outpatient department.
 export async function updateOutpatientDepartment(id, name) {
   const database = requireDb();
   const departmentName = sanitizeDepartmentName(name);
@@ -315,11 +398,22 @@ export async function updateOutpatientDepartment(id, name) {
   });
 }
 
+// Deletes an outpatient department.
 export async function deleteOutpatientDepartment(id) {
   const database = requireDb();
   await deleteDoc(doc(database, "departments", id));
 }
 
+// Updates a user's role, account status, or restriction reason from the admin panel.
+export async function updateUserAccess(userId, updates) {
+  const database = requireDb();
+  await updateDoc(doc(database, "users", userId), {
+    ...sanitizeUserAccessPayload(updates),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// Creates a patient and its matching available chart document.
 export async function createPatient(patient) {
   const database = requireDb();
   const safePatient = sanitizePatientPayload(patient);
@@ -371,6 +465,7 @@ export async function createPatient(patient) {
   });
 }
 
+// Updates patient details and keeps the linked chart document in sync.
 export async function updatePatient(previousCaseNumber, patient) {
   const database = requireDb();
   const now = serverTimestamp();
@@ -461,6 +556,7 @@ export async function updatePatient(previousCaseNumber, patient) {
   });
 }
 
+// Deletes a patient and cancels active borrow logs tied to its chart.
 export async function deletePatient(caseNumber) {
   const database = requireDb();
   const chartRef = doc(database, "charts", caseNumber);
@@ -500,6 +596,7 @@ export async function deletePatient(caseNumber) {
   await deleteDoc(chartRef);
 }
 
+// Updates chart circulation fields for borrow and return workflows.
 export async function updateChart(caseNumber, updates) {
   const database = requireDb();
   await updateDoc(doc(database, "charts", caseNumber), {
@@ -508,6 +605,7 @@ export async function updateChart(caseNumber, updates) {
   });
 }
 
+// Adds a new chart audit log and returns its id for active-borrow linking.
 export async function addChartLog(log) {
   const database = requireDb();
   const logRef = await addDoc(collection(database, "chartLogs"), {
@@ -517,6 +615,7 @@ export async function addChartLog(log) {
   return logRef.id;
 }
 
+// Updates a chart audit log by id.
 export async function updateChartLog(id, log) {
   const database = requireDb();
   await updateDoc(doc(database, "chartLogs", id), {
@@ -525,6 +624,7 @@ export async function updateChartLog(id, log) {
   });
 }
 
+// Updates an audit log only when it still exists.
 export async function updateChartLogIfExists(id, log) {
   const database = requireDb();
   const logRef = doc(database, "chartLogs", id);
@@ -538,7 +638,23 @@ export async function updateChartLogIfExists(id, log) {
   return true;
 }
 
+// Deletes a chart audit log by id.
 export async function deleteChartLog(id) {
   const database = requireDb();
   await deleteDoc(doc(database, "chartLogs", id));
+}
+
+// Adds a centralized audit action for important CRUD and account events.
+export async function addAuditLog(log) {
+  const database = requireDb();
+  await addDoc(collection(database, "auditLogs"), {
+    ...sanitizeAuditLogPayload(log),
+    createdAt: serverTimestamp(),
+  });
+}
+
+// Deletes a centralized audit action from the admin log.
+export async function deleteAuditLog(id) {
+  const database = requireDb();
+  await deleteDoc(doc(database, "auditLogs", id));
 }
