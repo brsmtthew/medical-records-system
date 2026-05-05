@@ -20,6 +20,7 @@ service cloud.firestore {
     function isActiveStaff() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userProfile().data.role in ["admin", "staff"]
         && userProfile().data.accountStatus != "disabled";
     }
 
@@ -30,7 +31,7 @@ service cloud.firestore {
         && request.resource.data.accountStatus == "active";
 
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow update: if isAdmin()
+      allow update: if (isAdmin() && request.resource.data.role in ["admin", "staff"])
         || (
           signedIn()
           && request.auth.uid == userId
@@ -44,13 +45,15 @@ service cloud.firestore {
             "updatedAt"
           ])
           && request.resource.data.role == resource.data.role
+          && request.resource.data.role in ["admin", "staff"]
           && request.resource.data.accountStatus == resource.data.accountStatus
         );
       allow delete: if false;
     }
 
     match /patients/{caseNumber} {
-      allow read, create, update: if isActiveStaff();
+      allow read: if isActiveStaff();
+      allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
 
