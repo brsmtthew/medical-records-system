@@ -1,60 +1,86 @@
-# Medical Records System
+# Medical-Records-System_V1.0_FULL
 
-A medical records management system for patient registry, chart circulation, chart viewing, reports, and role-based records administration.
+TGMCI Medical Records System is a secured records workspace for patient registry, chart circulation, local chart viewing, reporting, user access control, settings, and audit monitoring.
+
+## Version
+
+- Release: `1.0.0`
+- Release name: `Medical-Records-System_V1.0_FULL`
+- Frontend: React + Vite + Tailwind CSS + Framer Motion
+- Data/Auth: Firebase Authentication + Firestore
+- Server scaffold: Node.js + Express security/API foundation
+
+## Core Features
+
+- Secure sign in and staff account creation with Firebase Auth.
+- Role-based access for `admin` and `staff`.
+- Patient registry with add, update, case-number edit, validation, barcode preview, and barcode PNG download.
+- Chart station for borrowing and returning physical chart records.
+- Realtime dashboard analytics for patients, chart availability, movement, services, and recent activity.
+- Local-only chart viewing for PDF/JPG/PNG/WEBP files with zoom, rotate, fullscreen image preview, PDF page controls, sorting, recent history, and keyboard navigation.
+- Reports page with filters, pagination, print support, Excel export for admins, and staff-safe view-only access.
+- Admin user management with table view, search, sorting, profile pictures/initials, role updates, block, and activate.
+- Settings for appearance, report defaults, configurable session timeout, departments, admission locations, outpatient departments, and audit logs.
+- Audit logging for critical actions through centralized notification/audit records.
+- Confidentiality acknowledgment and session-expiration warning for protected pages.
+
+## Security Highlights
+
+- Firestore rules require authenticated active users.
+- Admin-only routes are protected in the router and sensitive service functions.
+- Staff cannot access admin-only Users route.
+- Staff report actions are hidden.
+- Admin-only destructive actions require confirmation.
+- Login attempt throttling applies temporary local lockout after repeated failures.
+- Firebase environment values are checked for missing or placeholder config.
+- Inputs are sanitized before writes.
+- Local chart files are previewed only in the browser and are not uploaded by the chart viewing page.
+- Real `.env` files are ignored and must never be committed.
 
 ## Project Structure
 
 - `client/` - React + Vite frontend
-- `server/` - Node.js + Express API scaffold
-- `firestore.rules` - Firebase security rules for the current Firebase-backed data layer
+- `server/` - Node.js + Express API/security scaffold
+- `firestore.rules` - Firestore Security Rules for Firebase-backed data
+- `README.md` - Project and release documentation
 
-## Frontend
+## Install
 
-Install and run:
+Install dependencies:
 
 ```bash
-cd client
 npm install
-npm run dev
+npm --prefix client install
+npm --prefix server install
 ```
 
-Build:
-
-```bash
-cd client
-npm run build
-```
-
-The root scripts also forward to the frontend:
+## Run Frontend
 
 ```bash
 npm run dev
-npm run build
+```
+
+Equivalent client command:
+
+```bash
+npm --prefix client run dev -- --host 127.0.0.1
+```
+
+Default Vite URL:
+
+```bash
+http://127.0.0.1:5173/
+```
+
+## Build And Validate
+
+```bash
 npm run lint
+npm run build
+npm run test:functional
 ```
 
-## Backend
-
-Install and run:
-
-```bash
-cd server
-npm install
-npm run dev
-```
-
-API routes:
-
-- `GET /api/health`
-- `/api/auth`
-- `/api/users`
-- `/api/patients`
-- `/api/charts`
-- `GET /api/charts/files/:fileName` for authenticated local chart-file viewing
-
-The backend is structured with routes, controllers, middleware, config, models, and utilities. It is ready for an API/database adapter while the existing frontend features continue to use Firebase.
-
-## Environment Variables
+## Firebase Setup
 
 Create `client/.env` from `client/.env.example`:
 
@@ -67,6 +93,14 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 VITE_API_BASE_URL=http://127.0.0.1:5000/api
 ```
+
+Publish the Firestore rules before production use:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+## Server Scaffold
 
 Create `server/.env` from `server/.env.example`:
 
@@ -84,30 +118,21 @@ ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=ChangeMe123
 ```
 
-Never commit real `.env` files, API keys, database URLs, JWT secrets, or private credentials.
+Run server scaffold:
 
-## Security Notes
+```bash
+npm run dev:server
+```
 
-- Protected frontend routes require authentication.
-- Role-based frontend access supports only `admin` and `staff`.
-- Express routes include JWT authentication, role authorization, request validation, rate limiting, and global error handling middleware.
-- Passwords in the Express auth scaffold are hashed with bcrypt-compatible hashing via `bcryptjs`.
-- Access tokens are short-lived and refresh tokens are supported through secure HTTP-only cookies.
-- Sensitive API responses use simple user-facing errors; detailed server errors are logged only on the backend.
-- Audit logs are written as JSON lines to `AUDIT_LOG_PATH`.
-- Scanned chart files must stay outside `client/public`; serve them only from `CHART_FILES_DIR` through authenticated `/api/charts/files/:fileName`.
-- Inputs are validated and sanitized in the frontend utilities and server middleware.
+## GitHub Push Checklist
 
-## Security File Guide
+- Confirm `client/.env` and `server/.env` are not staged.
+- Run `npm run lint`.
+- Run `npm run build`.
+- Run `npm run test:functional`.
+- Review `git status --short`.
+- Commit with a release message such as `Release Medical-Records-System_V1.0_FULL`.
 
-- `server/middleware/authenticate.js` verifies JWT access tokens.
-- `server/middleware/authorizeRoles.js` exports `requireRole(...)` to protect routes by role.
-- `server/middleware/validateRequest.js` runs Zod validation schemas.
-- `server/middleware/rateLimiters.js` limits login and sensitive API traffic.
-- `server/middleware/errorHandler.js` prevents technical errors from leaking to users.
-- `server/middleware/auditAction.js` records protected actions.
-- `server/utils/auditLogger.js` writes audit events outside the frontend.
-- `server/controllers/authController.js` handles login, logout, registration, refresh tokens, lockout, and bcrypt password checks.
-- `server/controllers/chartController.js` serves local scanned chart files only after authentication and logs access.
-- `client/src/services/sessionService.js` stores access tokens in session storage and clears them on expiry/logout.
-- `client/src/routes/ProtectedRoute.jsx` protects frontend pages and keeps the inactivity timeout.
+## Privacy Notice
+
+This system handles sensitive medical record workflows. Access should be limited to authorized personnel, and patient data should be managed according to hospital policy and applicable privacy law.
