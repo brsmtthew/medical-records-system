@@ -24,6 +24,19 @@ service cloud.firestore {
         && userProfile().data.accountStatus != "disabled";
     }
 
+    function isValidCaseNumber(caseNumber) {
+      return caseNumber is string && caseNumber.size() > 0 && caseNumber.size() <= 60;
+    }
+
+    function isSelfRenameDelete(collectionName, caseNumber) {
+      return isActiveStaff()
+        && resource.data.renamePendingBy == request.auth.uid
+        && isValidCaseNumber(resource.data.renamePendingTo)
+        && exists(/databases/$(database)/documents/$(collectionName)/$(resource.data.renamePendingTo))
+        && get(/databases/$(database)/documents/$(collectionName)/$(resource.data.renamePendingTo)).data.previousCaseNumber == caseNumber
+        && get(/databases/$(database)/documents/$(collectionName)/$(resource.data.renamePendingTo)).data.renamePendingBy == request.auth.uid;
+    }
+
     match /users/{userId} {
       allow create: if signedIn()
         && request.auth.uid == userId
@@ -53,13 +66,20 @@ service cloud.firestore {
 
     match /patients/{caseNumber} {
       allow read: if isActiveStaff();
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update: if isActiveStaff()
+        && request.resource.data.caseNumber == caseNumber
+        && isValidCaseNumber(request.resource.data.caseNumber)
+        && request.resource.data.name is string
+        && request.resource.data.type in ["inpatient", "outpatient"];
+      allow delete: if isAdmin() || isSelfRenameDelete("patients", caseNumber);
     }
 
     match /charts/{caseNumber} {
-      allow read, create, update: if isActiveStaff();
-      allow delete: if isAdmin();
+      allow read: if isActiveStaff();
+      allow create, update: if isActiveStaff()
+        && request.resource.data.caseNumber == caseNumber
+        && isValidCaseNumber(request.resource.data.caseNumber);
+      allow delete: if isAdmin() || isSelfRenameDelete("charts", caseNumber);
     }
 
     match /chartLogs/{logId} {

@@ -6,6 +6,7 @@ import {
   CircleAlert,
   Download,
   FileText,
+  Printer,
   RotateCcw,
   Search,
   Trash2,
@@ -124,6 +125,7 @@ function downloadExcel(rows, fileName) {
 
 export default function Reports() {
   const { isAdmin } = useAuth();
+  const canManageReports = isAdmin;
   const [systemSettings] = useState(readSystemSettings);
   const [reportLogs, setReportLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -136,6 +138,8 @@ export default function Reports() {
   const [successMessage, setSuccessMessage] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
   const [successMeta, setSuccessMeta] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   useEffect(() => {
     return subscribeToChartLogs(
@@ -165,6 +169,26 @@ export default function Reports() {
   }, [actionFilter, reportLogs, searchTerm, startDate, endDate]);
 
   const activeBorrowed = reportLogs.filter((log) => log.action === "borrowed");
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / rowsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedLogs = filteredLogs.slice((safeCurrentPage - 1) * rowsPerPage, safeCurrentPage * rowsPerPage);
+
+  const highlightSearch = (value) => {
+    const text = String(value || "");
+    const queryText = searchTerm.trim();
+    if (!queryText) return text;
+
+    const index = text.toLowerCase().indexOf(queryText.toLowerCase());
+    if (index === -1) return text;
+
+    return (
+      <>
+        {text.slice(0, index)}
+        <mark className="rounded bg-amber-100 px-0.5 text-amber-900">{text.slice(index, index + queryText.length)}</mark>
+        {text.slice(index + queryText.length)}
+      </>
+    );
+  };
 
   const stats = [
     {
@@ -197,6 +221,7 @@ export default function Reports() {
     setSearchTerm("");
     setStartDate("");
     setEndDate("");
+    setCurrentPage(1);
     setInfoMessage("Report filters were reset.");
   };
 
@@ -232,15 +257,24 @@ export default function Reports() {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={() => downloadExcel(filteredLogs, systemSettings.reportExportFileName)}
-              className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase transition"
-            >
-              <Download size={17} />
-              Export Excel
-            </button>
-          </div>
+          {canManageReports && (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => downloadExcel(filteredLogs, systemSettings.reportExportFileName)}
+                className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase transition"
+              >
+                <Download size={17} />
+                Export Excel
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="mrs-soft-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase transition"
+              >
+                <Printer size={17} />
+                Print
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="grid shrink-0 grid-cols-3 gap-2">
@@ -283,7 +317,10 @@ export default function Reports() {
                   />
                   <input
                     value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
+                    onChange={(event) => {
+                      setSearchTerm(event.target.value);
+                      setCurrentPage(1);
+                    }}
                     placeholder="Search patient, case number, borrower, returner, or department"
                     className="mrs-field w-full rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold"
                   />
@@ -292,13 +329,19 @@ export default function Reports() {
                 <input
                   type="date"
                   value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
+                  onChange={(event) => {
+                    setStartDate(event.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="mrs-field rounded-xl py-2.5 px-3 text-sm font-bold"
                 />
                 <input
                   type="date"
                   value={endDate}
-                  onChange={(event) => setEndDate(event.target.value)}
+                  onChange={(event) => {
+                    setEndDate(event.target.value);
+                    setCurrentPage(1);
+                  }}
                   className="mrs-field rounded-xl py-2.5 px-3 text-sm font-bold"
                 />
                 <button
@@ -313,7 +356,10 @@ export default function Reports() {
                 {["all", "borrowed", "returned", "canceled"].map((filter) => (
                   <button
                     key={filter}
-                    onClick={() => setActionFilter(filter)}
+                    onClick={() => {
+                      setActionFilter(filter);
+                      setCurrentPage(1);
+                    }}
                     className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase border-2 transition-colors ${
                       actionFilter === filter
                         ? "bg-green-700 text-white border-green-700"
@@ -323,11 +369,24 @@ export default function Reports() {
                     {filter}
                   </button>
                 ))}
+                <select
+                  value={rowsPerPage}
+                  onChange={(event) => {
+                    setRowsPerPage(Number(event.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="mrs-field rounded-xl px-3 py-2 text-[11px] font-black uppercase"
+                  aria-label="Rows per report page"
+                >
+                  <option value={10}>10 Rows</option>
+                  <option value={25}>25 Rows</option>
+                  <option value={50}>50 Rows</option>
+                </select>
               </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
-              <table className="w-full min-w-[980px] table-fixed text-left">
+              <table className={`w-full table-fixed text-left ${canManageReports ? "min-w-[980px]" : "min-w-[880px]"}`}>
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-slate-100 bg-white">
                     <th className="w-[19%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -345,29 +404,31 @@ export default function Reports() {
                     <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Remarks
                     </th>
-                    <th className="w-[9%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Actions
-                    </th>
+                    {canManageReports && (
+                      <th className="w-[9%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredLogs.map((log) => (
+                  {paginatedLogs.map((log) => (
                     <tr key={log.id} className="mrs-table-row">
                       <td className="p-3">
-                        <p className="font-black text-slate-800 break-words">{log.patientName}</p>
+                        <p className="font-black text-slate-800 break-words">{highlightSearch(log.patientName)}</p>
                         <p className="text-[10px] font-bold uppercase text-green-700">
-                          {log.caseNumber}
+                          {highlightSearch(log.caseNumber)}
                         </p>
                       </td>
                       <td className="p-3">
-                        <p className="text-sm font-black text-slate-700">Borrowed: {log.borrowedBy || "N/A"}</p>
+                        <p className="text-sm font-black text-slate-700">Borrowed: {highlightSearch(log.borrowedBy || "N/A")}</p>
                         {log.action === "returned" && (
                           <p className="text-sm font-black text-slate-700">
-                            Returned: {log.returnedBy || log.borrowedBy || "N/A"}
+                            Returned: {highlightSearch(log.returnedBy || log.borrowedBy || "N/A")}
                           </p>
                         )}
                         <p className="text-[10px] font-bold uppercase text-slate-400">
-                          {log.department}
+                          {highlightSearch(log.department)}
                         </p>
                       </td>
                       <td className="p-3">
@@ -399,27 +460,27 @@ export default function Reports() {
                         )}
                       </td>
                       <td className="p-3 text-sm font-semibold text-slate-500 break-words">
-                        {log.remarks}
+                        {highlightSearch(log.remarks)}
                       </td>
-                      <td className="p-3">
-                        <div className="flex justify-end gap-2">
-                          {isAdmin && (
+                      {canManageReports && (
+                        <td className="p-3">
+                          <div className="flex justify-end gap-2">
                             <button
                               onClick={() => setDeleteLog(log)}
-                              className="p-2 rounded-xl border-2 border-transparent hover:border-red-200 hover:bg-red-50 text-red-500 transition-colors"
+                              className="p-2 rounded-xl border-2 border-transparent text-red-500 transition-colors hover:border-red-200 hover:bg-red-50"
                               aria-label={`Delete report row ${log.caseNumber}`}
                             >
                               <Trash2 size={17} />
                             </button>
-                          )}
-                        </div>
-                      </td>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
 
                   {filteredLogs.length === 0 && (
                     <tr>
-                      <td colSpan="6" className="p-10 text-center">
+                      <td colSpan={canManageReports ? 6 : 5} className="p-10 text-center">
                         <FileText size={38} className="mx-auto text-slate-300 mb-3" />
                         <p className="font-black text-slate-700 uppercase">
                           {isLoading ? "Loading reports..." : "No records found"}
@@ -432,6 +493,32 @@ export default function Reports() {
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs font-bold text-slate-500">
+                Showing {paginatedLogs.length} of {filteredLogs.length} report rows
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="mrs-soft-button rounded-lg px-3 py-2 text-xs font-black uppercase disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span className="text-xs font-black text-slate-600">
+                  Page {safeCurrentPage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="mrs-soft-button rounded-lg px-3 py-2 text-xs font-black uppercase disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
 
@@ -482,7 +569,7 @@ export default function Reports() {
         </div>
       </div>
 
-      {deleteLog && (
+      {canManageReports && deleteLog && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setDeleteLog(null)} />
           <div className="mrs-panel relative w-full max-w-sm rounded-2xl p-6 text-center sm:p-7">

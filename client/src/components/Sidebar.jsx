@@ -32,7 +32,7 @@ export default function Sidebar({
     { name: "Patients", icon: Users, path: "/patients" },
     { name: "Charts Station", icon: FileText, path: "/charts" },
     { name: "Chart Viewing", icon: FileSearch, path: "/chart-viewing" },
-    ...(isAdmin ? [{ name: "Activity Logs", icon: BarChart3, path: "/reports" }] : []),
+    { name: "Activity Logs", icon: BarChart3, path: "/reports" },
     ...(isAdmin ? [{ name: "Users", icon: UserCog, path: "/users" }] : []),
     { name: "Settings", icon: Settings, path: "/settings" },
   ];

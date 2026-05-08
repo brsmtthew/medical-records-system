@@ -169,8 +169,9 @@ function hasOverlappingPatientStay(patientRows, candidate, ignoredPatientId = ""
 }
 
 export default function Patients() {
-  const { isAdmin } = useAuth();
-  const canManagePatients = isAdmin;
+  const { isAdmin, isStaff } = useAuth();
+  const canManagePatients = isAdmin || isStaff;
+  const canDeletePatients = isAdmin;
   const [patients, setPatients] = useState([]);
   const [admissionLocations, setAdmissionLocations] = useState([]);
   const [outpatientDepartments, setOutpatientDepartments] = useState([]);
@@ -324,6 +325,7 @@ export default function Patients() {
   // Validates and saves changes from the edit patient dialog.
   const handleUpdate = async (e) => {
     e.preventDefault();
+    const previousCaseNumber = editPatient.previousCaseNumber || editPatient.id;
     const caseNumber = normalizeCaseNumber(editPatient.caseNumber);
     if (!editPatient.name.trim() || !caseNumber || !editPatient.department || !editPatient.admissionDate) {
       setEditError("Patient name, case number, department/location, and date are required.");
@@ -359,17 +361,17 @@ export default function Patients() {
       dischargeDate: editPatient.dischargeDate || "",
     });
 
-    if (hasOverlappingPatientStay(patients, patientCandidate, editPatient.previousCaseNumber || editPatient.id)) {
+    if (hasOverlappingPatientStay(patients, patientCandidate, previousCaseNumber)) {
       setEditError("This inpatient record overlaps a previous inpatient admission period.");
       return;
     }
-    if (hasAdmissionBeforeFirstRecord(patients, patientCandidate, editPatient.previousCaseNumber || editPatient.id)) {
+    if (hasAdmissionBeforeFirstRecord(patients, patientCandidate, previousCaseNumber)) {
       setEditError("Readmission date cannot be earlier than this patient's first hospital record.");
       return;
     }
 
     try {
-      await updatePatientRecord(editPatient.previousCaseNumber || editPatient.id, patientCandidate);
+      await updatePatientRecord(previousCaseNumber, patientCandidate);
       setEditPatient(null);
       setEditError("");
       setSuccessMessage(`${caseNumber} was updated successfully.`);
@@ -632,7 +634,7 @@ export default function Patients() {
                             <Edit size={16} />
                           </button>
                         )}
-                        {isAdmin && (
+                        {canDeletePatients && (
                           <button onClick={() => setDeletePatient(p)} className="rounded-lg border border-transparent p-1.5 text-red-500 transition-all hover:border-black hover:bg-red-50">
                             <Trash2 size={16} />
                           </button>
@@ -1060,7 +1062,7 @@ export default function Patients() {
 
       {/* DELETE MODAL */}
       <AnimatePresence>
-        {canManagePatients && deletePatient && (
+        {canDeletePatients && deletePatient && (
           <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
             <Motion.div className="absolute inset-0 bg-black/40" onClick={() => setDeletePatient(null)} />
             <Motion.div className="mrs-panel relative w-full max-w-sm rounded-2xl p-6 text-center sm:p-10">

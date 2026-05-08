@@ -40,7 +40,7 @@ const authErrorMessages = {
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { authLoading, isAuthenticated, missingFirebaseConfig } = useAuth();
+  const { authLoading, isAuthenticated, invalidFirebaseConfig = [], missingFirebaseConfig } = useAuth();
   const [authMode, setAuthMode] = useState("sign-in");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -175,8 +175,12 @@ export default function Login() {
           <section className="relative hidden min-h-0 overflow-hidden lg:flex lg:flex-col">
             <div className="absolute right-0 top-0 h-full w-2/5 bg-[linear-gradient(135deg,rgba(22,101,52,0.26),rgba(37,99,235,0.18),rgba(245,158,11,0.12))]" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(45,212,191,0.13),transparent_28rem)]" />
+            <div className="absolute right-8 top-8 z-10 flex items-center gap-2 rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-emerald-100">
+              <ShieldCheck size={16} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Secure Portal</span>
+            </div>
             <div className="relative flex min-h-0 flex-1 flex-col justify-between p-6 xl:p-8">
-              <header className="flex shrink-0 items-center justify-between gap-4">
+              <header className="flex shrink-0 items-center gap-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white p-2 shadow-xl shadow-black/20">
                     <img src={logo} className="h-full w-full object-contain" alt="TGMCI Logo" />
@@ -185,10 +189,6 @@ export default function Login() {
                     <p className="truncate text-base font-black uppercase tracking-wide text-white">TGMCI</p>
                     <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Medical Records</p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-emerald-100">
-                  <ShieldCheck size={16} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Secure Portal</span>
                 </div>
               </header>
 
@@ -233,7 +233,8 @@ export default function Login() {
             </div>
           </section>
 
-          <aside className="login-auth-area flex min-h-0 items-center justify-center border-white/10 bg-slate-50 p-4 sm:p-5 lg:border-l">
+          <aside className="login-auth-area relative flex min-h-0 items-center justify-center border-white/10 p-4 sm:p-5 lg:border-l">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(14,116,144,0.12),transparent_24rem)]" />
             <div className="login-auth-panel mx-auto flex max-h-full w-full max-w-md flex-col rounded-xl border border-slate-200 bg-white p-4 text-slate-950 shadow-2xl shadow-slate-950/20 sm:p-5 lg:max-w-none">
               <div className="mb-3 flex items-center gap-3 lg:hidden">
                 <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
@@ -435,13 +436,15 @@ export default function Login() {
               ? { type: "success", message: notice }
             : location.state?.securityMessage && !isSecurityToastDismissed
               ? { type: "info", message: location.state.securityMessage }
-            : missingFirebaseConfig.length > 0 && !isConfigToastDismissed
+            : (missingFirebaseConfig.length > 0 || invalidFirebaseConfig.length > 0) && !isConfigToastDismissed
               ? {
                   type: "error",
-                  title: "Firebase Config Missing",
-                  message: `Missing: ${missingFirebaseConfig
+                  title: "Firebase Config Issue",
+                  message: `${missingFirebaseConfig.length > 0 ? `Missing: ${missingFirebaseConfig
                     .map((key) => `VITE_FIREBASE_${key.replace(/([A-Z])/g, "_$1").toUpperCase()}`)
-                    .join(", ")}`,
+                    .join(", ")}` : ""}${invalidFirebaseConfig.length > 0 ? ` Invalid: ${invalidFirebaseConfig
+                    .map((key) => `VITE_FIREBASE_${key.replace(/([A-Z])/g, "_$1").toUpperCase()}`)
+                    .join(", ")}` : ""}`.trim(),
                 }
               : null
         }

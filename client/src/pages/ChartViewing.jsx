@@ -1,8 +1,22 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { FolderOpen, FileText, Image, RotateCcw, Search, ShieldCheck, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  FolderOpen,
+  FileText,
+  Image,
+  Maximize2,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  SortAsc,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 
 const supportedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const chartViewingSession = {
@@ -10,6 +24,7 @@ const chartViewingSession = {
   selectedPath: "",
   searchQuery: "",
   folderName: "",
+  recentCharts: [],
 };
 
 // Reads the in-memory folder preview state used while navigating inside the app.
@@ -49,15 +64,37 @@ export default function ChartViewing() {
   });
   const [searchQuery, setSearchQuery] = useState(() => readChartViewingSession().searchQuery);
   const [folderName, setFolderName] = useState(() => readChartViewingSession().folderName);
+  const [recentCharts, setRecentCharts] = useState(() => readChartViewingSession().recentCharts || []);
   const [pendingFiles, setPendingFiles] = useState(null);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [sortMode, setSortMode] = useState("path");
+  const [imageZoom, setImageZoom] = useState(1);
+  const [imageRotation, setImageRotation] = useState(0);
+  const [pdfPage, setPdfPage] = useState(1);
+  const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [unsupportedCount, setUnsupportedCount] = useState(0);
 
   // Selects a chart preview and remembers it for the current session.
-  const selectChart = (chart) => {
+  const selectChart = useCallback((chart) => {
     setSelectedChart(chart);
+    setImageZoom(1);
+    setImageRotation(0);
+    setPdfPage(1);
+    setIsPreviewLoading(Boolean(chart));
     updateChartViewingSession({ selectedPath: chart?.path || "" });
-  };
+    if (chart) {
+      setRecentCharts((current) => {
+        const nextHistory = [
+          { name: chart.name, path: chart.path, viewedAt: new Date().toISOString() },
+          ...current.filter((item) => item.path !== chart.path),
+        ].slice(0, 5);
+        updateChartViewingSession({ recentCharts: nextHistory });
+        return nextHistory;
+      });
+    }
+  }, []);
 
   // Updates chart search text and keeps it in the current session state.
   const updateSearchQuery = (value) => {
@@ -67,7 +104,9 @@ export default function ChartViewing() {
 
   // Builds preview rows for supported files selected from a local folder.
   const loadFiles = (fileList) => {
-    const selectedFiles = Array.from(fileList).filter(isSupportedChart);
+    const allFiles = Array.from(fileList);
+    const selectedFiles = allFiles.filter(isSupportedChart);
+    const nextUnsupportedCount = allFiles.length - selectedFiles.length;
     if (selectedFiles.length === 0) {
       setNotice({ type: "info", message: "No supported chart files were found in that folder." });
       return;
@@ -92,8 +131,16 @@ export default function ChartViewing() {
     });
 
     setCharts(nextCharts);
+    setUnsupportedCount(nextUnsupportedCount);
+    setImageZoom(1);
+    setImageRotation(0);
+    setPdfPage(1);
+    setIsPreviewLoading(Boolean(nextCharts[0]));
     setSelectedChart(nextCharts[0] || null);
     setFolderName(nextFolderName);
+    if (nextUnsupportedCount > 0) {
+      setNotice({ type: "info", message: `${nextUnsupportedCount} unsupported file(s) were skipped.` });
+    }
   };
 
   // Captures a chosen folder and asks for confirmation before replacing previews.
@@ -126,6 +173,7 @@ export default function ChartViewing() {
     setSelectedChart(null);
     setSearchQuery("");
     setFolderName("");
+    setUnsupportedCount(0);
     setIsClearConfirmOpen(false);
     setNotice({ type: "info", message: "Chart folder was cleared." });
   };
@@ -147,14 +195,57 @@ export default function ChartViewing() {
     setPendingFiles(null);
   };
 
+  const sortedCharts = useMemo(() => {
+    return [...charts].sort((first, second) => {
+      if (sortMode === "name") return first.name.localeCompare(second.name);
+      if (sortMode === "size") return second.size - first.size;
+      if (sortMode === "type") return first.type.localeCompare(second.type) || first.path.localeCompare(second.path);
+      return first.path.localeCompare(second.path);
+    });
+  }, [charts, sortMode]);
+
   const filteredCharts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return charts;
+    if (!query) return sortedCharts;
 
-    return charts.filter((chart) =>
+    return sortedCharts.filter((chart) =>
       `${chart.name} ${chart.path}`.toLowerCase().includes(query)
     );
-  }, [charts, searchQuery]);
+  }, [searchQuery, sortedCharts]);
+
+  const selectedIndex = filteredCharts.findIndex((chart) => chart.path === selectedChart?.path);
+  const selectRelativeChart = useCallback((direction) => {
+    if (filteredCharts.length === 0) return;
+    const currentIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    const nextIndex = (currentIndex + direction + filteredCharts.length) % filteredCharts.length;
+    selectChart(filteredCharts[nextIndex]);
+  }, [filteredCharts, selectChart, selectedIndex]);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.target instanceof HTMLInputElement) return;
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        event.preventDefault();
+        selectRelativeChart(1);
+      }
+      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        selectRelativeChart(-1);
+      }
+      if (event.key === "Escape") {
+        setIsFullscreenOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectRelativeChart]);
+
+  useEffect(() => {
+    const releaseUrls = () => revokeChartUrls(readChartViewingSession().charts);
+    window.addEventListener("beforeunload", releaseUrls);
+    return () => window.removeEventListener("beforeunload", releaseUrls);
+  }, []);
 
   return (
     <DashboardLayout>
@@ -246,8 +337,26 @@ export default function ChartViewing() {
                   Reset
                 </button>
                 </div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <select
+                    value={sortMode}
+                    onChange={(event) => setSortMode(event.target.value)}
+                    className="mrs-field rounded-xl px-3 py-2 text-xs font-black"
+                    aria-label="Sort local chart files"
+                  >
+                    <option value="path">Sort by Folder Path</option>
+                    <option value="name">Sort by File Name</option>
+                    <option value="type">Sort by File Type</option>
+                    <option value="size">Sort by File Size</option>
+                  </select>
+                  <div className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-500">
+                    <SortAsc size={14} />
+                    {filteredCharts.length}
+                  </div>
+                </div>
                 <div className="mt-3 text-[10px] font-black uppercase text-slate-400">
                   {folderName || "No folder selected"} - {filteredCharts.length} file(s)
+                  {unsupportedCount > 0 ? ` - ${unsupportedCount} skipped` : ""}
                 </div>
               </div>
 
@@ -315,18 +424,53 @@ export default function ChartViewing() {
                   </p>
                 </div>
                 {selectedChart && (
-                  <a
-                    href={selectedChart.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-black uppercase"
-                  >
-                    Open Full View
-                  </a>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button type="button" onClick={() => selectRelativeChart(-1)} className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-black uppercase" title="Previous chart">
+                      <ChevronLeft size={15} />
+                    </button>
+                    <button type="button" onClick={() => selectRelativeChart(1)} className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-black uppercase" title="Next chart">
+                      <ChevronRight size={15} />
+                    </button>
+                    {selectedChart.type === "application/pdf" ? (
+                      <>
+                        <button type="button" onClick={() => setPdfPage((page) => Math.max(1, page - 1))} className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-black uppercase">Page -</button>
+                        <span className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600">Page {pdfPage}</span>
+                        <button type="button" onClick={() => setPdfPage((page) => page + 1)} className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-black uppercase">Page +</button>
+                      </>
+                    ) : (
+                      <>
+                        <button type="button" onClick={() => setImageZoom((value) => Math.max(0.5, Number((value - 0.25).toFixed(2))))} className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-black uppercase" title="Zoom out">
+                          <ZoomOut size={15} />
+                        </button>
+                        <button type="button" onClick={() => setImageZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))} className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-black uppercase" title="Zoom in">
+                          <ZoomIn size={15} />
+                        </button>
+                        <button type="button" onClick={() => setImageRotation((value) => (value + 90) % 360)} className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-black uppercase" title="Rotate image">
+                          <RotateCcw size={15} />
+                        </button>
+                        <button type="button" onClick={() => setIsFullscreenOpen(true)} className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-black uppercase" title="Fullscreen preview">
+                          <Maximize2 size={15} />
+                        </button>
+                      </>
+                    )}
+                    <a
+                      href={selectedChart.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-black uppercase"
+                    >
+                      Open Full View
+                    </a>
+                  </div>
                 )}
               </div>
 
-              <div className="flex-1 bg-slate-100">
+              <div className="relative flex-1 bg-slate-100">
+                {isPreviewLoading && selectedChart && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-100">
+                    <div className="h-20 w-48 animate-pulse rounded-xl bg-white/80" />
+                  </div>
+                )}
                 {!selectedChart ? (
                   <div className="h-full flex items-center justify-center p-8 text-center">
                     <div>
@@ -341,16 +485,19 @@ export default function ChartViewing() {
                   </div>
                 ) : selectedChart.type === "application/pdf" ? (
                   <iframe
-                    src={selectedChart.url}
+                    src={`${selectedChart.url}#page=${pdfPage}`}
                     title={selectedChart.name}
                     className="w-full h-full bg-white"
+                    onLoad={() => setIsPreviewLoading(false)}
                   />
                 ) : (
-                  <div className="h-full flex items-center justify-center p-4">
+                  <div className="h-full flex items-center justify-center overflow-auto p-4">
                     <img
                       src={selectedChart.url}
                       alt={selectedChart.name}
-                      className="max-h-full max-w-full object-contain bg-white border border-slate-200"
+                      onLoad={() => setIsPreviewLoading(false)}
+                      className="max-h-full max-w-full object-contain bg-white border border-slate-200 transition-transform"
+                      style={{ transform: `scale(${imageZoom}) rotate(${imageRotation}deg)` }}
                     />
                   </div>
                 )}
@@ -358,6 +505,26 @@ export default function ChartViewing() {
             </div>
           </div>
         </div>
+        {recentCharts.length > 0 && (
+          <div className="mrs-panel shrink-0 rounded-xl p-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Recently Viewed</p>
+            <div className="mt-2 flex gap-2 overflow-x-auto">
+              {recentCharts.map((item) => (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={() => {
+                    const match = charts.find((chart) => chart.path === item.path);
+                    if (match) selectChart(match);
+                  }}
+                  className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-black text-slate-700 hover:bg-slate-50"
+                >
+                  {item.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <AnimatePresence>
         {pendingFiles && (
@@ -455,6 +622,26 @@ export default function ChartViewing() {
         )}
       </AnimatePresence>
       <FloatingToast toast={notice} onClose={() => setNotice(null)} />
+      <AnimatePresence>
+        {isFullscreenOpen && selectedChart && selectedChart.type !== "application/pdf" && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/90 p-4">
+            <button
+              type="button"
+              onClick={() => setIsFullscreenOpen(false)}
+              className="absolute right-4 top-4 rounded-xl bg-white/10 p-3 text-white hover:bg-white/20"
+              aria-label="Close fullscreen image"
+            >
+              <X size={22} />
+            </button>
+            <img
+              src={selectedChart.url}
+              alt={selectedChart.name}
+              className="max-h-full max-w-full object-contain"
+              style={{ transform: `scale(${imageZoom}) rotate(${imageRotation}deg)` }}
+            />
+          </div>
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   );
 }

@@ -22,9 +22,14 @@ const requiredConfig = [
 
 // Lists missing Firebase env values so the login screen can show a setup warning.
 export const missingFirebaseConfig = requiredConfig.filter((key) => !firebaseConfig[key]);
+export const invalidFirebaseConfig = requiredConfig.filter((key) => {
+  const value = String(firebaseConfig[key] || "").trim();
+  if (!value) return false;
+  return value.includes("YOUR_") || value.includes("your-") || value.includes("<") || value.includes(">");
+});
 
 // Initializes Firebase only when every required Vite env value is present.
-const app = missingFirebaseConfig.length === 0 ? initializeApp(firebaseConfig) : null;
+const app = missingFirebaseConfig.length === 0 && invalidFirebaseConfig.length === 0 ? initializeApp(firebaseConfig) : null;
 
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;

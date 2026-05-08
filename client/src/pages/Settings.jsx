@@ -101,11 +101,13 @@ export default function Settings({ initialTab = "rules" }) {
   const [editingOutpatientDepartment, setEditingOutpatientDepartment] = useState(null);
   const [outpatientDepartmentError, setOutpatientDepartmentError] = useState("");
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isClearLogsConfirmOpen, setIsClearLogsConfirmOpen] = useState(false);
   const [notificationLogs, setNotificationLogs] = useState([]);
   const [users, setUsers] = useState([]);
   const [restrictionReasons, setRestrictionReasons] = useState({});
   const [accessError, setAccessError] = useState("");
   const [accessMessage, setAccessMessage] = useState("");
+  const [clearLogsMessage, setClearLogsMessage] = useState("");
   const [pendingAccessAction, setPendingAccessAction] = useState(null);
   const visibleTabs = useMemo(
     () => (isAdmin ? tabs : tabs.filter((tab) => tab.id === "rules")),
@@ -160,15 +162,23 @@ export default function Settings({ initialTab = "rules" }) {
 
   // Clears centralized audit logs and resets the local navbar unread badge.
   const clearNotificationLogs = async () => {
+    if (!isAdmin) {
+      setAccessError("Only admins can clear audit logs.");
+      return;
+    }
+
     try {
       await Promise.all(notificationLogs.map((log) => deleteAuditLog(log.id)));
       writeStoredUnreadNotifications(0);
       window.dispatchEvent(new CustomEvent("mrs-notifications-cleared", {
         detail: { scope: "notification-log" },
       }));
-      setAccessMessage("Audit logs were cleared.");
+      setNotificationLogs([]);
+      setClearLogsMessage("Audit logs were cleared.");
+      setIsClearLogsConfirmOpen(false);
     } catch (error) {
       setAccessError(error.message || "Unable to clear audit logs.");
+      setIsClearLogsConfirmOpen(false);
     }
   };
 
@@ -221,7 +231,7 @@ export default function Settings({ initialTab = "rules" }) {
     const cleanedSettings = {
       ...settings,
       reportExportFileName: settings.reportExportFileName.trim() || "chart-activity-report",
-      sessionTimeoutMinutes: defaultSystemSettings.sessionTimeoutMinutes,
+      sessionTimeoutMinutes: Math.min(60, Math.max(5, Number(settings.sessionTimeoutMinutes) || 10)),
     };
     setSettings(cleanedSettings);
     saveSystemSettings(cleanedSettings);
@@ -556,7 +566,7 @@ export default function Settings({ initialTab = "rules" }) {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-hidden p-3">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
                 {safeActiveTab === "rules" && (
                   <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
                     <div className={`rounded-xl border-2 border-slate-100 bg-slate-50 p-3 ${isAdmin ? "" : "xl:col-span-3"}`}>
@@ -654,9 +664,16 @@ export default function Settings({ initialTab = "rules" }) {
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                             Auto Lock After Inactivity
                           </p>
-                          <p className="mt-1 text-lg font-black text-slate-800">10 Minutes</p>
+                          <input
+                            type="number"
+                            min="5"
+                            max="60"
+                            value={settings.sessionTimeoutMinutes}
+                            onChange={(event) => handleChange("sessionTimeoutMinutes", event.target.value)}
+                            className="mrs-field mt-2 w-full rounded-lg px-3 py-2 text-sm font-black"
+                          />
                           <p className="mt-1 text-xs font-semibold text-slate-500">
-                            Fixed security policy for all accounts.
+                            Admin-configurable policy from 5 to 60 minutes. Users see a warning before auto logout.
                           </p>
                         </div>
                       </div>
@@ -683,7 +700,7 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "departmentEditor" && (
-                  <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div className="mb-4 grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3">
                     {departmentEditorSections.map((section) => (
                       <button
                         key={section.id}
@@ -702,7 +719,7 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "departmentEditor" && departmentEditorTab === "departments" && (
-                  <div className="flex h-full min-h-0 flex-col gap-3">
+                  <div className="flex min-h-0 flex-1 flex-col gap-3">
                     <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
                       <p className="text-sm font-black text-slate-700 uppercase">Borrowing Departments</p>
                       <p className="text-xs font-semibold text-slate-500 mt-1">
@@ -787,7 +804,7 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "departmentEditor" && departmentEditorTab === "admissions" && (
-                  <div className="flex h-full min-h-0 flex-col gap-3">
+                  <div className="flex min-h-0 flex-1 flex-col gap-3">
                     <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
                       <p className="text-sm font-black text-slate-700 uppercase">Patient Admission Locations</p>
                       <p className="text-xs font-semibold text-slate-500 mt-1">
@@ -873,7 +890,7 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "departmentEditor" && departmentEditorTab === "outpatients" && (
-                  <div className="flex h-full min-h-0 flex-col gap-3">
+                  <div className="flex min-h-0 flex-1 flex-col gap-3">
                     <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
                       <p className="text-sm font-black text-slate-700 uppercase">Outpatient Departments</p>
                       <p className="text-xs font-semibold text-slate-500 mt-1">
@@ -959,7 +976,7 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "access" && (
-                  <div className="flex h-full min-h-0 flex-col gap-3">
+                  <div className="flex min-h-0 flex-1 flex-col gap-3">
                     <div className="grid gap-3 xl:grid-cols-3">
                       <div className="rounded-xl border-2 border-green-100 bg-green-50 p-4 xl:col-span-2">
                         <div className="flex items-start gap-3">
@@ -1077,7 +1094,7 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "notifications" && (
-                  <div className="lg:h-full min-h-0 flex flex-col gap-4">
+                  <div className="flex min-h-0 flex-1 flex-col gap-4">
                     <div className="flex flex-col gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm font-black uppercase text-slate-700">Notification Action Log</p>
@@ -1087,7 +1104,13 @@ export default function Settings({ initialTab = "rules" }) {
                       </div>
                       <button
                         type="button"
-                        onClick={clearNotificationLogs}
+                        onClick={() => {
+                          if (notificationLogs.length === 0) {
+                            setClearLogsMessage("There are no audit logs to clear.");
+                            return;
+                          }
+                          setIsClearLogsConfirmOpen(true);
+                        }}
                         className="mrs-soft-button inline-flex items-center justify-center rounded-xl px-4 py-3 text-xs font-black uppercase"
                       >
                         Clear Logs
@@ -1155,7 +1178,7 @@ export default function Settings({ initialTab = "rules" }) {
             </div>
 
             {isAdmin && (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 shrink-0">
+              <div className="grid shrink-0 grid-cols-1 gap-3 pb-1 md:grid-cols-2 xl:grid-cols-4">
                 {[
                   { label: "Borrowing Departments", value: departments.length || fallbackDepartments.length, icon: Building2 },
                   { label: "Admission Departments", value: admissionLocations.length || fallbackAdmissionLocations.length, icon: Building2 },
@@ -1164,7 +1187,7 @@ export default function Settings({ initialTab = "rules" }) {
                 ].map((item) => (
                   <div key={item.label} className="mrs-card rounded-2xl p-3">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-xl bg-green-50 text-green-700 border border-green-100">
+                      <div className="rounded-xl border border-green-100 bg-green-50 p-2 text-green-700">
                         <item.icon size={19} />
                       </div>
                       <div>
@@ -1208,6 +1231,40 @@ export default function Settings({ initialTab = "rules" }) {
                 className="rounded-xl bg-amber-500 px-4 py-3 text-xs font-black uppercase text-white shadow-lg shadow-amber-500/20"
               >
                 Restore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && isClearLogsConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setIsClearLogsConfirmOpen(false)}
+          />
+          <div className="mrs-panel relative w-full max-w-sm rounded-2xl p-6 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+              <Trash2 size={26} />
+            </div>
+            <h2 className="text-xl font-black uppercase text-slate-800">Clear Audit Logs?</h2>
+            <p className="mt-2 text-sm font-semibold text-slate-500">
+              This will permanently remove {notificationLogs.length} audit log record(s) from the admin log table.
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setIsClearLogsConfirmOpen(false)}
+                className="rounded-xl px-4 py-3 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={clearNotificationLogs}
+                className="rounded-xl bg-red-600 px-4 py-3 text-xs font-black uppercase text-white shadow-lg shadow-red-500/20"
+              >
+                Clear
               </button>
             </div>
           </div>
@@ -1276,6 +1333,8 @@ export default function Settings({ initialTab = "rules" }) {
                 ? { type: "error", message: outpatientDepartmentError }
                 : accessError
                   ? { type: "error", message: accessError }
+                  : clearLogsMessage
+                    ? { type: "success", title: "Audit Logs", message: clearLogsMessage }
                   : savedMessage
                     ? { type: "success", title: "Settings Updated", message: savedMessage, action: "Settings Updated", audit: true, adminOnly: isAdmin }
                     : accessMessage
@@ -1289,6 +1348,7 @@ export default function Settings({ initialTab = "rules" }) {
           setAdmissionLocationError("");
           setOutpatientDepartmentError("");
           setAccessError("");
+          setClearLogsMessage("");
           setSavedMessage("");
           setAccessMessage("");
           setSuccessMessage("");

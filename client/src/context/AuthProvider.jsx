@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { AuthContext } from "./useAuth";
-import { auth, db, missingFirebaseConfig } from "../firebaseClient";
+import { auth, db, invalidFirebaseConfig, missingFirebaseConfig } from "../firebaseClient";
 
 function normalizeRole(role) {
   return role === "admin" ? "admin" : "staff";
@@ -101,6 +101,7 @@ export function AuthProvider({ children }) {
       authLoading,
       isAuthenticated: Boolean(currentUser),
       missingFirebaseConfig,
+      invalidFirebaseConfig,
     }),
     [authLoading, currentUser, userProfile],
   );

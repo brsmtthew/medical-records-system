@@ -12,7 +12,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { db } from "../firebaseClient";
+import { auth, db } from "../firebaseClient";
 import { sortNewestFirst } from "../utils/recordSorting";
 import { sanitizeRecordPayload, sanitizeText } from "../utils/security";
 
@@ -49,6 +49,28 @@ function requireDb() {
     throw new Error(recordsUnavailableMessage);
   }
   return db;
+}
+
+async function requireActiveRole({ adminOnly = false } = {}) {
+  const database = requireDb();
+  const user = auth?.currentUser;
+  if (!user) {
+    throw new Error("Sign in again before making this change.");
+  }
+
+  const profileSnapshot = await getDoc(doc(database, "users", user.uid));
+  const profile = profileSnapshot.exists() ? profileSnapshot.data() : {};
+  const isActive = profile.accountStatus !== "disabled";
+  const role = profile.role === "admin" ? "admin" : "staff";
+
+  if (!isActive) {
+    throw new Error("This account is disabled.");
+  }
+  if (adminOnly && role !== "admin") {
+    throw new Error("Administrator access is required for this action.");
+  }
+
+  return { user, profile, role };
 }
 
 // Converts Firestore snapshots into plain rows with their document ids attached.
@@ -327,6 +349,7 @@ export function subscribeToAuditLogs(onRows, onError) {
 // Adds a chart borrowing department.
 export async function addDepartment(name) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   const departmentName = sanitizeDepartmentName(name);
   await addDoc(collection(database, "departments"), {
     name: departmentName,
@@ -339,6 +362,7 @@ export async function addDepartment(name) {
 // Renames a chart borrowing department.
 export async function updateDepartment(id, name) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   const departmentName = sanitizeDepartmentName(name);
   await updateDoc(doc(database, "departments", id), {
     name: departmentName,
@@ -349,12 +373,14 @@ export async function updateDepartment(id, name) {
 // Deletes a chart borrowing department.
 export async function deleteDepartment(id) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   await deleteDoc(doc(database, "departments", id));
 }
 
 // Adds an inpatient admission location.
 export async function addAdmissionLocation(name) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   const locationName = sanitizeDepartmentName(name);
   await addDoc(collection(database, "departments"), {
     name: locationName,
@@ -367,6 +393,7 @@ export async function addAdmissionLocation(name) {
 // Renames an inpatient admission location.
 export async function updateAdmissionLocation(id, name) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   const locationName = sanitizeDepartmentName(name);
   await updateDoc(doc(database, "departments", id), {
     name: locationName,
@@ -378,12 +405,14 @@ export async function updateAdmissionLocation(id, name) {
 // Deletes an inpatient admission location.
 export async function deleteAdmissionLocation(id) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   await deleteDoc(doc(database, "departments", id));
 }
 
 // Adds an outpatient department.
 export async function addOutpatientDepartment(name) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   const departmentName = sanitizeDepartmentName(name);
   await addDoc(collection(database, "departments"), {
     name: departmentName,
@@ -396,6 +425,7 @@ export async function addOutpatientDepartment(name) {
 // Renames an outpatient department.
 export async function updateOutpatientDepartment(id, name) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   const departmentName = sanitizeDepartmentName(name);
   await updateDoc(doc(database, "departments", id), {
     name: departmentName,
@@ -407,12 +437,14 @@ export async function updateOutpatientDepartment(id, name) {
 // Deletes an outpatient department.
 export async function deleteOutpatientDepartment(id) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   await deleteDoc(doc(database, "departments", id));
 }
 
 // Updates a user's role, account status, or restriction reason from the admin panel.
 export async function updateUserAccess(userId, updates) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   await updateDoc(doc(database, "users", userId), {
     ...sanitizeUserAccessPayload(updates),
     updatedAt: serverTimestamp(),
@@ -422,6 +454,7 @@ export async function updateUserAccess(userId, updates) {
 // Creates a patient and its matching available chart document.
 export async function createPatient(patient) {
   const database = requireDb();
+  await requireActiveRole();
   const safePatient = sanitizePatientPayload(patient);
   const patientRef = doc(database, "patients", safePatient.caseNumber);
   const chartRef = doc(database, "charts", safePatient.caseNumber);
@@ -474,6 +507,7 @@ export async function createPatient(patient) {
 // Updates patient details and keeps the linked chart document in sync.
 export async function updatePatient(previousCaseNumber, patient) {
   const database = requireDb();
+  const { user } = await requireActiveRole();
   const now = serverTimestamp();
   const safePatient = sanitizePatientPayload(patient);
 
@@ -502,6 +536,8 @@ export async function updatePatient(previousCaseNumber, patient) {
 
     await setDoc(nextPatientRef, {
       ...safePatient,
+      previousCaseNumber,
+      renamePendingBy: user.uid,
       createdAt: safePatient.createdAt || now,
       updatedAt: now,
     });
@@ -509,6 +545,8 @@ export async function updatePatient(previousCaseNumber, patient) {
     await setDoc(nextChartRef, {
       ...previousChart,
       caseNumber: safePatient.caseNumber,
+      previousCaseNumber,
+      renamePendingBy: user.uid,
       patientName: safePatient.name,
       patientDepartment: safePatient.department || "",
       recordType: safePatient.recordType || "new",
@@ -537,6 +575,16 @@ export async function updatePatient(previousCaseNumber, patient) {
       });
     }
 
+    await updateDoc(doc(database, "patients", previousCaseNumber), {
+      renamePendingBy: user.uid,
+      renamePendingTo: safePatient.caseNumber,
+      updatedAt: now,
+    });
+    await updateDoc(previousChartRef, {
+      renamePendingBy: user.uid,
+      renamePendingTo: safePatient.caseNumber,
+      updatedAt: now,
+    });
     await deleteDoc(doc(database, "patients", previousCaseNumber));
     await deleteDoc(previousChartRef);
     return;
@@ -565,6 +613,7 @@ export async function updatePatient(previousCaseNumber, patient) {
 // Deletes a patient and cancels active borrow logs tied to its chart.
 export async function deletePatient(caseNumber) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   const chartRef = doc(database, "charts", caseNumber);
   const chartSnapshot = await getDoc(chartRef);
   const chart = chartSnapshot.exists() ? chartSnapshot.data() : null;
@@ -605,6 +654,7 @@ export async function deletePatient(caseNumber) {
 // Updates chart circulation fields for borrow and return workflows.
 export async function updateChart(caseNumber, updates) {
   const database = requireDb();
+  await requireActiveRole();
   await updateDoc(doc(database, "charts", caseNumber), {
     ...sanitizeChartPayload(updates),
     updatedAt: serverTimestamp(),
@@ -614,6 +664,7 @@ export async function updateChart(caseNumber, updates) {
 // Adds a new chart audit log and returns its id for active-borrow linking.
 export async function addChartLog(log) {
   const database = requireDb();
+  await requireActiveRole();
   const logRef = await addDoc(collection(database, "chartLogs"), {
     ...sanitizeChartLogPayload(log),
     createdAt: serverTimestamp(),
@@ -624,6 +675,7 @@ export async function addChartLog(log) {
 // Updates a chart audit log by id.
 export async function updateChartLog(id, log) {
   const database = requireDb();
+  await requireActiveRole();
   await updateDoc(doc(database, "chartLogs", id), {
     ...sanitizeChartLogPayload(log),
     updatedAt: serverTimestamp(),
@@ -633,6 +685,7 @@ export async function updateChartLog(id, log) {
 // Updates an audit log only when it still exists.
 export async function updateChartLogIfExists(id, log) {
   const database = requireDb();
+  await requireActiveRole();
   const logRef = doc(database, "chartLogs", id);
   const logSnapshot = await getDoc(logRef);
   if (!logSnapshot.exists()) return false;
@@ -647,12 +700,14 @@ export async function updateChartLogIfExists(id, log) {
 // Deletes a chart audit log by id.
 export async function deleteChartLog(id) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   await deleteDoc(doc(database, "chartLogs", id));
 }
 
 // Adds a centralized audit action for important CRUD and account events.
 export async function addAuditLog(log) {
   const database = requireDb();
+  await requireActiveRole();
   await addDoc(collection(database, "auditLogs"), {
     ...sanitizeAuditLogPayload(log),
     createdAt: serverTimestamp(),
@@ -662,5 +717,6 @@ export async function addAuditLog(log) {
 // Deletes a centralized audit action from the admin log.
 export async function deleteAuditLog(id) {
   const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
   await deleteDoc(doc(database, "auditLogs", id));
 }

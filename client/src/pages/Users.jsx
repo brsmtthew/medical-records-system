@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  ArrowUpDown,
+  Search,
   ShieldCheck,
   UserCheck,
   UserCog,
@@ -12,6 +14,15 @@ import FloatingToast from "../components/FloatingToast";
 import { subscribeToUsers, updateUserAccess } from "../services/userService";
 import { useAuth } from "../context/useAuth";
 
+function getInitials(name = "") {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
+}
+
 export default function Users() {
   const { currentUser } = useAuth();
   const [users, setUsers] = useState([]);
@@ -19,6 +30,9 @@ export default function Users() {
   const [accessError, setAccessError] = useState("");
   const [accessMessage, setAccessMessage] = useState("");
   const [pendingAccessAction, setPendingAccessAction] = useState(null);
+  const [userFilter, setUserFilter] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortMode, setSortMode] = useState("name");
 
   useEffect(() => {
     const unsubscribeUsers = subscribeToUsers(
@@ -101,6 +115,34 @@ export default function Users() {
   const activeUsers = users.filter((user) => user.accountStatus !== "disabled").length;
   const blockedUsers = users.length - activeUsers;
   const adminUsers = users.filter((user) => user.role === "admin").length;
+  const staffUsers = users.filter((user) => user.role !== "admin").length;
+  const filteredUsers = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return users.filter((user) => {
+      if (userFilter === "active") return user.accountStatus !== "disabled";
+      if (userFilter === "blocked") return user.accountStatus === "disabled";
+      if (userFilter === "admins") return user.role === "admin";
+      if (userFilter === "staff") return user.role !== "admin";
+      return true;
+    }).filter((user) => {
+      if (!query) return true;
+      return `${user.fullName || ""} ${user.displayName || ""} ${user.email || ""} ${user.department || ""}`
+        .toLowerCase()
+        .includes(query);
+    }).sort((first, second) => {
+      if (sortMode === "role") return String(first.role || "staff").localeCompare(String(second.role || "staff"));
+      if (sortMode === "status") return String(first.accountStatus || "active").localeCompare(String(second.accountStatus || "active"));
+      if (sortMode === "email") return String(first.email || "").localeCompare(String(second.email || ""));
+      return String(first.fullName || first.displayName || first.email || "").localeCompare(String(second.fullName || second.displayName || second.email || ""));
+    });
+  }, [searchTerm, sortMode, userFilter, users]);
+  const userNavItems = [
+    { id: "all", label: "All Users", value: users.length, icon: UsersIcon },
+    { id: "active", label: "Active", value: activeUsers, icon: UserCheck },
+    { id: "blocked", label: "Blocked", value: blockedUsers, icon: UserX },
+    { id: "admins", label: "Admins", value: adminUsers, icon: ShieldCheck },
+    { id: "staff", label: "Staff", value: staffUsers, icon: UserCog },
+  ];
 
   return (
     <DashboardLayout>
@@ -157,96 +199,191 @@ export default function Users() {
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto xl:grid-cols-2">
-          {users.map((user) => {
-            const userId = user.uid || user.id;
-            const isSelf = userId === currentUser?.uid;
-            const isDisabled = user.accountStatus === "disabled";
+        <div className="mrs-nav-list shrink-0 overflow-x-auto pb-1">
+          {userNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = userFilter === item.id;
 
             return (
-              <div key={userId} className="mrs-card rounded-xl p-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="break-words text-sm font-black uppercase text-slate-800">
-                      {user.fullName || user.displayName || "Unnamed User"}
-                    </p>
-                    <p className="mt-1 break-words text-[10px] font-bold text-slate-400">
-                      {user.email || "No email saved"}
-                    </p>
-                  </div>
-                  <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-[10px] font-black uppercase ${
-                    isDisabled
-                      ? "border-red-200 bg-red-50 text-red-700"
-                      : "border-green-200 bg-green-50 text-green-700"
-                  }`}>
-                    {isDisabled ? "Blocked" : "Active"}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[10rem_1fr]">
-                  <label className="space-y-1">
-                    <span className="text-[10px] font-black uppercase text-slate-400">Role</span>
-                    <select
-                      value={user.role === "admin" ? "admin" : "staff"}
-                      onChange={(event) => handleRoleChange(user, event.target.value)}
-                      disabled={isSelf}
-                      className="mrs-field w-full rounded-xl px-3 py-2 text-xs font-black uppercase disabled:opacity-60"
-                      aria-label={`Role for ${user.email || user.fullName || "user"}`}
-                    >
-                      <option value="staff">Staff</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-[10px] font-black uppercase text-slate-400">Restriction Reason</span>
-                    <input
-                      value={restrictionReasons[userId] ?? user.restrictionReason ?? ""}
-                      onChange={(event) => setRestrictionReasons((current) => ({
-                        ...current,
-                        [userId]: event.target.value,
-                      }))}
-                      placeholder="Required before blocking"
-                      className="mrs-field w-full rounded-xl px-3 py-2 text-xs font-bold"
-                      disabled={isSelf}
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-4 flex justify-end">
-                  {isDisabled ? (
-                    <button
-                      type="button"
-                      onClick={() => handleActivateUser(user)}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-xs font-black uppercase text-green-700"
-                    >
-                      <UserCheck size={16} />
-                      Activate
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleBlockUser(user)}
-                      disabled={isSelf}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-black uppercase text-red-600 disabled:opacity-50"
-                    >
-                      <UserX size={16} />
-                      Block
-                    </button>
-                  )}
-                </div>
-              </div>
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setUserFilter(item.id)}
+                className={`mrs-nav-pill shrink-0 gap-2 px-3 py-2 text-sm ${
+                  isActive ? "mrs-nav-pill-active" : ""
+                }`}
+              >
+                <Icon size={16} />
+                <span>{item.label}</span>
+                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-600">
+                  {item.value}
+                </span>
+              </button>
             );
           })}
-
-          {users.length === 0 && (
-            <div className="mrs-card rounded-2xl p-10 text-center xl:col-span-2">
-              <ShieldCheck size={38} className="mx-auto mb-3 text-slate-300" />
-              <p className="font-black uppercase text-slate-700">No user profiles yet</p>
-              <p className="mt-1 text-sm font-semibold text-slate-400">
-                Profiles appear after users sign in or create a staff account.
-              </p>
+        </div>
+        <div className="mrs-panel shrink-0 rounded-xl p-3">
+          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search users, email, or department"
+                className="mrs-field w-full rounded-lg py-2.5 pl-9 pr-3 text-sm font-bold"
+              />
             </div>
-          )}
+            <label className="flex items-center gap-2">
+              <ArrowUpDown size={16} className="text-slate-400" />
+              <select
+                value={sortMode}
+                onChange={(event) => setSortMode(event.target.value)}
+                className="mrs-field rounded-lg px-3 py-2.5 text-xs font-black uppercase"
+                aria-label="Sort users"
+              >
+                <option value="name">Sort By Name</option>
+                <option value="email">Sort By Email</option>
+                <option value="role">Sort By Role</option>
+                <option value="status">Sort By Status</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="mrs-panel min-h-0 flex-1 overflow-hidden rounded-xl">
+          <div className="min-h-0 h-full overflow-x-auto overflow-y-auto">
+            <table className="w-full min-w-[960px] table-fixed text-left">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b border-slate-100 bg-white">
+                  <th className="w-[27%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    User
+                  </th>
+                  <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Role
+                  </th>
+                  <th className="w-[13%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Status
+                  </th>
+                  <th className="w-[28%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Restriction Reason
+                  </th>
+                  <th className="w-[18%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredUsers.map((user) => {
+                  const userId = user.uid || user.id;
+                  const isSelf = userId === currentUser?.uid;
+                  const isDisabled = user.accountStatus === "disabled";
+
+                  return (
+                    <tr key={userId} className="mrs-table-row">
+                      <td className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-green-50 text-xs font-black text-green-700">
+                            {user.photoDataUrl ? (
+                              <img src={user.photoDataUrl} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              getInitials(user.fullName || user.displayName || user.email)
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="break-words text-sm font-black uppercase text-slate-800">
+                              {user.fullName || user.displayName || "Unnamed User"}
+                            </p>
+                            <p className="mt-1 break-words text-[10px] font-bold text-slate-400">
+                              {user.email || "No email saved"}
+                            </p>
+                            {isSelf && (
+                              <p className="mt-1 text-[10px] font-black uppercase text-blue-600">
+                                Signed-in account
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <select
+                          value={user.role === "admin" ? "admin" : "staff"}
+                          onChange={(event) => handleRoleChange(user, event.target.value)}
+                          disabled={isSelf}
+                          className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-black uppercase disabled:opacity-60"
+                          aria-label={`Role for ${user.email || user.fullName || "user"}`}
+                        >
+                          <option value="staff">Staff</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                      <td className="p-3">
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${
+                          isDisabled
+                            ? "border-red-200 bg-red-50 text-red-700"
+                            : "border-green-200 bg-green-50 text-green-700"
+                        }`}>
+                          {isDisabled ? "Blocked" : "Active"}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <input
+                          value={restrictionReasons[userId] ?? user.restrictionReason ?? ""}
+                          onChange={(event) => setRestrictionReasons((current) => ({
+                            ...current,
+                            [userId]: event.target.value,
+                          }))}
+                          placeholder="Required before blocking"
+                          className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-bold"
+                          disabled={isSelf}
+                        />
+                      </td>
+                      <td className="p-3">
+                        <div className="flex justify-end">
+                          {isDisabled ? (
+                            <button
+                              type="button"
+                              onClick={() => handleActivateUser(user)}
+                              disabled={isSelf}
+                              className="inline-flex min-w-28 items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-black uppercase text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50"
+                            >
+                              <UserCheck size={16} />
+                              Activate
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleBlockUser(user)}
+                              disabled={isSelf}
+                              className="inline-flex min-w-28 items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50"
+                            >
+                              <UserX size={16} />
+                              Block
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {filteredUsers.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="p-10 text-center">
+                      <ShieldCheck size={38} className="mx-auto mb-3 text-slate-300" />
+                      <p className="font-black uppercase text-slate-700">
+                        {users.length === 0 ? "No user profiles yet" : "No users match this view"}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-400">
+                        {users.length === 0
+                          ? "Profiles appear after users sign in or create a staff account."
+                          : "Choose another user navigation filter."}
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

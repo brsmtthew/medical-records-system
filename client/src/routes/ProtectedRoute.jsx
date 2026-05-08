@@ -1,29 +1,41 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { useAuth } from "../context/useAuth";
 import { auth } from "../firebaseClient";
 import { cancelAutoLogout, scheduleAutoLogout } from "../services/sessionService";
-
-const fixedSessionTimeoutMinutes = 10;
+import { readSystemSettings } from "../utils/systemSettings";
 
 export default function ProtectedRoute({ children, requireAdmin = false, roles = [] }) {
   const location = useLocation();
   const navigate = useNavigate();
   const lastActivityRef = useRef(0);
+  const [sessionWarning, setSessionWarning] = useState(false);
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(() => {
+    return localStorage.getItem("mrs-confidentiality-ack") === "true";
+  });
   const { authLoading, isAuthenticated, isAccountDisabled, isAdmin, userRole } = useAuth();
 
   useEffect(() => {
     // Locks the session after the fixed security timeout inside protected pages.
     if (!isAuthenticated || !auth) return undefined;
 
-    const timeoutMs = fixedSessionTimeoutMinutes * 60 * 1000;
+    const settings = readSystemSettings();
+    const timeoutMinutes = Math.min(60, Math.max(5, Number(settings.sessionTimeoutMinutes) || 10));
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+    const warningMs = Math.min(60 * 1000, timeoutMs / 2);
     const resetActivity = () => {
       lastActivityRef.current = Date.now();
+      setSessionWarning(false);
     };
     // Checks inactivity on an interval so passive users are signed out.
     const checkActivity = async () => {
-      if (Date.now() - lastActivityRef.current < timeoutMs) return;
+      const idleMs = Date.now() - lastActivityRef.current;
+      if (idleMs >= timeoutMs - warningMs && idleMs < timeoutMs) {
+        setSessionWarning(true);
+        return;
+      }
+      if (idleMs < timeoutMs) return;
       await signOut(auth);
       navigate("/", {
         replace: true,
@@ -37,7 +49,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
     ["click", "keydown", "mousemove", "touchstart"].forEach((eventName) => {
       window.addEventListener(eventName, resetActivity, { passive: true });
     });
-    const interval = window.setInterval(checkActivity, 30000);
+    const interval = window.setInterval(checkActivity, 15000);
 
     return () => {
       ["click", "keydown", "mousemove", "touchstart"].forEach((eventName) => {
@@ -102,5 +114,50 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
     return <Navigate to="/dashboard" replace />;
   }
 
-  return children;
+  return (
+    <>
+      {children}
+      {!privacyAcknowledged && (
+        <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="mrs-panel w-full max-w-lg rounded-2xl p-6">
+            <p className="text-lg font-black uppercase text-slate-800">Confidential Records Access</p>
+            <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-500">
+              Patient information is confidential. Continue only when access is work-related, authorized, and compliant with hospital privacy policy and the Data Privacy Act.
+            </p>
+            <div className="mt-4 rounded-xl border border-green-100 bg-green-50 p-3 text-xs font-bold leading-relaxed text-green-800">
+              Local chart viewing files stay on this workstation and are not uploaded by the chart viewing page.
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.setItem("mrs-confidentiality-ack", "true");
+                setPrivacyAcknowledged(true);
+              }}
+              className="mrs-primary-button mt-5 w-full rounded-xl px-4 py-3 text-xs font-black uppercase"
+            >
+              I Understand And Accept
+            </button>
+          </div>
+        </div>
+      )}
+      {sessionWarning && (
+        <div className="fixed bottom-4 right-4 z-[130] w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-amber-200 bg-white p-4 shadow-2xl shadow-slate-900/10">
+          <p className="text-sm font-black uppercase text-slate-800">Session Expiring Soon</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            Activity has been idle. Continue working to keep this secure session open.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              lastActivityRef.current = Date.now();
+              setSessionWarning(false);
+            }}
+            className="mrs-primary-button mt-3 rounded-lg px-4 py-2 text-xs font-black uppercase"
+          >
+            Stay Signed In
+          </button>
+        </div>
+      )}
+    </>
+  );
 }
