@@ -11,6 +11,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { auth, db } from "../firebaseClient";
 import { sortNewestFirst } from "../utils/recordSorting";
@@ -708,6 +709,27 @@ export async function deleteChartLog(id) {
 export async function addAuditLog(log) {
   const database = requireDb();
   await requireActiveRole();
+  await addDoc(collection(database, "auditLogs"), {
+    ...sanitizeAuditLogPayload(log),
+    createdAt: serverTimestamp(),
+  });
+}
+
+// Permanently clears all centralized audit actions, then records the clear event.
+export async function clearAuditLogs(log) {
+  const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
+  const logsSnapshot = await getDocs(collection(database, "auditLogs"));
+  const logRows = logsSnapshot.docs;
+
+  for (let index = 0; index < logRows.length; index += 450) {
+    const batch = writeBatch(database);
+    logRows.slice(index, index + 450).forEach((logSnapshot) => {
+      batch.delete(logSnapshot.ref);
+    });
+    await batch.commit();
+  }
+
   await addDoc(collection(database, "auditLogs"), {
     ...sanitizeAuditLogPayload(log),
     createdAt: serverTimestamp(),

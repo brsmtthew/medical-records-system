@@ -38,7 +38,7 @@ import {
   updateUserAccess,
 } from "../services/userService";
 import {
-  deleteAuditLog,
+  clearAuditLogs,
   subscribeToAuditLogs,
 } from "../services/chartService";
 import {
@@ -46,7 +46,11 @@ import {
   readSystemSettings,
   saveSystemSettings,
 } from "../utils/systemSettings";
-import { writeStoredUnreadNotifications } from "../utils/notificationLog";
+import {
+  clearStoredBellNotifications,
+  clearStoredNotifications,
+  writeStoredUnreadNotifications,
+} from "../utils/notificationLog";
 import { formatDisplayDate } from "../utils/dateFormatting";
 import { useAuth } from "../context/useAuth";
 
@@ -82,7 +86,7 @@ function Field({ label, children, hint }) {
 }
 
 export default function Settings({ initialTab = "rules" }) {
-  const { currentUser, isAdmin } = useAuth();
+  const { currentUser, userProfile, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [departmentEditorTab, setDepartmentEditorTab] = useState("departments");
   const [settings, setSettings] = useState(readSystemSettings);
@@ -168,13 +172,25 @@ export default function Settings({ initialTab = "rules" }) {
     }
 
     try {
-      await Promise.all(notificationLogs.map((log) => deleteAuditLog(log.id)));
+      const clearedCount = notificationLogs.length;
+      await clearAuditLogs({
+        type: "admin",
+        title: "Notification Log Cleared",
+        message: `Admin cleared ${clearedCount} notification log record(s).`,
+        action: "Notification Log Cleared",
+        userName: userProfile?.fullName || currentUser?.displayName || currentUser?.email || "Unknown User",
+        userEmail: currentUser?.email || "",
+        userId: currentUser?.uid || "",
+        adminOnly: true,
+      });
+      clearStoredNotifications();
+      clearStoredBellNotifications();
       writeStoredUnreadNotifications(0);
       window.dispatchEvent(new CustomEvent("mrs-notifications-cleared", {
         detail: { scope: "notification-log" },
       }));
       setNotificationLogs([]);
-      setClearLogsMessage("Audit logs were cleared.");
+      setClearLogsMessage("Audit logs were cleared and the clear action was recorded.");
       setIsClearLogsConfirmOpen(false);
     } catch (error) {
       setAccessError(error.message || "Unable to clear audit logs.");

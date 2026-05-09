@@ -1,6 +1,7 @@
 export {
   addAuditLog,
   addChartLog,
+  clearAuditLogs,
   deleteAuditLog,
   deleteChartLog,
   fallbackDepartments,

@@ -46,6 +46,16 @@ export function writeStoredNotifications(notifications) {
   }
 }
 
+// Removes the local Settings action-log history.
+export function clearStoredNotifications() {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.removeItem(notificationStorageKey);
+  } catch {
+    // localStorage can be unavailable in private or restricted browser contexts.
+  }
+}
+
 // Reads the navbar bell notification list from local storage.
 export function readStoredBellNotifications() {
   try {
@@ -66,6 +76,16 @@ export function writeStoredBellNotifications(notifications) {
       bellNotificationStorageKey,
       JSON.stringify(notifications.map(normalizeNotification).slice(0, maxNotificationLogItems)),
     );
+  } catch {
+    // localStorage can be unavailable in private or restricted browser contexts.
+  }
+}
+
+// Removes the local navbar bell notification history.
+export function clearStoredBellNotifications() {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.removeItem(bellNotificationStorageKey);
   } catch {
     // localStorage can be unavailable in private or restricted browser contexts.
   }
