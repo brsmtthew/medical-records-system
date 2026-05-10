@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
-import { motion as Motion, AnimatePresence } from "framer-motion";
+import ChartClearFolderModal from "../modals/chart/ChartClearFolderModal";
+import ChartFolderLoadModal from "../modals/chart/ChartFolderLoadModal";
+import ChartFullscreenImageModal from "../modals/chart/ChartFullscreenImageModal";
 import {
   ChevronLeft,
   ChevronRight,
@@ -526,122 +528,25 @@ export default function ChartViewing() {
           </div>
         )}
       </div>
-      <AnimatePresence>
-        {pendingFiles && (
-          <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
-            <Motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-950/45"
-              onClick={() => setPendingFiles(null)}
-            />
-            <Motion.div
-              initial={{ opacity: 0, y: 12, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.97 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="mrs-panel relative w-full max-w-md rounded-2xl p-6"
-            >
-              <div className="mb-5 flex items-center gap-3">
-                <div className="rounded-2xl bg-blue-50 p-3 text-blue-700">
-                  <FolderOpen size={24} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-slate-800 uppercase">Load Chart Folder?</h2>
-                  <p className="text-xs font-bold text-slate-400 uppercase">
-                    {pendingFiles.length} selected file(s)
-                  </p>
-                </div>
-              </div>
-              <p className="mb-6 text-sm font-semibold text-slate-500">
-                This will replace the current local chart preview list.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPendingFiles(null)}
-                  className="rounded-xl py-3 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmFolderLoad}
-                  className="mrs-blue-button rounded-xl py-3 text-xs font-black uppercase"
-                >
-                  Load
-                </button>
-              </div>
-            </Motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {isClearConfirmOpen && (
-          <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
-            <Motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-950/45"
-              onClick={() => setIsClearConfirmOpen(false)}
-            />
-            <Motion.div
-              initial={{ opacity: 0, y: 12, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.97 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="mrs-panel relative w-full max-w-sm rounded-2xl p-6 text-center"
-            >
-              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                <FolderOpen size={26} />
-              </div>
-              <h2 className="text-xl font-black text-slate-800 uppercase">Clear Folder?</h2>
-              <p className="mt-2 mb-6 text-sm font-semibold text-slate-500">
-                This will remove the current local previews from this screen.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsClearConfirmOpen(false)}
-                  className="rounded-xl py-3 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={clearFolder}
-                  className="mrs-blue-button rounded-xl py-3 text-xs font-black uppercase"
-                >
-                  Clear
-                </button>
-              </div>
-            </Motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ChartFolderLoadModal
+        fileCount={pendingFiles?.length || 0}
+        isOpen={Boolean(pendingFiles)}
+        onCancel={() => setPendingFiles(null)}
+        onConfirm={confirmFolderLoad}
+      />
+      <ChartClearFolderModal
+        isOpen={isClearConfirmOpen}
+        onCancel={() => setIsClearConfirmOpen(false)}
+        onConfirm={clearFolder}
+      />
       <FloatingToast toast={notice} onClose={() => setNotice(null)} />
-      <AnimatePresence>
-        {isFullscreenOpen && selectedChart && selectedChart.type !== "application/pdf" && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/90 p-4">
-            <button
-              type="button"
-              onClick={() => setIsFullscreenOpen(false)}
-              className="absolute right-4 top-4 rounded-xl bg-white/10 p-3 text-white hover:bg-white/20"
-              aria-label="Close fullscreen image"
-            >
-              <X size={22} />
-            </button>
-            <img
-              src={selectedChart.url}
-              alt={selectedChart.name}
-              className="max-h-full max-w-full object-contain"
-              style={{ transform: `scale(${imageZoom}) rotate(${imageRotation}deg)` }}
-            />
-          </div>
-        )}
-      </AnimatePresence>
+      <ChartFullscreenImageModal
+        imageRotation={imageRotation}
+        imageZoom={imageZoom}
+        isOpen={isFullscreenOpen}
+        onClose={() => setIsFullscreenOpen(false)}
+        selectedChart={selectedChart}
+      />
     </DashboardLayout>
   );
 }

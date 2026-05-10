@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
+import DepartmentEditorConfirmModal from "../modals/settings/DepartmentEditorConfirmModal";
+import DepartmentEditorEntryModal from "../modals/settings/DepartmentEditorEntryModal";
+import SettingsClearLogsConfirmModal from "../modals/settings/SettingsClearLogsConfirmModal";
+import SettingsResetConfirmModal from "../modals/settings/SettingsResetConfirmModal";
+import UserAccessConfirmModal from "../modals/users/UserAccessConfirmModal";
 import {
   Bell,
   Building2,
@@ -66,6 +71,24 @@ const departmentEditorSections = [
   { id: "outpatients", label: "Outpatient Departments" },
 ];
 
+const departmentEntryDetails = {
+  departments: {
+    label: "Borrowing Department",
+    placeholder: "Enter borrowing department or hospital area",
+    title: "Add Borrowing Department",
+  },
+  admissions: {
+    label: "Admission Location",
+    placeholder: "Enter admission location",
+    title: "Add Admission Location",
+  },
+  outpatients: {
+    label: "Outpatient Department",
+    placeholder: "Enter outpatient department",
+    title: "Add Outpatient Department",
+  },
+};
+
 // Formats notification log timestamps with the date style used across dashboard tables.
 function formatLogTimestamp(value) {
   if (!value) return "N/A";
@@ -93,15 +116,12 @@ export default function Settings({ initialTab = "rules" }) {
   const [savedMessage, setSavedMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [departments, setDepartments] = useState([]);
-  const [departmentName, setDepartmentName] = useState("");
   const [editingDepartment, setEditingDepartment] = useState(null);
   const [departmentError, setDepartmentError] = useState("");
   const [admissionLocations, setAdmissionLocations] = useState([]);
-  const [admissionLocationName, setAdmissionLocationName] = useState("");
   const [editingAdmissionLocation, setEditingAdmissionLocation] = useState(null);
   const [admissionLocationError, setAdmissionLocationError] = useState("");
   const [outpatientDepartments, setOutpatientDepartments] = useState([]);
-  const [outpatientDepartmentName, setOutpatientDepartmentName] = useState("");
   const [editingOutpatientDepartment, setEditingOutpatientDepartment] = useState(null);
   const [outpatientDepartmentError, setOutpatientDepartmentError] = useState("");
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -113,6 +133,9 @@ export default function Settings({ initialTab = "rules" }) {
   const [accessMessage, setAccessMessage] = useState("");
   const [clearLogsMessage, setClearLogsMessage] = useState("");
   const [pendingAccessAction, setPendingAccessAction] = useState(null);
+  const [pendingDepartmentEntry, setPendingDepartmentEntry] = useState(null);
+  const [pendingDepartmentAction, setPendingDepartmentAction] = useState(null);
+  const [isDepartmentActionSaving, setIsDepartmentActionSaving] = useState(false);
   const visibleTabs = useMemo(
     () => (isAdmin ? tabs : tabs.filter((tab) => tab.id === "rules")),
     [isAdmin],
@@ -282,24 +305,35 @@ export default function Settings({ initialTab = "rules" }) {
     );
   };
 
+  // Opens a confirmation dialog after department editor validation passes.
+  const openDepartmentConfirmation = (action) => {
+    setDepartmentError("");
+    setAdmissionLocationError("");
+    setOutpatientDepartmentError("");
+    setSuccessMessage("");
+    setPendingDepartmentAction(action);
+  };
+
   // Adds a borrowing department after local duplicate validation.
-  const handleAddDepartment = async (event) => {
-    event.preventDefault();
-    const name = departmentName.trim();
-    if (!name) return;
+  const handleAddDepartment = (value) => {
+    const name = value.trim();
+    if (!name) {
+      setDepartmentError("Enter a borrowing department name.");
+      return false;
+    }
     if (departmentExists(name)) {
       setDepartmentError("That department already exists.");
-      return;
+      return false;
     }
 
-    try {
-      await addDepartment(name);
-      setDepartmentName("");
-      setDepartmentError("");
-      setSuccessMessage(`${name} was added to borrowing departments.`);
-    } catch (error) {
-      setDepartmentError(error.message || "Unable to add department.");
-    }
+    openDepartmentConfirmation({
+      type: "add",
+      section: "departments",
+      name,
+      title: "Add Borrowing Department?",
+      message: "This will add a new borrowing department to Chart Tracking.",
+    });
+    return true;
   };
 
   // Saves an edited borrowing department name.
@@ -312,46 +346,49 @@ export default function Settings({ initialTab = "rules" }) {
       return;
     }
 
-    try {
-      await updateDepartment(editingDepartment.id, name);
-      setEditingDepartment(null);
-      setDepartmentError("");
-      setSuccessMessage(`${name} was updated in borrowing departments.`);
-    } catch (error) {
-      setDepartmentError(error.message || "Unable to update department.");
-    }
+    openDepartmentConfirmation({
+      type: "update",
+      section: "departments",
+      id: editingDepartment.id,
+      name,
+      title: "Update Borrowing Department?",
+      message: "This will rename the selected borrowing department.",
+    });
   };
 
   // Deletes a borrowing department by Firestore id.
-  const handleDeleteDepartment = async (id) => {
-    const departmentName = departments.find((department) => department.id === id)?.name || "Department";
-    try {
-      await deleteDepartment(id);
-      setDepartmentError("");
-      setSuccessMessage(`${departmentName} was deleted from borrowing departments.`);
-    } catch (error) {
-      setDepartmentError(error.message || "Unable to delete department.");
-    }
+  const handleDeleteDepartment = (id) => {
+    const name = departments.find((department) => department.id === id)?.name || "Department";
+    openDepartmentConfirmation({
+      type: "delete",
+      section: "departments",
+      id,
+      name,
+      title: "Delete Borrowing Department?",
+      message: "This will remove the department from Chart Tracking options.",
+    });
   };
 
   // Adds an inpatient admission location after duplicate validation.
-  const handleAddAdmissionLocation = async (event) => {
-    event.preventDefault();
-    const name = admissionLocationName.trim();
-    if (!name) return;
+  const handleAddAdmissionLocation = (value) => {
+    const name = value.trim();
+    if (!name) {
+      setAdmissionLocationError("Enter an admission location name.");
+      return false;
+    }
     if (admissionLocationExists(name)) {
       setAdmissionLocationError("That admission location already exists.");
-      return;
+      return false;
     }
 
-    try {
-      await addAdmissionLocation(name);
-      setAdmissionLocationName("");
-      setAdmissionLocationError("");
-      setSuccessMessage(`${name} was added to admission locations.`);
-    } catch (error) {
-      setAdmissionLocationError(error.message || "Unable to add admission location. Check Firebase write permission for departments.");
-    }
+    openDepartmentConfirmation({
+      type: "add",
+      section: "admissions",
+      name,
+      title: "Add Admission Location?",
+      message: "This will add a new inpatient admission location to Patient Registry.",
+    });
+    return true;
   };
 
   // Saves an edited inpatient admission location.
@@ -364,46 +401,49 @@ export default function Settings({ initialTab = "rules" }) {
       return;
     }
 
-    try {
-      await updateAdmissionLocation(editingAdmissionLocation.id, name);
-      setEditingAdmissionLocation(null);
-      setAdmissionLocationError("");
-      setSuccessMessage(`${name} was updated in admission locations.`);
-    } catch (error) {
-      setAdmissionLocationError(error.message || "Unable to update admission location. Check Firebase write permission for departments.");
-    }
+    openDepartmentConfirmation({
+      type: "update",
+      section: "admissions",
+      id: editingAdmissionLocation.id,
+      name,
+      title: "Update Admission Location?",
+      message: "This will rename the selected inpatient admission location.",
+    });
   };
 
   // Deletes an inpatient admission location by Firestore id.
-  const handleDeleteAdmissionLocation = async (id) => {
-    const locationName = admissionLocations.find((location) => location.id === id)?.name || "Admission location";
-    try {
-      await deleteAdmissionLocation(id);
-      setAdmissionLocationError("");
-      setSuccessMessage(`${locationName} was deleted from admission locations.`);
-    } catch (error) {
-      setAdmissionLocationError(error.message || "Unable to delete admission location. Check Firebase write permission for departments.");
-    }
+  const handleDeleteAdmissionLocation = (id) => {
+    const name = admissionLocations.find((location) => location.id === id)?.name || "Admission location";
+    openDepartmentConfirmation({
+      type: "delete",
+      section: "admissions",
+      id,
+      name,
+      title: "Delete Admission Location?",
+      message: "This will remove the location from inpatient registration options.",
+    });
   };
 
   // Adds an outpatient department after duplicate validation.
-  const handleAddOutpatientDepartment = async (event) => {
-    event.preventDefault();
-    const name = outpatientDepartmentName.trim();
-    if (!name) return;
+  const handleAddOutpatientDepartment = (value) => {
+    const name = value.trim();
+    if (!name) {
+      setOutpatientDepartmentError("Enter an outpatient department name.");
+      return false;
+    }
     if (outpatientDepartmentExists(name)) {
       setOutpatientDepartmentError("That outpatient department already exists.");
-      return;
+      return false;
     }
 
-    try {
-      await addOutpatientDepartment(name);
-      setOutpatientDepartmentName("");
-      setOutpatientDepartmentError("");
-      setSuccessMessage(`${name} was added to outpatient departments.`);
-    } catch (error) {
-      setOutpatientDepartmentError(error.message || "Unable to add outpatient department. Check Firebase write permission for departments.");
-    }
+    openDepartmentConfirmation({
+      type: "add",
+      section: "outpatients",
+      name,
+      title: "Add Outpatient Department?",
+      message: "This will add a new outpatient department to Patient Registry.",
+    });
+    return true;
   };
 
   // Saves an edited outpatient department.
@@ -416,26 +456,102 @@ export default function Settings({ initialTab = "rules" }) {
       return;
     }
 
-    try {
-      await updateOutpatientDepartment(editingOutpatientDepartment.id, name);
-      setEditingOutpatientDepartment(null);
-      setOutpatientDepartmentError("");
-      setSuccessMessage(`${name} was updated in outpatient departments.`);
-    } catch (error) {
-      setOutpatientDepartmentError(error.message || "Unable to update outpatient department. Check Firebase write permission for departments.");
-    }
+    openDepartmentConfirmation({
+      type: "update",
+      section: "outpatients",
+      id: editingOutpatientDepartment.id,
+      name,
+      title: "Update Outpatient Department?",
+      message: "This will rename the selected outpatient department.",
+    });
   };
 
   // Deletes an outpatient department by Firestore id.
-  const handleDeleteOutpatientDepartment = async (id) => {
-    const departmentName = outpatientDepartments.find((department) => department.id === id)?.name || "Outpatient department";
+  const handleDeleteOutpatientDepartment = (id) => {
+    const name = outpatientDepartments.find((department) => department.id === id)?.name || "Outpatient department";
+    openDepartmentConfirmation({
+      type: "delete",
+      section: "outpatients",
+      id,
+      name,
+      title: "Delete Outpatient Department?",
+      message: "This will remove the department from outpatient registration options.",
+    });
+  };
+
+  // Applies the confirmed department editor action to Firebase.
+  const confirmDepartmentAction = async () => {
+    if (!pendingDepartmentAction || isDepartmentActionSaving) return;
+
+    const { id, name, section, type } = pendingDepartmentAction;
+    setIsDepartmentActionSaving(true);
+
     try {
-      await deleteOutpatientDepartment(id);
-      setOutpatientDepartmentError("");
-      setSuccessMessage(`${departmentName} was deleted from outpatient departments.`);
+      if (section === "departments") {
+        if (type === "add") {
+          await addDepartment(name);
+          setSuccessMessage(`${name} was added to borrowing departments.`);
+        } else if (type === "update") {
+          await updateDepartment(id, name);
+          setEditingDepartment(null);
+          setSuccessMessage(`${name} was updated in borrowing departments.`);
+        } else {
+          await deleteDepartment(id);
+          setSuccessMessage(`${name} was deleted from borrowing departments.`);
+        }
+        setDepartmentError("");
+      }
+
+      if (section === "admissions") {
+        if (type === "add") {
+          await addAdmissionLocation(name);
+          setSuccessMessage(`${name} was added to admission locations.`);
+        } else if (type === "update") {
+          await updateAdmissionLocation(id, name);
+          setEditingAdmissionLocation(null);
+          setSuccessMessage(`${name} was updated in admission locations.`);
+        } else {
+          await deleteAdmissionLocation(id);
+          setSuccessMessage(`${name} was deleted from admission locations.`);
+        }
+        setAdmissionLocationError("");
+      }
+
+      if (section === "outpatients") {
+        if (type === "add") {
+          await addOutpatientDepartment(name);
+          setSuccessMessage(`${name} was added to outpatient departments.`);
+        } else if (type === "update") {
+          await updateOutpatientDepartment(id, name);
+          setEditingOutpatientDepartment(null);
+          setSuccessMessage(`${name} was updated in outpatient departments.`);
+        } else {
+          await deleteOutpatientDepartment(id);
+          setSuccessMessage(`${name} was deleted from outpatient departments.`);
+        }
+        setOutpatientDepartmentError("");
+      }
+
+      setPendingDepartmentAction(null);
     } catch (error) {
-      setOutpatientDepartmentError(error.message || "Unable to delete outpatient department. Check Firebase write permission for departments.");
+      const message = error.message || "Unable to save department editor change. Check Firebase write permission for departments.";
+      if (section === "departments") setDepartmentError(message);
+      if (section === "admissions") setAdmissionLocationError(message);
+      if (section === "outpatients") setOutpatientDepartmentError(message);
+      setPendingDepartmentAction(null);
+    } finally {
+      setIsDepartmentActionSaving(false);
     }
+  };
+
+  // Routes the add modal submission to the active department editor list.
+  const submitDepartmentEntry = (name) => {
+    let isValid = false;
+    if (pendingDepartmentEntry === "departments") isValid = handleAddDepartment(name);
+    if (pendingDepartmentEntry === "admissions") isValid = handleAddAdmissionLocation(name);
+    if (pendingDepartmentEntry === "outpatients") isValid = handleAddOutpatientDepartment(name);
+    if (isValid) setPendingDepartmentEntry(null);
+    return isValid;
   };
 
   // Updates a user's role while preventing the signed-in admin from demoting their own account.
@@ -736,30 +852,22 @@ export default function Settings({ initialTab = "rules" }) {
 
                 {safeActiveTab === "departmentEditor" && departmentEditorTab === "departments" && (
                   <div className="flex min-h-0 flex-1 flex-col gap-3">
-                    <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
-                      <p className="text-sm font-black text-slate-700 uppercase">Borrowing Departments</p>
-                      <p className="text-xs font-semibold text-slate-500 mt-1">
-                        Used in Chart Tracking when a chart is borrowed by a hospital department.
-                      </p>
-                    </div>
-                    <form onSubmit={handleAddDepartment} className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                      <input
-                        value={departmentName}
-                        onChange={(event) => {
-                          setDepartmentName(event.target.value);
-                          setDepartmentError("");
-                        }}
-                        placeholder="Add borrowing department or hospital area"
-                        className="mrs-field w-full rounded-xl p-3 font-bold"
-                      />
+                    <div className="flex flex-col gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-black text-slate-700 uppercase">Borrowing Departments</p>
+                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                          Used in Chart Tracking when a chart is borrowed by a hospital department.
+                        </p>
+                      </div>
                       <button
-                        type="submit"
-                        className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-green-700 text-white text-xs font-black uppercase"
+                        type="button"
+                        onClick={() => setPendingDepartmentEntry("departments")}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-xs font-black uppercase text-white"
                       >
                         <Plus size={16} />
                         Add
                       </button>
-                    </form>
+                    </div>
 
                     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                       {departments.map((department) => (
@@ -821,31 +929,22 @@ export default function Settings({ initialTab = "rules" }) {
 
                 {safeActiveTab === "departmentEditor" && departmentEditorTab === "admissions" && (
                   <div className="flex min-h-0 flex-1 flex-col gap-3">
-                    <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
-                      <p className="text-sm font-black text-slate-700 uppercase">Patient Admission Locations</p>
-                      <p className="text-xs font-semibold text-slate-500 mt-1">
-                        Used only by inpatient registration. Defaults are Nurse Station, Emergency, NICU, and MICU.
-                      </p>
-                    </div>
-
-                    <form onSubmit={handleAddAdmissionLocation} className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                      <input
-                        value={admissionLocationName}
-                        onChange={(event) => {
-                          setAdmissionLocationName(event.target.value);
-                          setAdmissionLocationError("");
-                        }}
-                        placeholder="Add admission location"
-                        className="mrs-field w-full rounded-xl p-3 font-bold"
-                      />
+                    <div className="flex flex-col gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-black text-slate-700 uppercase">Patient Admission Locations</p>
+                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                          Used only by inpatient registration. Defaults are Nurse Station, Emergency, NICU, and MICU.
+                        </p>
+                      </div>
                       <button
-                        type="submit"
-                        className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-green-700 text-white text-xs font-black uppercase"
+                        type="button"
+                        onClick={() => setPendingDepartmentEntry("admissions")}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-xs font-black uppercase text-white"
                       >
                         <Plus size={16} />
                         Add
                       </button>
-                    </form>
+                    </div>
 
                     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                       {admissionLocations.map((location) => (
@@ -907,31 +1006,22 @@ export default function Settings({ initialTab = "rules" }) {
 
                 {safeActiveTab === "departmentEditor" && departmentEditorTab === "outpatients" && (
                   <div className="flex min-h-0 flex-1 flex-col gap-3">
-                    <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
-                      <p className="text-sm font-black text-slate-700 uppercase">Outpatient Departments</p>
-                      <p className="text-xs font-semibold text-slate-500 mt-1">
-                        Used only by outpatient registration. Defaults are RDU, OR, ONCO, and ENDOSCOPY.
-                      </p>
-                    </div>
-
-                    <form onSubmit={handleAddOutpatientDepartment} className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                      <input
-                        value={outpatientDepartmentName}
-                        onChange={(event) => {
-                          setOutpatientDepartmentName(event.target.value);
-                          setOutpatientDepartmentError("");
-                        }}
-                        placeholder="Add outpatient department"
-                        className="mrs-field w-full rounded-xl p-3 font-bold"
-                      />
+                    <div className="flex flex-col gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-black text-slate-700 uppercase">Outpatient Departments</p>
+                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                          Used only by outpatient registration. Defaults are RDU, OR, ONCO, and ENDOSCOPY.
+                        </p>
+                      </div>
                       <button
-                        type="submit"
-                        className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-green-700 text-white text-xs font-black uppercase"
+                        type="button"
+                        onClick={() => setPendingDepartmentEntry("outpatients")}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-xs font-black uppercase text-white"
                       >
                         <Plus size={16} />
                         Add
                       </button>
-                    </form>
+                    </div>
 
                     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                       {outpatientDepartments.map((department) => (
@@ -1219,124 +1309,40 @@ export default function Settings({ initialTab = "rules" }) {
         </div>
       </div>
 
-      {isAdmin && isResetConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setIsResetConfirmOpen(false)}
+      {isAdmin && (
+        <>
+          <SettingsResetConfirmModal
+            isOpen={isResetConfirmOpen}
+            onCancel={() => setIsResetConfirmOpen(false)}
+            onConfirm={resetSettings}
           />
-          <div className="mrs-panel relative w-full max-w-sm rounded-2xl p-6 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-700">
-              <RotateCcw size={26} />
-            </div>
-            <h2 className="text-xl font-black uppercase text-slate-800">Restore Defaults?</h2>
-            <p className="mt-2 text-sm font-semibold text-slate-500">
-              This will reset the system settings values to their defaults.
-            </p>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setIsResetConfirmOpen(false)}
-                className="rounded-xl px-4 py-3 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={resetSettings}
-                className="rounded-xl bg-amber-500 px-4 py-3 text-xs font-black uppercase text-white shadow-lg shadow-amber-500/20"
-              >
-                Restore
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isAdmin && isClearLogsConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setIsClearLogsConfirmOpen(false)}
+          <SettingsClearLogsConfirmModal
+            isOpen={isClearLogsConfirmOpen}
+            logCount={notificationLogs.length}
+            onCancel={() => setIsClearLogsConfirmOpen(false)}
+            onConfirm={clearNotificationLogs}
           />
-          <div className="mrs-panel relative w-full max-w-sm rounded-2xl p-6 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-              <Trash2 size={26} />
-            </div>
-            <h2 className="text-xl font-black uppercase text-slate-800">Clear Audit Logs?</h2>
-            <p className="mt-2 text-sm font-semibold text-slate-500">
-              This will permanently remove {notificationLogs.length} audit log record(s) from the admin log table.
-            </p>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setIsClearLogsConfirmOpen(false)}
-                className="rounded-xl px-4 py-3 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={clearNotificationLogs}
-                className="rounded-xl bg-red-600 px-4 py-3 text-xs font-black uppercase text-white shadow-lg shadow-red-500/20"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isAdmin && pendingAccessAction && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setPendingAccessAction(null)}
+          <DepartmentEditorEntryModal
+            isOpen={Boolean(pendingDepartmentEntry)}
+            label={departmentEntryDetails[pendingDepartmentEntry]?.label || ""}
+            onCancel={() => setPendingDepartmentEntry(null)}
+            onSubmit={submitDepartmentEntry}
+            placeholder={departmentEntryDetails[pendingDepartmentEntry]?.placeholder || ""}
+            title={departmentEntryDetails[pendingDepartmentEntry]?.title || ""}
           />
-          <div className="mrs-panel relative w-full max-w-md rounded-2xl p-6">
-            <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${
-              pendingAccessAction.type === "block"
-                ? "bg-red-50 text-red-600"
-                : "bg-green-50 text-green-700"
-            }`}>
-              {pendingAccessAction.type === "block" ? <UserX size={26} /> : <UserCheck size={26} />}
-            </div>
-            <h2 className="text-xl font-black uppercase text-slate-800">
-              {pendingAccessAction.type === "block" ? "Block Staff Account?" : "Activate Staff Account?"}
-            </h2>
-            <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-500">
-              {pendingAccessAction.type === "block"
-                ? `This will stop ${pendingAccessAction.user.fullName || pendingAccessAction.user.email || "this user"} from accessing the system.`
-                : `This will restore access for ${pendingAccessAction.user.fullName || pendingAccessAction.user.email || "this user"}.`}
-            </p>
-            {pendingAccessAction.type === "block" && (
-              <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-red-500">Restriction Reason</p>
-                <p className="mt-1 text-sm font-bold text-red-700">{pendingAccessAction.reason}</p>
-              </div>
-            )}
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setPendingAccessAction(null)}
-                className="rounded-xl px-4 py-3 text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmAccessAction}
-                className={`rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg ${
-                  pendingAccessAction.type === "block"
-                    ? "bg-red-600 shadow-red-500/20"
-                    : "bg-green-600 shadow-green-500/20"
-                }`}
-              >
-                {pendingAccessAction.type === "block" ? "Block" : "Activate"}
-              </button>
-            </div>
-          </div>
-        </div>
+          <DepartmentEditorConfirmModal
+            action={pendingDepartmentAction}
+            isSaving={isDepartmentActionSaving}
+            onCancel={() => setPendingDepartmentAction(null)}
+            onConfirm={confirmDepartmentAction}
+          />
+          <UserAccessConfirmModal
+            action={pendingAccessAction}
+            confirmLabel={pendingAccessAction?.type === "block" ? "Block" : "Activate"}
+            onCancel={() => setPendingAccessAction(null)}
+            onConfirm={confirmAccessAction}
+          />
+        </>
       )}
 
       <FloatingToast

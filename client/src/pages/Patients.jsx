@@ -2,22 +2,22 @@ import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
 import StatusBadge from "../components/StatusBadge";
-import Barcode from "react-barcode";
-import { motion as Motion, AnimatePresence } from "framer-motion";
+import PatientCreateConfirmModal from "../modals/patient/PatientCreateConfirmModal";
+import PatientDeleteModal from "../modals/patient/PatientDeleteModal";
+import PatientEditModal from "../modals/patient/PatientEditModal";
+import PatientRegistrationModal from "../modals/patient/PatientRegistrationModal";
+import PatientViewModal from "../modals/patient/PatientViewModal";
 import {
   UserPlus,
   Eye,
   Edit,
   Trash2,
   Search,
-  Download,
   ClipboardList,
-  Save,
-  ArrowRight,
   Users,
   Bed,
   UserRound,
-  X
+  X,
 } from "lucide-react";
 import {
   createPatient,
@@ -34,12 +34,12 @@ import { recordTimeValue } from "../utils/recordSorting";
 
 // Keeps patient case numbers consistent whether typed manually or scanned.
 function normalizeCaseNumber(value) {
-  return value.trim().toUpperCase();
+  return String(value || "").trim().toUpperCase();
 }
 
 // Normalizes patient names before duplicate and readmission checks.
 function normalizePatientName(value) {
-  return value.trim().replace(/\s+/g, " ").toUpperCase();
+  return String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
 }
 
 // Converts nullable patient fields into search-safe text.
@@ -675,422 +675,56 @@ export default function Patients() {
         </div>
       </div>
 
-        {canManagePatients && isAddPatientOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
-          <Motion.div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsAddPatientOpen(false)} />
-          <Motion.div initial={{ scale: 0.97, opacity: 0, y: 12 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.97, opacity: 0, y: 12 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} className="mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-hidden rounded-2xl p-4" >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2.5 bg-green-100 text-green-700 rounded-xl">
-                <UserPlus size={20} />
-              </div>
-              <h2 className="font-black text-lg text-gray-900 uppercase tracking-tight">Register Patient</h2>
-              <button type="button" onClick={() => setIsAddPatientOpen(false)} className="ml-auto rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-black" aria-label="Close add patient">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="grid max-h-[calc(100dvh-8rem)] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Patient Name</label>
-                <input
-                  className="mrs-field w-full p-3 rounded-xl text-sm font-bold"
-                  value={form.name}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    const hasExistingRecord = patients.some(
-                      (p) => normalizePatientName(p.name) === normalizePatientName(name),
-                    );
-                    setForm({ ...form, name, recordType: hasExistingRecord ? "old" : "new" });
-                    setFormError("");
-                  }}
-                  placeholder="Full Name"
-                  required
-                />
-                {formNameMatchesExistingPatient && (
-                  <p className="text-[10px] font-black uppercase text-amber-600 px-1">
-                    Existing patient name found.
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Case ID</label>
-                <input
-                  className="mrs-field w-full p-3 rounded-xl font-mono text-sm font-bold"
-                  value={form.caseNumber}
-                  onChange={(e) => {
-                    setForm({ ...form, caseNumber: e.target.value.toUpperCase() });
-                    setFormError("");
-                  }}
-                  placeholder="Enter case number from patient system"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Care Status</label>
-                <select
-                  className="mrs-field w-full p-3 rounded-xl text-sm font-bold cursor-pointer"
-                  value={form.type}
-                  onChange={(e) => {
-                    const type = e.target.value;
-                    setForm({
-                      ...form,
-                      type,
-                      department: "",
-                      dischargeDate: type === "outpatient" ? form.admissionDate : "",
-                    });
-                    setFormError("");
-                  }}
-                >
-                  <option value="outpatient">Outpatient</option>
-                  <option value="inpatient">Inpatient</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
-                  {patientDepartmentLabel}
-                </label>
-                <select
-                  className="mrs-field w-full p-3 rounded-xl text-sm font-bold cursor-pointer"
-                  value={form.department}
-                  onChange={(e) => {
-                    setForm({ ...form, department: e.target.value });
-                    setFormError("");
-                  }}
-                  required
-                >
-                  <option value="">Select {patientDepartmentLabel.toLowerCase()}</option>
-                  {patientDepartmentOptions.map((department) => (
-                    <option key={department} value={department}>{department}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Admission</label>
-                  <input
-                    type="date"
-                    className="mrs-field w-full p-3 rounded-xl text-xs font-bold"
-                    value={form.admissionDate}
-                    onChange={(e) => {
-                      const admissionDate = e.target.value;
-                      setForm({
-                        ...form,
-                        admissionDate,
-                        dischargeDate: form.type === "outpatient" ? admissionDate : form.dischargeDate,
-                      });
-                      setFormError("");
-                    }}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Discharge</label>
-                  <input
-                    type="date"
-                    className="mrs-field w-full p-3 rounded-xl text-xs font-bold disabled:bg-slate-100 disabled:text-slate-400"
-                    value={form.dischargeDate}
-                    onChange={(e) => {
-                      setForm({ ...form, dischargeDate: e.target.value });
-                      setFormError("");
-                    }}
-                    disabled={form.type === "outpatient"}
-                    required={form.type === "inpatient"}
-                  />
-                </div>
-              </div>
-
-              <button className="mrs-primary-button flex w-full items-center justify-center gap-2 rounded-xl py-3 font-black transition-all sm:col-span-2">
-                ADD RECORD <ArrowRight size={18} />
-              </button>
-            </form>
-          </Motion.div>
-        </div>
-        )}
+        <PatientRegistrationModal
+          form={form}
+          formNameMatchesExistingPatient={formNameMatchesExistingPatient}
+          isOpen={canManagePatients && isAddPatientOpen}
+          normalizePatientName={normalizePatientName}
+          onClose={() => setIsAddPatientOpen(false)}
+          onSubmit={handleSubmit}
+          patientDepartmentLabel={patientDepartmentLabel}
+          patientDepartmentOptions={patientDepartmentOptions}
+          patients={patients}
+          setForm={setForm}
+          setFormError={setFormError}
+        />
 
       </div>
 
-      {/* EDIT MODAL - FULL FUNCTIONALITY RESTORED */}
-      <AnimatePresence>
-        {canManagePatients && editPatient && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
-            <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setEditPatient(null)} />
-            <Motion.div initial={{ scale: 0.97, opacity: 0, y: 12 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.97, opacity: 0, y: 12 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} className="mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-2xl p-5 sm:p-8" >
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-blue-50 text-blue-700 rounded-xl"><Edit size={24} /></div>
-                <h2 className="text-2xl font-black text-gray-900 uppercase">Update Record</h2>
-              </div>
-              <form onSubmit={handleUpdate} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1 col-span-2">
-                    <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Patient Name</label>
-                    <input
-                      className="w-full border-2 border-black p-4 rounded-xl font-bold outline-none focus:bg-gray-50"
-                      value={editPatient.name}
-                      onChange={(e) => {
-                        const name = e.target.value;
-                        const hasExistingRecord = patients.some(
-                          (p) => p.id !== editPatient.id && normalizePatientName(p.name) === normalizePatientName(name),
-                        );
-                        setEditPatient({ ...editPatient, name, recordType: hasExistingRecord ? "old" : editPatient.recordType || "new" });
-                      }}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1 col-span-2">
-                    <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Case Number</label>
-                    <input className="w-full border-2 border-black p-4 rounded-xl font-mono font-bold outline-none focus:bg-gray-50" value={editPatient.caseNumber} onChange={(e) => { setEditPatient({ ...editPatient, caseNumber: e.target.value.toUpperCase() }); setEditError(""); }} required />
-                  </div>
-                  <div className="space-y-1 col-span-2">
-                    <label className="text-[11px] font-black text-gray-400 uppercase ml-1">{editDepartmentLabel}</label>
-                    <select
-                      className="w-full border-2 border-black p-4 rounded-xl font-bold bg-white"
-                      value={editPatient.department || ""}
-                      onChange={(e) => {
-                        setEditPatient({ ...editPatient, department: e.target.value });
-                        setEditError("");
-                      }}
-                      required
-                    >
-                      <option value="">Select {editDepartmentLabel.toLowerCase()}</option>
-                      {editDepartmentOptions.map((department) => (
-                        <option key={department} value={department}>{department}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Admission</label>
-                    <input
-                      type="date"
-                      className="w-full border-2 border-black p-3 rounded-xl font-bold"
-                      value={editPatient.admissionDate}
-                      onChange={(e) => {
-                        const admissionDate = e.target.value;
-                        setEditPatient({
-                          ...editPatient,
-                          admissionDate,
-                          dischargeDate: editPatient.type === "outpatient" ? admissionDate : editPatient.dischargeDate,
-                        });
-                        setEditError("");
-                      }}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Discharge</label>
-                    <input
-                      type="date"
-                      className="w-full border-2 border-black p-3 rounded-xl font-bold disabled:bg-slate-100 disabled:text-slate-400"
-                      value={editPatient.dischargeDate}
-                      onChange={(e) => {
-                        setEditPatient({ ...editPatient, dischargeDate: e.target.value });
-                        setEditError("");
-                      }}
-                      disabled={editPatient.type === "outpatient"}
-                      required={editPatient.type === "inpatient"}
-                    />
-                  </div>
-                  <div className="space-y-1 col-span-2">
-                    <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Patient Record</label>
-                    <div className="w-full border-2 border-black p-4 rounded-xl font-bold bg-slate-50 text-slate-700">
-                      {isFirstAdmissionRecord(patients, editPatient) ? "First Admission" : "Old Patient / Readmission"}
-                    </div>
-                  </div>
-                  <div className="space-y-1 col-span-2">
-                    <label className="text-[11px] font-black text-gray-400 uppercase ml-1">Care Status</label>
-                    <select
-                      className="w-full border-2 border-black p-4 rounded-xl font-bold"
-                      value={editPatient.type}
-                      onChange={(e) => {
-                        const type = e.target.value;
-                        setEditPatient({
-                          ...editPatient,
-                          type,
-                          department: "",
-                          dischargeDate: type === "outpatient" ? editPatient.admissionDate : "",
-                        });
-                        setEditError("");
-                      }}
-                    >
-                      <option value="outpatient">Outpatient</option>
-                      <option value="inpatient">Inpatient</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="flex gap-4 mt-6">
-                  <button type="button" onClick={() => setEditPatient(null)} className="flex-1 py-4 font-black text-gray-500 uppercase">Cancel</button>
-                  <button type="submit" disabled={pendingAction === "update"} className="mrs-blue-button flex-1 py-4 rounded-xl font-black flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-70">
-                    <Save size={20} /> {pendingAction === "update" ? "Saving..." : "Save Changes"}
-                  </button>
-                </div>
-              </form>
-            </Motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* VIEW MODAL */}
-      <AnimatePresence>
-        {viewPatient && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
-            <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setViewPatient(null)} />
-            <Motion.div initial={{ scale: 0.97, opacity: 0, y: 12 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.97, opacity: 0, y: 12 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} className="mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl p-5 text-center sm:p-10" >
-                <button
-                  type="button"
-                  onClick={() => setViewPatient(null)}
-                  className="absolute right-4 top-4 flex size-10 items-center justify-center rounded-xl border-2 border-transparent text-slate-400 transition-colors hover:border-black hover:bg-slate-50 hover:text-black"
-                  aria-label="Close patient view"
-                >
-                  <X size={18} />
-                </button>
-                <div className="size-20 bg-blue-50 text-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-6"><ClipboardList size={38} /></div>
-                <h2 className="text-2xl sm:text-3xl font-black text-gray-900 uppercase tracking-tighter">{viewPatient.name}</h2>
-                <p className="text-gray-500 font-mono font-bold text-sm mb-8">{viewPatient.caseNumber}</p>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                  <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
-                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Record</p>
-                    <p className="font-black text-gray-900 uppercase">
-                      {isFirstAdmissionRecord(patients, viewPatient) ? "First Admission" : "Old / Readmission"}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
-                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">
-                      {viewPatient.type === "inpatient" ? "Admitted Location" : "Outpatient Department"}
-                    </p>
-                    <p className="font-black text-gray-900 uppercase">{viewPatient.department || "Unassigned"}</p>
-                  </div>
-                  <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
-                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Admission</p>
-                    <p className="font-black text-gray-900">{viewPatient.admissionDate || "N/A"}</p>
-                  </div>
-                  <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
-                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Discharge</p>
-                    <p className="font-black text-gray-900">{viewPatient.dischargeDate || "Ongoing"}</p>
-                  </div>
-                  <div className="bg-gray-50 p-5 rounded-2xl border-2 border-black">
-                    <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Type</p>
-                    <p className="font-black text-gray-900 capitalize">{viewPatient.type}</p>
-                  </div>
-                </div>
-
-                <div className="mrs-card p-6 rounded-2xl mb-8 flex justify-center">
-                   <Barcode id={`barcode-${viewPatient.caseNumber}`} value={viewPatient.caseNumber} width={1.8} height={60} fontSize={14} />
-                </div>
-                
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => setViewPatient(null)}
-                    className="flex w-full items-center justify-center rounded-xl border-2 border-black bg-white py-4 font-black uppercase text-slate-600 transition-colors hover:bg-slate-50"
-                  >
-                    Close
-                  </button>
-                  <button onClick={() => downloadBarcode(viewPatient.caseNumber)} className="mrs-blue-button w-full flex items-center justify-center gap-3 py-4 rounded-xl font-black transition-all" >
-                    <Download size={20} /> Download PNG
-                  </button>
-                </div>
-            </Motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ADD CONFIRMATION MODAL */}
-      <AnimatePresence>
-        {canManagePatients && confirmPatient && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
-            <Motion.div className="absolute inset-0 bg-black/40" onClick={() => setConfirmPatient(null)} />
-            <Motion.div
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-              className="mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl p-5 sm:p-7"
-            >
-              <div className="flex items-center gap-3 mb-5">
-                <div className="p-3 bg-green-50 text-green-700 rounded-2xl">
-                  <UserPlus size={24} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-gray-900 uppercase">Add Patient Record?</h3>
-                  <p className="text-xs font-bold text-slate-400 uppercase">Please review before saving</p>
-                </div>
-              </div>
-
-              <div className="space-y-3 bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 mb-6">
-                <div>
-                  <p className="text-[10px] font-black uppercase text-slate-400">Patient</p>
-                  <p className="font-black text-slate-900 uppercase">{confirmPatient.name}</p>
-                  <p className="font-mono text-sm font-black text-green-800">{confirmPatient.caseNumber}</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-slate-400">Record</p>
-                    <p className="font-black text-slate-800 uppercase">
-                      {confirmPatient.recordType === "old" ? "Old / Readmission" : "First Admission"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-slate-400">
-                      {confirmPatient.type === "inpatient" ? "Admitted Location" : "Outpatient Department"}
-                    </p>
-                    <p className="font-black text-slate-800 uppercase">{confirmPatient.department}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-slate-400">Type</p>
-                    <p className="font-black text-slate-800 uppercase">{confirmPatient.type}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-slate-400">Admission</p>
-                    <p className="font-black text-slate-800">{confirmPatient.admissionDate}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-slate-400">Discharge</p>
-                    <p className="font-black text-slate-800">{confirmPatient.dischargeDate}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setConfirmPatient(null)}
-                  disabled={pendingAction === "create"}
-                  className="flex-1 py-3 font-black text-gray-500 uppercase"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmCreate}
-                  disabled={pendingAction === "create"}
-                  className="mrs-primary-button flex-1 py-3 rounded-xl font-black uppercase disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {pendingAction === "create" ? "Saving..." : "Confirm"}
-                </button>
-              </div>
-            </Motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* DELETE MODAL */}
-      <AnimatePresence>
-        {canDeletePatients && deletePatient && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
-            <Motion.div className="absolute inset-0 bg-black/40" onClick={() => setDeletePatient(null)} />
-            <Motion.div className="mrs-panel relative w-full max-w-sm rounded-2xl p-6 text-center sm:p-10">
-              <div className="size-20 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6"><Trash2 size={34} /></div>
-              <h3 className="text-2xl font-black text-gray-900 mb-2">Delete?</h3>
-              <p className="text-gray-500 font-bold text-sm mb-10 leading-tight">Are you sure you want to remove <span className="text-black">{deletePatient.name}</span>?</p>
-              <div className="flex gap-4">
-                <button onClick={() => setDeletePatient(null)} disabled={pendingAction === "delete"} className="flex-1 py-4 font-black text-gray-400 uppercase">No</button>
-                <button onClick={() => handleDelete(deletePatient.caseNumber)} disabled={pendingAction === "delete"} className="flex-1 py-4 bg-red-600 text-white rounded-xl font-black shadow-lg shadow-red-600/20 disabled:cursor-not-allowed disabled:opacity-70">{pendingAction === "delete" ? "Deleting..." : "Yes"}</button>
-              </div>
-            </Motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <PatientEditModal
+        editDepartmentLabel={editDepartmentLabel}
+        editDepartmentOptions={editDepartmentOptions}
+        isFirstAdmissionRecord={isFirstAdmissionRecord}
+        normalizePatientName={normalizePatientName}
+        onClose={() => setEditPatient(null)}
+        onSubmit={handleUpdate}
+        patient={canManagePatients ? editPatient : null}
+        patients={patients}
+        pendingAction={pendingAction}
+        setEditError={setEditError}
+        setPatient={setEditPatient}
+      />
+      <PatientViewModal
+        isFirstAdmissionRecord={isFirstAdmissionRecord}
+        onClose={() => setViewPatient(null)}
+        onDownloadBarcode={downloadBarcode}
+        patient={viewPatient}
+        patients={patients}
+      />
+      <PatientCreateConfirmModal
+        canManagePatients={canManagePatients}
+        isSaving={pendingAction === "create"}
+        onCancel={() => setConfirmPatient(null)}
+        onConfirm={handleConfirmCreate}
+        patient={confirmPatient}
+      />
+      <PatientDeleteModal
+        canDeletePatients={canDeletePatients}
+        isDeleting={pendingAction === "delete"}
+        onCancel={() => setDeletePatient(null)}
+        onConfirm={handleDelete}
+        patient={deletePatient}
+      />
       <FloatingToast
         toast={
           editError

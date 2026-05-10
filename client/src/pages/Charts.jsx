@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
+import ChartHistoryModal from "../modals/chart/ChartHistoryModal";
+import ChartTransactionConfirmModal from "../modals/chart/ChartTransactionConfirmModal";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import {
   Archive,
@@ -11,7 +13,6 @@ import {
   RotateCcw,
   Search,
   Table2,
-  X,
 } from "lucide-react";
 import {
   addChartLog,
@@ -22,7 +23,6 @@ import {
   updateChartLogIfExists,
 } from "../services/chartService";
 import { buildReturnedChartLog, buildReturnedChartUpdate } from "../utils/chartTransactions";
-import { formatDisplayDate } from "../utils/dateFormatting";
 
 const today = new Date();
 const transactionModes = [
@@ -98,8 +98,6 @@ const fieldClass =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100";
 const softButtonClass =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-black uppercase text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700";
-const modalCardClass =
-  "relative max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-950/20";
 
 export default function Charts() {
   const [charts, setCharts] = useState([]);
@@ -734,150 +732,17 @@ export default function Charts() {
         onClose={() => setTransactionToast(null)}
       />
 
-      <AnimatePresence>
-        {confirmTransaction && (
-          <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
-            <Motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/50"
-              onClick={() => setConfirmTransaction(null)}
-            />
-            <Motion.div
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-              className={`${modalCardClass} max-w-md sm:p-7`}
-            >
-              <div className="flex items-center gap-3 mb-5">
-                <div className={`p-3 rounded-2xl ${
-                  confirmTransaction.type === "borrow"
-                    ? "bg-blue-50 text-blue-700"
-                    : "bg-green-50 text-green-700"
-                }`}>
-                  {confirmTransaction.type === "borrow" ? <FileText size={24} /> : <RotateCcw size={24} />}
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-slate-900 uppercase">
-                    Confirm {confirmTransaction.type === "borrow" ? "Borrow" : "Return"} Chart
-                  </h3>
-                  <p className="text-xs font-bold text-slate-400 uppercase">
-                    Review transaction details before saving
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3 bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-6">
-                <div>
-                  <p className="text-[10px] font-black uppercase text-slate-400">Chart</p>
-                  <p className="font-black text-slate-900 uppercase">{confirmTransaction.chart.patientName}</p>
-                  <p className="font-mono text-sm font-black text-green-800">{confirmTransaction.caseNumber}</p>
-                </div>
-
-                {confirmTransaction.type === "borrow" ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-400">Borrower</p>
-                      <p className="font-black text-slate-800">{confirmTransaction.borrower}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-400">Department</p>
-                      <p className="font-black text-slate-800">{confirmTransaction.department}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-400">Borrowed By</p>
-                      <p className="font-black text-slate-800">{confirmTransaction.chart.borrower || "N/A"}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-400">Returned By</p>
-                      <p className="font-black text-slate-800">{confirmTransaction.returner}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-400">Department</p>
-                      <p className="font-black text-slate-800">{confirmTransaction.chart.department || "N/A"}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setConfirmTransaction(null)}
-                  disabled={isSavingTransaction}
-                  className="flex-1 py-3 font-black text-slate-500 uppercase"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmTransaction.type === "borrow" ? handleCheckout : handleCheckin}
-                  disabled={isSavingTransaction}
-                  className={`flex-1 rounded-xl py-3 font-black uppercase text-white shadow-lg transition ${
-                    confirmTransaction.type === "borrow" ? "mrs-blue-button" : "bg-green-600"
-                  } disabled:cursor-not-allowed disabled:opacity-70`}
-                >
-                  {isSavingTransaction ? "Saving..." : "Confirm"}
-                </button>
-              </div>
-            </Motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {selectedHistory && (
-          <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 bg-black/60 backdrop-blur-sm sm:items-center sm:p-4">
-            <Motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className={`${modalCardClass} max-w-md sm:p-8`}
-            >
-              <button
-                onClick={() => setSelectedHistory(null)}
-                className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
-              <h2 className="pr-9 text-xl sm:text-2xl font-black uppercase italic text-slate-800 mb-1">Circulation History</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase mb-6">
-                {selectedHistory.patientName} - {selectedHistory.caseNumber}
-              </p>
-              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                {(selectedHistory.history || []).filter((log) => log.borrower !== "System").length === 0 && (
-                  <div className="p-6 rounded-2xl border-2 border-slate-100 bg-slate-50 text-center">
-                    <History size={34} className="mx-auto text-slate-300 mb-3" />
-                    <p className="font-black text-slate-700 uppercase">No history of borrowing or returned</p>
-                    <p className="text-xs font-semibold text-slate-400 mt-1">
-                      This chart has not been borrowed or returned yet.
-                    </p>
-                  </div>
-                )}
-                {(selectedHistory.history || []).filter((log) => log.borrower !== "System").map((log, i) => (
-                  <div key={`${log.action}-${log.date}-${i}`} className="relative pl-6 border-l-2 border-slate-200 pb-2 last:pb-0">
-                    <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white ring-2 ring-slate-300 ${log.action === "checkout" ? "bg-blue-500" : "bg-green-500"}`} />
-                    <p className="text-sm font-black uppercase text-slate-800">{log.action === "checkout" ? "Borrowed" : "Returned"}</p>
-                    <p className="text-xs font-bold text-slate-700">Borrowed By: {log.borrower || "N/A"}</p>
-                    {log.action === "checkin" && (
-                      <p className="text-xs font-bold text-slate-700">
-                        Returned By: {log.returnedBy || log.borrower || "N/A"}
-                      </p>
-                    )}
-                    <p className="text-xs font-bold text-slate-700">Department: {log.department || "N/A"}</p>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">
-                      {formatDisplayDate(log.date)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <button onClick={() => setSelectedHistory(null)} className="mrs-primary-button w-full mt-8 rounded-xl py-3 font-black uppercase text-xs transition">Close Log</button>
-            </Motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ChartTransactionConfirmModal
+        isSaving={isSavingTransaction}
+        onCancel={() => setConfirmTransaction(null)}
+        onConfirmBorrow={handleCheckout}
+        onConfirmReturn={handleCheckin}
+        transaction={confirmTransaction}
+      />
+      <ChartHistoryModal
+        chart={selectedHistory}
+        onClose={() => setSelectedHistory(null)}
+      />
     </DashboardLayout>
   );
 }
