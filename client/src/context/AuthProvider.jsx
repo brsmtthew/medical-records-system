@@ -3,6 +3,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { AuthContext } from "./useAuth";
 import { auth, db, invalidFirebaseConfig, missingFirebaseConfig } from "../firebaseClient";
+import { syncActiveUserProfile } from "../services/recordsService";
 
 function normalizeRole(role) {
   return role === "admin" ? "admin" : "staff";
@@ -16,6 +17,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     // Tracks Firebase Auth state and hydrates the matching user security profile.
     if (!auth) {
+      syncActiveUserProfile(null);
       return undefined;
     }
 
@@ -25,6 +27,7 @@ export function AuthProvider({ children }) {
       unsubscribeProfile();
       setCurrentUser(user);
       setUserProfile(null);
+      syncActiveUserProfile(null);
 
       if (!user) {
         setAuthLoading(false);
@@ -61,24 +64,29 @@ export function AuthProvider({ children }) {
               { merge: true },
             ).catch(console.error);
             setUserProfile(fallbackProfile);
+            syncActiveUserProfile(fallbackProfile);
           } else {
-            setUserProfile({
+            const profile = {
               ...fallbackProfile,
               ...snapshot.data(),
-            });
+            };
+            setUserProfile(profile);
+            syncActiveUserProfile(profile);
           }
           setAuthLoading(false);
         },
         (error) => {
           console.error("Unable to load user security profile:", error);
-          setUserProfile({
+          const fallbackProfile = {
             uid: user.uid,
             fullName: user.displayName || "",
             email: user.email || "",
             role: "staff",
             accountStatus: "active",
             department: "Medical Records",
-          });
+          };
+          setUserProfile(fallbackProfile);
+          syncActiveUserProfile(fallbackProfile);
           setAuthLoading(false);
         },
       );

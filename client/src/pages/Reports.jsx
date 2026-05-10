@@ -140,6 +140,7 @@ export default function Reports() {
   const [successMeta, setSuccessMeta] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [isDeletingLog, setIsDeletingLog] = useState(false);
 
   useEffect(() => {
     return subscribeToChartLogs(
@@ -227,8 +228,9 @@ export default function Reports() {
 
   // Deletes one audit row after the confirmation dialog is accepted.
   const handleDeleteLog = async () => {
-    if (!deleteLog) return;
+    if (!deleteLog || isDeletingLog) return;
     try {
+      setIsDeletingLog(true);
       await deleteChartLog(deleteLog.id);
       setSuccessMessage(`${deleteLog.caseNumber || "Report row"} was deleted.`);
       setSuccessMeta({
@@ -241,6 +243,8 @@ export default function Reports() {
       setLoadError("");
     } catch (error) {
       setLoadError(error.message || "Unable to delete report row.");
+    } finally {
+      setIsDeletingLog(false);
     }
   };
 
@@ -584,6 +588,7 @@ export default function Reports() {
               <button
                 type="button"
                 onClick={() => setDeleteLog(null)}
+                disabled={isDeletingLog}
                 className="py-3 rounded-xl text-xs font-black uppercase text-slate-500 hover:bg-slate-50"
               >
                 Cancel
@@ -591,9 +596,10 @@ export default function Reports() {
               <button
                 type="button"
                 onClick={handleDeleteLog}
-                className="py-3 rounded-xl bg-red-600 text-white text-xs font-black uppercase shadow-lg shadow-red-600/20"
+                disabled={isDeletingLog}
+                className="py-3 rounded-xl bg-red-600 text-white text-xs font-black uppercase shadow-lg shadow-red-600/20 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Delete
+                {isDeletingLog ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>

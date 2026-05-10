@@ -117,6 +117,7 @@ export default function Charts() {
   const [confirmTransaction, setConfirmTransaction] = useState(null);
   const [notice, setNotice] = useState(null);
   const [transactionToast, setTransactionToast] = useState(null);
+  const [isSavingTransaction, setIsSavingTransaction] = useState(false);
 
   // Shows an inline toast-style notice for transaction validation.
   const setTransactionNotice = (type, message) => {
@@ -274,7 +275,7 @@ export default function Charts() {
 
   // Writes the borrow log and marks the selected chart as out of records.
   const handleCheckout = async () => {
-    if (!confirmTransaction || confirmTransaction.type !== "borrow") return;
+    if (!confirmTransaction || confirmTransaction.type !== "borrow" || isSavingTransaction) return;
     const { chart, caseNumber } = confirmTransaction;
     const now = new Date();
     const log = {
@@ -292,6 +293,7 @@ export default function Charts() {
     };
 
     try {
+      setIsSavingTransaction(true);
       const activeLogId = await addChartLog(log);
       await updateChart(caseNumber, {
         status: "borrowed",
@@ -324,6 +326,8 @@ export default function Charts() {
     } catch (error) {
       setTransactionNotice("error", error.message || "Unable to update chart in Firebase.");
       setConfirmTransaction(null);
+    } finally {
+      setIsSavingTransaction(false);
     }
   };
 
@@ -356,7 +360,7 @@ export default function Charts() {
 
   // Writes the return log and marks the selected chart as available.
   const handleCheckin = async () => {
-    if (!confirmTransaction || confirmTransaction.type !== "return") return;
+    if (!confirmTransaction || confirmTransaction.type !== "return" || isSavingTransaction) return;
     const { chart, caseNumber } = confirmTransaction;
     const now = new Date();
     const returnedAt = now.toISOString();
@@ -368,6 +372,7 @@ export default function Charts() {
     });
 
     try {
+      setIsSavingTransaction(true);
       if (chart.activeLogId) {
         const updatedActiveLog = await updateChartLogIfExists(chart.activeLogId, returnedLog);
 
@@ -398,6 +403,8 @@ export default function Charts() {
     } catch (error) {
       setTransactionNotice("error", error.message || "Unable to update chart in Firebase.");
       setConfirmTransaction(null);
+    } finally {
+      setIsSavingTransaction(false);
     }
   };
 
@@ -800,17 +807,19 @@ export default function Charts() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setConfirmTransaction(null)}
+                  disabled={isSavingTransaction}
                   className="flex-1 py-3 font-black text-slate-500 uppercase"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmTransaction.type === "borrow" ? handleCheckout : handleCheckin}
+                  disabled={isSavingTransaction}
                   className={`flex-1 rounded-xl py-3 font-black uppercase text-white shadow-lg transition ${
                     confirmTransaction.type === "borrow" ? "mrs-blue-button" : "bg-green-600"
-                  }`}
+                  } disabled:cursor-not-allowed disabled:opacity-70`}
                 >
-                  Confirm
+                  {isSavingTransaction ? "Saving..." : "Confirm"}
                 </button>
               </div>
             </Motion.div>

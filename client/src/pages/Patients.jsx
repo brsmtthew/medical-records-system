@@ -194,6 +194,7 @@ export default function Patients() {
   const [deletePatient, setDeletePatient] = useState(null);
   const [confirmPatient, setConfirmPatient] = useState(null);
   const [isAddPatientOpen, setIsAddPatientOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState("");
 
   const formNameMatchesExistingPatient = patients.some(
     (p) => normalizePatientName(p.name) === normalizePatientName(form.name),
@@ -294,8 +295,9 @@ export default function Patients() {
 
   // Saves the confirmed patient and clears the registration form.
   const handleConfirmCreate = async () => {
-    if (!confirmPatient) return;
+    if (!confirmPatient || pendingAction) return;
     try {
+      setPendingAction("create");
       await createPatient(confirmPatient);
       setForm({
         name: "",
@@ -319,12 +321,15 @@ export default function Patients() {
     } catch (error) {
       setFormError(error.message || "Unable to save patient to Firebase.");
       setConfirmPatient(null);
+    } finally {
+      setPendingAction("");
     }
   };
 
   // Validates and saves changes from the edit patient dialog.
   const handleUpdate = async (e) => {
     e.preventDefault();
+    if (pendingAction) return;
     const previousCaseNumber = editPatient.previousCaseNumber || editPatient.id;
     const caseNumber = normalizeCaseNumber(editPatient.caseNumber);
     if (!editPatient.name.trim() || !caseNumber || !editPatient.department || !editPatient.admissionDate) {
@@ -371,6 +376,7 @@ export default function Patients() {
     }
 
     try {
+      setPendingAction("update");
       await updatePatientRecord(previousCaseNumber, patientCandidate);
       setEditPatient(null);
       setEditError("");
@@ -383,13 +389,17 @@ export default function Patients() {
       });
     } catch (error) {
       setEditError(error.message || "Unable to update patient in Firebase.");
+    } finally {
+      setPendingAction("");
     }
   };
 
   // Deletes a patient record after the delete dialog is confirmed.
   const handleDelete = async (caseNumber) => {
+    if (pendingAction) return;
     const patientName = deletePatient?.name || "";
     try {
+      setPendingAction("delete");
       await deletePatientRecord(caseNumber);
       setDeletePatient(null);
       setSuccessMessage(`${caseNumber} was deleted successfully.`);
@@ -401,6 +411,8 @@ export default function Patients() {
       });
     } catch (error) {
       setFormError(error.message || "Unable to delete patient from Firebase.");
+    } finally {
+      setPendingAction("");
     }
   };
 
@@ -910,8 +922,8 @@ export default function Patients() {
                 </div>
                 <div className="flex gap-4 mt-6">
                   <button type="button" onClick={() => setEditPatient(null)} className="flex-1 py-4 font-black text-gray-500 uppercase">Cancel</button>
-                  <button type="submit" className="mrs-blue-button flex-1 py-4 rounded-xl font-black flex items-center justify-center gap-2">
-                    <Save size={20} /> Save Changes
+                  <button type="submit" disabled={pendingAction === "update"} className="mrs-blue-button flex-1 py-4 rounded-xl font-black flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-70">
+                    <Save size={20} /> {pendingAction === "update" ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </form>
@@ -1044,15 +1056,17 @@ export default function Patients() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setConfirmPatient(null)}
+                  disabled={pendingAction === "create"}
                   className="flex-1 py-3 font-black text-gray-500 uppercase"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmCreate}
-                  className="mrs-primary-button flex-1 py-3 rounded-xl font-black uppercase"
+                  disabled={pendingAction === "create"}
+                  className="mrs-primary-button flex-1 py-3 rounded-xl font-black uppercase disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Confirm
+                  {pendingAction === "create" ? "Saving..." : "Confirm"}
                 </button>
               </div>
             </Motion.div>
@@ -1070,8 +1084,8 @@ export default function Patients() {
               <h3 className="text-2xl font-black text-gray-900 mb-2">Delete?</h3>
               <p className="text-gray-500 font-bold text-sm mb-10 leading-tight">Are you sure you want to remove <span className="text-black">{deletePatient.name}</span>?</p>
               <div className="flex gap-4">
-                <button onClick={() => setDeletePatient(null)} className="flex-1 py-4 font-black text-gray-400 uppercase">No</button>
-                <button onClick={() => handleDelete(deletePatient.caseNumber)} className="flex-1 py-4 bg-red-600 text-white rounded-xl font-black shadow-lg shadow-red-600/20">Yes</button>
+                <button onClick={() => setDeletePatient(null)} disabled={pendingAction === "delete"} className="flex-1 py-4 font-black text-gray-400 uppercase">No</button>
+                <button onClick={() => handleDelete(deletePatient.caseNumber)} disabled={pendingAction === "delete"} className="flex-1 py-4 bg-red-600 text-white rounded-xl font-black shadow-lg shadow-red-600/20 disabled:cursor-not-allowed disabled:opacity-70">{pendingAction === "delete" ? "Deleting..." : "Yes"}</button>
               </div>
             </Motion.div>
           </div>

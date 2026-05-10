@@ -8,7 +8,6 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
   writeBatch,
@@ -44,6 +43,14 @@ export const duplicateCaseNumberMessage = "A patient with this case number alrea
 export const duplicatePatientStayMessage = "This inpatient record overlaps a previous inpatient admission period.";
 export const patientBeforeFirstRecordMessage = "Readmission date cannot be earlier than this patient's first hospital record.";
 
+let activeUserProfile = null;
+
+// AuthProvider keeps this profile live; CRUD calls reuse it so each write does not
+// first wait on an extra user-document read.
+export function syncActiveUserProfile(profile) {
+  activeUserProfile = profile?.uid ? profile : null;
+}
+
 // Returns the configured Firestore instance or fails fast with a user-facing setup message.
 function requireDb() {
   if (!db) {
@@ -59,8 +66,11 @@ async function requireActiveRole({ adminOnly = false } = {}) {
     throw new Error("Sign in again before making this change.");
   }
 
-  const profileSnapshot = await getDoc(doc(database, "users", user.uid));
-  const profile = profileSnapshot.exists() ? profileSnapshot.data() : {};
+  let profile = activeUserProfile?.uid === user.uid ? activeUserProfile : null;
+  if (!profile) {
+    const profileSnapshot = await getDoc(doc(database, "users", user.uid));
+    profile = profileSnapshot.exists() ? { uid: user.uid, ...profileSnapshot.data() } : {};
+  }
   const isActive = profile.accountStatus !== "disabled";
   const role = profile.role === "admin" ? "admin" : "staff";
 
@@ -476,13 +486,14 @@ export async function createPatient(patient) {
     throw new Error(patientBeforeFirstRecordMessage);
   }
 
-  await setDoc(patientRef, {
+  const batch = writeBatch(database);
+  batch.set(patientRef, {
     ...safePatient,
     createdAt: now,
     updatedAt: now,
   });
 
-  await setDoc(chartRef, {
+  batch.set(chartRef, {
     caseNumber: safePatient.caseNumber,
     patientName: safePatient.name,
     patientDepartment: safePatient.department || "",
@@ -503,6 +514,7 @@ export async function createPatient(patient) {
     createdAt: now,
     updatedAt: now,
   });
+  await batch.commit();
 }
 
 // Updates patient details and keeps the linked chart document in sync.
@@ -535,7 +547,8 @@ export async function updatePatient(previousCaseNumber, patient) {
 
     const previousChart = previousChartSnapshot.exists() ? previousChartSnapshot.data() : {};
 
-    await setDoc(nextPatientRef, {
+    const createBatch = writeBatch(database);
+    createBatch.set(nextPatientRef, {
       ...safePatient,
       previousCaseNumber,
       renamePendingBy: user.uid,
@@ -543,7 +556,7 @@ export async function updatePatient(previousCaseNumber, patient) {
       updatedAt: now,
     });
 
-    await setDoc(nextChartRef, {
+    createBatch.set(nextChartRef, {
       ...previousChart,
       caseNumber: safePatient.caseNumber,
       previousCaseNumber,
@@ -568,6 +581,7 @@ export async function updatePatient(previousCaseNumber, patient) {
       createdAt: previousChart.createdAt || now,
       updatedAt: now,
     });
+    await createBatch.commit();
 
     if (previousChart.activeLogId) {
       await updateChartLogIfExists(previousChart.activeLogId, {
@@ -576,18 +590,23 @@ export async function updatePatient(previousCaseNumber, patient) {
       });
     }
 
-    await updateDoc(doc(database, "patients", previousCaseNumber), {
+    const markRenameBatch = writeBatch(database);
+    markRenameBatch.update(doc(database, "patients", previousCaseNumber), {
       renamePendingBy: user.uid,
       renamePendingTo: safePatient.caseNumber,
       updatedAt: now,
     });
-    await updateDoc(previousChartRef, {
+    markRenameBatch.update(previousChartRef, {
       renamePendingBy: user.uid,
       renamePendingTo: safePatient.caseNumber,
       updatedAt: now,
     });
-    await deleteDoc(doc(database, "patients", previousCaseNumber));
-    await deleteDoc(previousChartRef);
+    await markRenameBatch.commit();
+
+    const deleteBatch = writeBatch(database);
+    deleteBatch.delete(doc(database, "patients", previousCaseNumber));
+    deleteBatch.delete(previousChartRef);
+    await deleteBatch.commit();
     return;
   }
 
@@ -598,17 +617,19 @@ export async function updatePatient(previousCaseNumber, patient) {
     throw new Error(patientBeforeFirstRecordMessage);
   }
 
-  await updateDoc(doc(database, "patients", safePatient.caseNumber), {
+  const batch = writeBatch(database);
+  batch.update(doc(database, "patients", safePatient.caseNumber), {
     ...safePatient,
     updatedAt: now,
   });
 
-  await updateDoc(doc(database, "charts", safePatient.caseNumber), {
+  batch.update(doc(database, "charts", safePatient.caseNumber), {
     patientName: safePatient.name,
     patientDepartment: safePatient.department || "",
     recordType: safePatient.recordType || "new",
     updatedAt: now,
   });
+  await batch.commit();
 }
 
 // Deletes a patient and cancels active borrow logs tied to its chart.
@@ -637,19 +658,25 @@ export async function deletePatient(caseNumber) {
       ),
     );
 
-    await Promise.all(
-      borrowedLogsSnapshot.docs.map((logSnapshot) =>
-        updateDoc(doc(database, "chartLogs", logSnapshot.id), cancelledLogUpdate),
-      ),
-    );
+    const batch = writeBatch(database);
+    borrowedLogsSnapshot.docs.forEach((logSnapshot) => {
+      batch.update(doc(database, "chartLogs", logSnapshot.id), cancelledLogUpdate);
+    });
+    batch.delete(doc(database, "patients", caseNumber));
+    batch.delete(chartRef);
 
     if (chart.activeLogId && !borrowedLogsSnapshot.docs.some((logSnapshot) => logSnapshot.id === chart.activeLogId)) {
       await updateChartLogIfExists(chart.activeLogId, cancelledLogUpdate);
     }
+
+    await batch.commit();
+    return;
   }
 
-  await deleteDoc(doc(database, "patients", caseNumber));
-  await deleteDoc(chartRef);
+  const batch = writeBatch(database);
+  batch.delete(doc(database, "patients", caseNumber));
+  batch.delete(chartRef);
+  await batch.commit();
 }
 
 // Updates chart circulation fields for borrow and return workflows.
