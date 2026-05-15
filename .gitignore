@@ -12,6 +12,7 @@ dist
 build
 client/dist
 client/build
+.firebase/
 server/node_modules
 server/logs
 private/charts
