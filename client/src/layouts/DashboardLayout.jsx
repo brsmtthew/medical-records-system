@@ -21,7 +21,7 @@ export default function DashboardLayout({ children }) {
   return (
     <div className="mrs-shell mrs-deploy-fit relative flex h-dvh overflow-hidden font-sans">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-[60] h-1 bg-[linear-gradient(90deg,#166534,#2563eb,#f59e0b)]" />
-      <aside className="hidden lg:block shrink-0">
+      <aside className="hidden h-full shrink-0 lg:block">
         <Sidebar
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={toggleSidebarCollapsed}

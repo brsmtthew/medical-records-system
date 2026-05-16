@@ -101,7 +101,7 @@ export default function FloatingToast({ toast, onClose, duration = 3200 }) {
           exit={{ opacity: 0, y: -18, scale: 0.96 }}
           onMouseEnter={clearDismissTimer}
           onMouseLeave={startDismissTimer}
-          className="fixed inset-x-3 top-[max(0.6rem,env(safe-area-inset-top))] z-[120] rounded-xl border border-slate-200 bg-white p-2.5 shadow-xl shadow-slate-900/10 sm:left-auto sm:right-4 sm:top-4 sm:w-[min(320px,calc(100vw-2rem))]"
+          className="fixed inset-x-3 top-[max(0.6rem,env(safe-area-inset-top))] z-[220] rounded-xl border border-slate-200 bg-white p-2.5 shadow-xl shadow-slate-900/10 sm:left-auto sm:right-4 sm:top-4 sm:w-[min(320px,calc(100vw-2rem))]"
           role="status"
           aria-live="polite"
         >

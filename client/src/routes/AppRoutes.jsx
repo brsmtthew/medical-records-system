@@ -10,6 +10,11 @@ import Reports from "../pages/Reports";
 import Settings from "../pages/Settings";
 import ChartViewing from "../pages/ChartViewing";
 import Users from "../pages/Users";
+import MedicalDocuments from "../pages/MedicalDocuments";
+import LabResults from "../pages/LabResults";
+import VitalCertificates from "../pages/VitalCertificates";
+import TrackingReports from "../pages/TrackingReports";
+import PrintReports from "../pages/PrintReports";
 
 export default function AppRoutes() {
   return (
@@ -45,6 +50,46 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute roles={["admin", "staff"]}>
             <Reports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/medical-documents"
+        element={
+          <ProtectedRoute roles={["admin", "staff"]}>
+            <MedicalDocuments />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/lab-results"
+        element={
+          <ProtectedRoute roles={["admin", "staff"]}>
+            <LabResults />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/vital-certificates"
+        element={
+          <ProtectedRoute roles={["admin", "staff"]}>
+            <VitalCertificates />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tracking-reports"
+        element={
+          <ProtectedRoute roles={["admin", "staff"]}>
+            <TrackingReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/print-reports"
+        element={
+          <ProtectedRoute roles={["admin", "staff"]}>
+            <PrintReports />
           </ProtectedRoute>
         }
       />

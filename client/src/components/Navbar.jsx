@@ -41,7 +41,7 @@ import {
   writeStoredUnreadNotifications,
 } from "../utils/notificationLog";
 import { formatDisplayDate } from "../utils/dateFormatting";
-import { readSystemSettings, saveSystemSettings } from "../utils/systemSettings";
+import { applySystemTheme, readSystemSettings, saveSystemSettings } from "../utils/systemSettings";
 import { isStrongPassword, normalizeEmail } from "../utils/security";
 
 // Builds the compact initials fallback for accounts without an uploaded photo.
@@ -201,11 +201,7 @@ export default function Navbar({ onMenuClick }) {
 
     saveSystemSettings(nextSettings);
     setAppearanceMode(nextMode);
-    document.documentElement.classList.toggle("dark", nextMode === "dark");
-    document.documentElement.classList.toggle(
-      "soft-light",
-      nextMode !== "dark" && nextSettings.lightComfortMode === "soft",
-    );
+    applySystemTheme(nextSettings);
     window.dispatchEvent(new CustomEvent("mrs-settings-updated"));
   };
 
@@ -315,6 +311,10 @@ export default function Navbar({ onMenuClick }) {
     "/chart-viewing": "Chart Viewing",
     "/chartviewing": "Chart Viewing",
     "/reports": "Activity Logs",
+    "/medical-documents": "Medical Documents",
+    "/lab-results": "Lab Results",
+    "/vital-certificates": "Vital Certificates",
+    "/tracking-reports": "Print Reports",
     "/settings": "Settings",
     "/users": "Users",
   };
@@ -403,7 +403,7 @@ export default function Navbar({ onMenuClick }) {
                   )}
                 </div>
 
-                <div className="max-h-[min(12.5rem,calc(100dvh-9rem))] divide-y divide-slate-100 overflow-y-auto">
+                <div className="max-h-[min(15.75rem,calc(100dvh-9rem))] divide-y divide-slate-100 overflow-y-auto">
                   {visibleNotifications.length === 0 ? (
                     <div className="p-6 text-center">
                       <Bell size={28} className="mx-auto mb-2 text-slate-300" />
@@ -413,7 +413,7 @@ export default function Navbar({ onMenuClick }) {
                       </p>
                     </div>
                   ) : (
-                    visibleNotifications.slice(0, 2).map((notification) => {
+                    visibleNotifications.map((notification) => {
                       const Icon = notificationIcon(notification.type);
                       const iconClass = notification.type === "success"
                         ? "bg-green-50 text-green-700 border-green-200"

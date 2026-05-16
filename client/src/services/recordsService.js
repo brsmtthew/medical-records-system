@@ -51,6 +51,10 @@ export function syncActiveUserProfile(profile) {
   activeUserProfile = profile?.uid ? profile : null;
 }
 
+export function getActiveUserProfile(userId) {
+  return activeUserProfile?.uid === userId ? activeUserProfile : null;
+}
+
 // Returns the configured Firestore instance or fails fast with a user-facing setup message.
 function requireDb() {
   if (!db) {
@@ -223,42 +227,61 @@ function patientStayOverlaps(firstPatient, secondPatient) {
 }
 
 // Prevents new or edited readmission dates from predating the first known record.
-async function patientAdmissionBeforeFirstRecordExists(database, patient, ignoredCaseNumber = "") {
+function patientAdmissionBeforeFirstRecordExistsInRows(patientRows, patient, ignoredCaseNumber = "") {
   const candidate = normalizePatientStay(patient);
   const candidateAdmission = dateValue(candidate.admissionDate);
   if (!candidate.name || !candidateAdmission) return false;
 
-  const patientRows = await getDocs(
-    query(collection(database, "patients"), where("name", "==", candidate.name)),
-  );
-
-  const firstExistingAdmission = patientRows.docs
-    .filter((patientSnapshot) => !ignoredCaseNumber || patientSnapshot.id !== ignoredCaseNumber)
-    .map((patientSnapshot) => dateValue(patientSnapshot.data().admissionDate))
+  const firstExistingAdmission = patientRows
+    .filter((row) => !ignoredCaseNumber || row.id !== ignoredCaseNumber)
+    .map((row) => dateValue(row.admissionDate))
     .filter(Boolean)
     .sort((first, second) => first - second)[0];
 
   return Boolean(firstExistingAdmission && candidateAdmission < firstExistingAdmission);
 }
 
-// Checks Firestore for an existing inpatient stay that overlaps the candidate row.
-async function overlappingPatientStayExists(database, patient, ignoredCaseNumber = "") {
+async function matchingPatientRows(database, patient) {
   const candidate = normalizePatientStay(patient);
-  if (!candidate.name || !candidate.admissionDate) return false;
+  if (!candidate.name) return [];
 
   const patientRows = await getDocs(
     query(collection(database, "patients"), where("name", "==", candidate.name)),
   );
 
-  return patientRows.docs.some((patientSnapshot) => {
-    if (ignoredCaseNumber && patientSnapshot.id === ignoredCaseNumber) return false;
+  return snapshotRows(patientRows);
+}
 
-    const row = normalizePatientStay(patientSnapshot.data());
+async function patientAdmissionBeforeFirstRecordExists(database, patient, ignoredCaseNumber = "") {
+  return patientAdmissionBeforeFirstRecordExistsInRows(
+    await matchingPatientRows(database, patient),
+    patient,
+    ignoredCaseNumber,
+  );
+}
+
+// Checks Firestore for an existing inpatient stay that overlaps the candidate row.
+function overlappingPatientStayExistsInRows(patientRows, patient, ignoredCaseNumber = "") {
+  const candidate = normalizePatientStay(patient);
+  if (!candidate.name || !candidate.admissionDate) return false;
+
+  return patientRows.some((patientRow) => {
+    if (ignoredCaseNumber && patientRow.id === ignoredCaseNumber) return false;
+
+    const row = normalizePatientStay(patientRow);
     return (
       row.name === candidate.name &&
       patientStayOverlaps(row, candidate)
     );
   });
+}
+
+async function overlappingPatientStayExists(database, patient, ignoredCaseNumber = "") {
+  return overlappingPatientStayExistsInRows(
+    await matchingPatientRows(database, patient),
+    patient,
+    ignoredCaseNumber,
+  );
 }
 
 // Streams patient rows sorted by most recent activity.
@@ -470,19 +493,20 @@ export async function createPatient(patient) {
   const patientRef = doc(database, "patients", safePatient.caseNumber);
   const chartRef = doc(database, "charts", safePatient.caseNumber);
   const now = serverTimestamp();
-  const [patientSnapshot, chartSnapshot] = await Promise.all([
+  const [patientSnapshot, chartSnapshot, matchingRows] = await Promise.all([
     getDoc(patientRef),
     getDoc(chartRef),
+    matchingPatientRows(database, safePatient),
   ]);
 
   if (patientSnapshot.exists() || chartSnapshot.exists()) {
     throw new Error(duplicateCaseNumberMessage);
   }
 
-  if (await overlappingPatientStayExists(database, safePatient)) {
+  if (overlappingPatientStayExistsInRows(matchingRows, safePatient)) {
     throw new Error(duplicatePatientStayMessage);
   }
-  if (await patientAdmissionBeforeFirstRecordExists(database, safePatient)) {
+  if (patientAdmissionBeforeFirstRecordExistsInRows(matchingRows, safePatient)) {
     throw new Error(patientBeforeFirstRecordMessage);
   }
 
@@ -640,6 +664,30 @@ export async function deletePatient(caseNumber) {
   const chartSnapshot = await getDoc(chartRef);
   const chart = chartSnapshot.exists() ? chartSnapshot.data() : null;
   const cancellationTime = new Date().toISOString();
+  const voidedTransactionUpdate = {
+    releaseStatus: "voided",
+    remarks: "Patient was deleted. All related transactions were voided.",
+    voidedAt: cancellationTime,
+    updatedAt: serverTimestamp(),
+  };
+  const trackingCollections = [
+    "medicalDocumentRequests",
+    "labResultRequests",
+    "vitalCertificateRequests",
+  ];
+  const trackingSnapshots = await Promise.all(
+    trackingCollections.map((collectionName) => (
+      getDocs(query(collection(database, collectionName), where("caseNumber", "==", caseNumber)))
+    )),
+  );
+
+  const addVoidedTrackingUpdates = (batch) => {
+    trackingCollections.forEach((collectionName, index) => {
+      trackingSnapshots[index].docs.forEach((trackingSnapshot) => {
+        batch.update(doc(database, collectionName, trackingSnapshot.id), voidedTransactionUpdate);
+      });
+    });
+  };
 
   if (chart?.status === "borrowed") {
     const cancelledLogUpdate = {
@@ -662,6 +710,7 @@ export async function deletePatient(caseNumber) {
     borrowedLogsSnapshot.docs.forEach((logSnapshot) => {
       batch.update(doc(database, "chartLogs", logSnapshot.id), cancelledLogUpdate);
     });
+    addVoidedTrackingUpdates(batch);
     batch.delete(doc(database, "patients", caseNumber));
     batch.delete(chartRef);
 
@@ -674,6 +723,7 @@ export async function deletePatient(caseNumber) {
   }
 
   const batch = writeBatch(database);
+  addVoidedTrackingUpdates(batch);
   batch.delete(doc(database, "patients", caseNumber));
   batch.delete(chartRef);
   await batch.commit();

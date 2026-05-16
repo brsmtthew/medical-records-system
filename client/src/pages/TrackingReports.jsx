@@ -1,0 +1,523 @@
+import React, { useEffect, useMemo, useState } from "react";
+import DashboardLayout from "../layouts/DashboardLayout";
+import FloatingToast from "../components/FloatingToast";
+import { FileText, RotateCcw, Search, Trash2 } from "lucide-react";
+import {
+  deleteTrackingRow,
+  deleteTrackingRowType,
+  subscribeToTrackingRows,
+} from "../services/trackingService";
+import {
+  optionLabel,
+  relationshipOptions,
+  releaseStatuses,
+  trackingReportConfigs,
+} from "../utils/trackingConfigs";
+import { formatDisplayDate } from "../utils/dateFormatting";
+import { recordTimeValue } from "../utils/recordSorting";
+import { useAuth } from "../context/useAuth";
+
+function reportSearchValue(row, columns) {
+  return columns.map((column) => column.value(row)).join(" ").toLowerCase();
+}
+
+function isVitalConfig(config) {
+  return config.collection === "vitalCertificateRequests";
+}
+
+function rowHasCertificateType(row, type) {
+  return Array.isArray(row.typeList) && row.typeList.includes(type);
+}
+
+function rowMatchesSelectedType(config, row, type) {
+  if (!config.typeOptions || !type) return true;
+  if (isVitalConfig(config)) return rowHasCertificateType(row, type);
+  if (config.typeFilterKey) return row[config.typeFilterKey] === type;
+  return true;
+}
+
+function dateOnly(value) {
+  if (!value) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+function rowMatchesDateRange(row, startDate, endDate) {
+  if (!startDate && !endDate) return true;
+
+  const dates = ["requestedAt", "reviewedAt", "releasedAt"]
+    .map((key) => dateOnly(row[key]))
+    .filter(Boolean);
+
+  return dates.some((date) => (
+    (!startDate || date >= startDate) && (!endDate || date <= endDate)
+  ));
+}
+
+function cellClassName(column) {
+  const base = "p-3 align-top text-xs font-bold leading-snug text-slate-700 xl:p-4 xl:text-sm";
+  return column.wrap
+    ? `${base} whitespace-pre-line break-words`
+    : `${base} overflow-hidden text-ellipsis whitespace-nowrap`;
+}
+
+function formatReportDateTime(value) {
+  const time = recordTimeValue(value);
+  if (!time) return "N/A";
+
+  const date = new Date(time);
+  const timePart = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${formatDisplayDate(time)}\n${timePart}`;
+}
+
+function receiverLabel(row) {
+  const receiver = row.receivedBy || "N/A";
+  const relationship = optionLabel(relationshipOptions, row.receiverRelationship);
+  return row.receiverRelationship ? `${receiver}\n${relationship}` : receiver;
+}
+
+function statusLabel(row) {
+  if (row.releaseStatus === "canceled") return "Canceled";
+  return optionLabel(releaseStatuses, row.releaseStatus || "forRelease");
+}
+
+function statusBadge(row) {
+  const status = row.releaseStatus || "forRelease";
+  const classes = status === "released"
+    ? "border-green-200 bg-green-50 text-green-700"
+    : ["canceled", "voided"].includes(status)
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : "border-blue-200 bg-blue-50 text-blue-700";
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${classes}`}>
+      {statusLabel(row)}
+    </span>
+  );
+}
+
+function getMedicalReportColumns() {
+  return [
+    {
+      label: "Patient / Case No.",
+      width: "w-[22%]",
+      wrap: true,
+      value: (row) => `${row.patientName || "N/A"}\n${row.caseNumber || "N/A"}`,
+    },
+    {
+      label: "Status",
+      width: "w-[13%]",
+      wrap: true,
+      value: statusLabel,
+      render: statusBadge,
+    },
+    {
+      label: "Date Requested",
+      width: "w-[14%]",
+      wrap: true,
+      value: (row) => formatReportDateTime(row.requestedAt),
+    },
+    {
+      label: "Date Released",
+      width: "w-[14%]",
+      wrap: true,
+      value: (row) => formatReportDateTime(row.releasedAt),
+    },
+    {
+      label: "Received By / Relationship",
+      width: "w-[18%]",
+      wrap: true,
+      value: receiverLabel,
+    },
+    {
+      label: "Remarks",
+      width: "w-[19%]",
+      wrap: true,
+      value: (row) => row.remarks || "",
+    },
+  ];
+}
+
+function reportStatusOptions(config) {
+  const hasCanceled = config.statusOptions.some((option) => option.value === "canceled");
+  return hasCanceled
+    ? config.statusOptions
+    : [...config.statusOptions, { value: "canceled", label: "Canceled" }];
+}
+
+function FilterField({ label, children }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function ConfirmationModal({ confirmation, onCancel, pendingAction }) {
+  if (!confirmation) return null;
+
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <div className="mrs-panel w-full max-w-md rounded-2xl p-5">
+        <p className="text-lg font-black uppercase text-slate-800">{confirmation.title}</p>
+        <p className="mt-2 text-sm font-semibold text-slate-500">{confirmation.message}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onCancel} className="mrs-soft-button rounded-xl px-4 py-3 text-xs font-black uppercase">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={confirmation.onConfirm}
+            disabled={Boolean(pendingAction)}
+            className="mrs-primary-button rounded-xl px-4 py-3 text-xs font-black uppercase disabled:opacity-60"
+          >
+            {pendingAction ? "Working..." : confirmation.confirmLabel || "Confirm"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function TrackingReports() {
+  const { isAdmin } = useAuth();
+  const [activeCollection, setActiveCollection] = useState(trackingReportConfigs[0].collection);
+  const [rowsByCollection, setRowsByCollection] = useState({});
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [selectedType, setSelectedType] = useState(trackingReportConfigs[0].typeOptions?.[0]?.value || "");
+  const [loadError, setLoadError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [pendingAction, setPendingAction] = useState("");
+  const [confirmation, setConfirmation] = useState(null);
+  const activeConfig = trackingReportConfigs.find((config) => config.collection === activeCollection) || trackingReportConfigs[0];
+  const activeColumns = useMemo(() => getMedicalReportColumns(), []);
+  const rows = useMemo(
+    () => rowsByCollection[activeConfig.collection] || [],
+    [activeConfig.collection, rowsByCollection],
+  );
+
+  useEffect(() => {
+    const unsubscribers = trackingReportConfigs.map((config) => (
+      subscribeToTrackingRows(
+        config.collection,
+        (nextRows) => setRowsByCollection((current) => ({ ...current, [config.collection]: nextRows })),
+        (error) => setLoadError(error.message || "Unable to load tracking reports."),
+      )
+    ));
+
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, []);
+
+  const filteredRows = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    return rows.filter((row) => {
+      const matchesSearch = !search || reportSearchValue(row, activeColumns).includes(search);
+      const matchesStatus = statusFilter === "all" || (
+        activeConfig.matchesStatus
+          ? activeConfig.matchesStatus(row, statusFilter)
+          : activeConfig.statusValue(row) === statusFilter
+      );
+      const matchesDate = rowMatchesDateRange(row, startDate, endDate);
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  }, [activeColumns, activeConfig, endDate, rows, searchTerm, startDate, statusFilter]);
+  const displayedRows = activeConfig.typeOptions
+    ? filteredRows.filter((row) => rowMatchesSelectedType(activeConfig, row, selectedType))
+    : filteredRows;
+  const activeStats = activeConfig.stats(displayedRows);
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setStartDate("");
+    setEndDate("");
+  };
+
+  const deleteRow = async (row) => {
+    if (!isAdmin) {
+      setLoadError("Only admins can delete report records.");
+      return;
+    }
+
+    try {
+      setPendingAction(`delete-${row.id}`);
+      if (isVitalConfig(activeConfig) && Array.isArray(row.typeList) && row.typeList.length > 1) {
+        await deleteTrackingRowType(activeConfig.collection, row.id, selectedType);
+      } else {
+        await deleteTrackingRow(activeConfig.collection, row.id);
+      }
+      setSuccessMessage("Report record was deleted.");
+      setConfirmation(null);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error.message || "Unable to delete report record.");
+    } finally {
+      setPendingAction("");
+    }
+  };
+
+  const confirmDeleteRow = (row) => {
+    if (!isAdmin) {
+      setLoadError("Only admins can delete report records.");
+      return;
+    }
+
+    const deleteMessage = isVitalConfig(activeConfig) && Array.isArray(row.typeList) && row.typeList.length > 1
+      ? `Delete only the ${selectedType} type from this report record? Other selected types will stay.`
+      : "Delete this report record?";
+    setConfirmation({
+      title: "Delete Report Record",
+      message: deleteMessage,
+      confirmLabel: "Delete",
+      onConfirm: () => deleteRow(row),
+    });
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
+        <div className="no-print flex shrink-0 flex-col justify-between gap-3 xl:flex-row xl:items-center">
+          <div>
+            <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
+              Medical <span className="text-green-700">Reports</span>
+            </h1>
+            <p className="text-xs font-medium text-slate-500">
+              Preview medical document, lab result, and vital certificate reports.
+            </p>
+          </div>
+        </div>
+
+        <div className="no-print grid shrink-0 grid-cols-1 gap-2 md:grid-cols-3">
+          {trackingReportConfigs.map((config) => (
+            <button
+              key={config.collection}
+              type="button"
+              onClick={() => {
+                setActiveCollection(config.collection);
+                setSearchTerm("");
+                setStatusFilter("all");
+                setStartDate("");
+                setEndDate("");
+                setSelectedType(config.typeOptions?.[0]?.value || "");
+              }}
+              className={`rounded-xl border p-3 text-left transition-colors ${
+                activeConfig.collection === config.collection
+                  ? "border-green-300 bg-green-50"
+                  : "mrs-surface"
+              }`}
+            >
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{config.pluralLabel}</p>
+              <p className="mt-1 text-xl font-black text-slate-800">{(rowsByCollection[config.collection] || []).length}</p>
+            </button>
+          ))}
+        </div>
+
+        <div className="mrs-panel mrs-print-area flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl">
+          <div className="mrs-report-header shrink-0 border-b border-slate-100 bg-white p-5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-green-700">TGMCI Medical Records</p>
+            <div className="mt-2 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+              <div>
+                <h2 className="text-xl font-black uppercase text-slate-900">{activeConfig.pluralLabel} Report</h2>
+                <p className="text-xs font-semibold text-slate-500">
+                  Generated {new Date().toLocaleString()}
+                </p>
+              </div>
+              <p className="text-xs font-black uppercase text-slate-500">
+                Showing {displayedRows.length} of {rows.length} rows
+              </p>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              {activeStats.map((item) => (
+                <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
+                  <p className="mt-1 text-lg font-black text-slate-800">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="no-print shrink-0 space-y-3 border-b border-slate-100 bg-slate-50 p-3">
+            <div className="grid gap-2 lg:grid-cols-[1fr_auto_auto_auto_auto]">
+              <FilterField label="Search">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder={activeConfig.searchPlaceholder}
+                    className="mrs-field w-full rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold"
+                  />
+                </div>
+              </FilterField>
+              <FilterField label="Start Date">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                />
+              </FilterField>
+              <FilterField label="End Date">
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(event) => setEndDate(event.target.value)}
+                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                />
+              </FilterField>
+              <FilterField label="Status">
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                >
+                  <option value="all">All Status</option>
+                  {reportStatusOptions(activeConfig).map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </FilterField>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="mrs-soft-button mt-4 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
+              >
+                <RotateCcw size={15} />
+                Reset
+              </button>
+            </div>
+            {activeConfig.typeOptions && (
+              <div className="flex flex-wrap gap-2">
+                {activeConfig.typeOptions.map((type) => (
+                  <button
+                    key={type.value}
+                    type="button"
+                    onClick={() => setSelectedType(type.value)}
+                    className={`rounded-xl border px-3 py-2 text-[10px] font-black uppercase transition-colors ${
+                      selectedType === type.value
+                        ? "border-green-700 bg-green-700 text-white"
+                        : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:text-green-700"
+                    }`}
+                  >
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+            {(activeConfig.typeOptions ? activeConfig.typeOptions.filter((type) => type.value === selectedType) : [{ value: "all", label: "" }]).map((type) => {
+              const tableRows = activeConfig.typeOptions
+                ? displayedRows
+                : filteredRows;
+
+              return (
+                <div key={type.value} className={activeConfig.typeOptions ? "border-b border-slate-100 last:border-b-0" : ""}>
+                  {activeConfig.typeOptions && (
+                    <div className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3">
+                      <p className="text-sm font-black uppercase text-slate-800">{type.label} {activeConfig.typeHeadingSuffix || "Records"}</p>
+                      <p className="text-xs font-bold text-slate-400">{tableRows.length} record(s)</p>
+                    </div>
+                  )}
+                  <table className="w-full table-fixed text-left">
+                    <thead className="sticky top-0 z-10 bg-white">
+                      <tr className="border-b border-slate-100">
+                        {activeColumns.map((column) => (
+                          <th key={column.label} className={`${column.width || "w-[14%]"} break-words p-3 align-top text-[9px] font-black uppercase leading-tight tracking-widest text-slate-400 xl:p-4 xl:text-[10px]`}>
+                            {column.label}
+                          </th>
+                        ))}
+                        {isAdmin && (
+                          <th className="w-[9%] p-3 text-right text-[9px] font-black uppercase tracking-widest text-slate-400 xl:text-[10px]">
+                            Actions
+                          </th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {tableRows.map((row) => (
+                        <tr key={`${type.value}-${row.id}`} className="mrs-table-row">
+                          {activeColumns.map((column) => (
+                            <td
+                              key={column.label}
+                              title={String(column.value(row) || "")}
+                              className={cellClassName(column)}
+                            >
+                              {column.render ? column.render(row) : column.value(row)}
+                            </td>
+                          ))}
+                          {isAdmin && (
+                            <td className="p-3 align-top xl:p-4">
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => confirmDeleteRow(row)}
+                                  disabled={pendingAction === `delete-${row.id}`}
+                                  className="rounded-xl border border-red-100 p-2 text-red-500 hover:border-red-300 disabled:opacity-60"
+                                  aria-label="Delete report record"
+                                  title="Delete report record"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+
+                      {tableRows.length === 0 && (
+                        <tr>
+                          <td colSpan={activeColumns.length + (isAdmin ? 1 : 0)} className="p-10 text-center">
+                            <FileText size={38} className="mx-auto mb-3 text-slate-300" />
+                            <p className="font-black uppercase text-slate-700">No Report Rows</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-400">
+                              Add records or adjust report filters.
+                            </p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+          </div>
+          <div className="shrink-0 border-t border-slate-100 bg-slate-50 p-3 text-xs font-bold text-slate-500">
+            Showing {displayedRows.length} of {rows.length} report rows.
+          </div>
+        </div>
+      </div>
+
+      <FloatingToast
+        toast={
+          loadError
+            ? { type: "error", message: loadError }
+            : successMessage
+              ? { type: "success", title: "Medical Reports", message: successMessage }
+              : null
+        }
+        onClose={() => {
+          setLoadError("");
+          setSuccessMessage("");
+        }}
+      />
+      <ConfirmationModal
+        confirmation={confirmation}
+        onCancel={() => setConfirmation(null)}
+        pendingAction={pendingAction}
+      />
+    </DashboardLayout>
+  );
+}

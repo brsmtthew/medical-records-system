@@ -231,6 +231,23 @@
 }
 
 @layer utilities {
+  html,
+  body,
+  .mrs-shell,
+  .mrs-shell * {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  .mrs-shell::-webkit-scrollbar,
+  .mrs-shell *::-webkit-scrollbar {
+    display: none;
+    height: 0;
+    width: 0;
+  }
+
   body :is(.font-semibold, .font-bold, .font-extrabold, .font-black):not(input):not(textarea):not(select) {
     text-transform: uppercase;
   }
@@ -454,6 +471,56 @@
   html.dark .mrs-logo-frame {
     border-color: rgb(71 85 105);
     background-color: rgb(255 255 255) !important;
+  }
+
+  html.dark.soft-light body {
+    background: rgb(22 31 47);
+    color: rgb(226 232 240);
+  }
+
+  html.dark.soft-light .mrs-shell {
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 34rem),
+      radial-gradient(circle at bottom right, rgba(20, 184, 166, 0.10), transparent 30rem),
+      linear-gradient(135deg, rgb(23 33 51), rgb(31 43 62));
+    background-size: 38px 38px, 38px 38px, auto, auto, auto;
+  }
+
+  html.dark.soft-light .mrs-surface,
+  html.dark.soft-light .mrs-panel,
+  html.dark.soft-light .mrs-card,
+  html.dark.soft-light .bg-white {
+    border-color: rgb(71 85 105);
+    background-color: rgba(30, 41, 59, 0.92);
+    color: rgb(226 232 240);
+  }
+
+  html.dark.soft-light .mrs-navbar {
+    border-color: rgb(71 85 105);
+    background: rgba(30, 41, 59, 0.88);
+    box-shadow: 0 12px 26px rgba(2, 6, 23, 0.24);
+  }
+
+  html.dark.soft-light .mrs-sidebar {
+    border-color: rgb(71 85 105);
+    background: linear-gradient(180deg, rgb(22 31 47), rgb(37 49 69), rgb(22 31 47));
+  }
+
+  html.dark.soft-light .bg-slate-50,
+  html.dark.soft-light .bg-slate-100,
+  html.dark.soft-light .bg-gray-50 {
+    background-color: rgb(39 52 72);
+  }
+
+  html.dark.soft-light .mrs-field,
+  html.dark.soft-light input,
+  html.dark.soft-light select,
+  html.dark.soft-light textarea {
+    border-color: rgb(71 85 105);
+    background-color: rgb(30 41 59);
+    color: rgb(226 232 240);
   }
 
   html.dark .bg-slate-50,
@@ -752,5 +819,50 @@
 
   body :is(button).border-black {
     border-color: rgb(203 213 225);
+  }
+
+  @media print {
+    body {
+      background: #ffffff !important;
+      color: #0f172a !important;
+    }
+
+    .no-print,
+    .mrs-sidebar,
+    .mrs-navbar {
+      display: none !important;
+    }
+
+    .mrs-print-area {
+      border: 0 !important;
+      box-shadow: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+    }
+
+    .mrs-print-area,
+    .mrs-print-area * {
+      background: #ffffff !important;
+      color: #0f172a !important;
+    }
+
+    .mrs-report-header {
+      page-break-after: avoid;
+    }
+
+    .mrs-print-area table {
+      border-collapse: collapse !important;
+      min-width: 0 !important;
+      width: 100% !important;
+    }
+
+    .mrs-print-area th,
+    .mrs-print-area td {
+      border: 1px solid #94a3b8 !important;
+      font-size: 10px !important;
+      padding: 6px !important;
+      vertical-align: top !important;
+    }
   }
 }

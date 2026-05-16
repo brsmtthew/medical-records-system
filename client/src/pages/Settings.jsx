@@ -47,6 +47,7 @@ import {
   subscribeToAuditLogs,
 } from "../services/chartService";
 import {
+  applySystemTheme,
   defaultSystemSettings,
   readSystemSettings,
   saveSystemSettings,
@@ -243,11 +244,7 @@ export default function Settings({ initialTab = "rules" }) {
     setSuccessMessage("");
     if (key === "appearanceMode" || key === "lightComfortMode") {
       const nextSettings = { ...settings, [key]: value };
-      document.documentElement.classList.toggle("dark", nextSettings.appearanceMode === "dark");
-      document.documentElement.classList.toggle(
-        "soft-light",
-        nextSettings.appearanceMode !== "dark" && nextSettings.lightComfortMode === "soft",
-      );
+      applySystemTheme(nextSettings);
     }
   };
 
@@ -255,11 +252,7 @@ export default function Settings({ initialTab = "rules" }) {
   const resetSettings = () => {
     setSettings(defaultSystemSettings);
     saveSystemSettings(defaultSystemSettings);
-    document.documentElement.classList.toggle("dark", defaultSystemSettings.appearanceMode === "dark");
-    document.documentElement.classList.toggle(
-      "soft-light",
-      defaultSystemSettings.appearanceMode !== "dark" && defaultSystemSettings.lightComfortMode === "soft",
-    );
+    applySystemTheme(defaultSystemSettings);
     window.dispatchEvent(new CustomEvent("mrs-settings-updated"));
     setSavedMessage("Settings restored to defaults.");
     setIsResetConfirmOpen(false);
@@ -733,12 +726,12 @@ export default function Settings({ initialTab = "rules" }) {
                       </div>
                       <div className="mt-3 rounded-xl border border-slate-200 bg-white p-2.5">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          Light Comfort
+                          Comfort
                         </p>
                         <div className="mt-2 grid grid-cols-2 gap-2">
                           {[
-                            { id: "normal", label: "Normal Light" },
-                            { id: "soft", label: "Reduce Light" },
+                            { id: "normal", label: "Standard" },
+                            { id: "soft", label: "Reduce Glare" },
                           ].map((mode) => (
                             <button
                               key={mode.id}

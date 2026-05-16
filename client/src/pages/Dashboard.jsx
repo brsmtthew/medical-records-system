@@ -318,7 +318,6 @@ export default function Dashboard() {
     : [{ name: "No Logs", borrowed: 0, returned: 0 }];
   const recentActivity = [...periodMovementEvents]
     .sort((first, second) => second.date.getTime() - first.date.getTime())
-    .slice(0, 2)
     .map((event) => ({
     action: event.type === "borrowed" ? "Borrowed" : "Returned",
     patientName: event.patientName,
@@ -555,7 +554,7 @@ export default function Dashboard() {
             </div>
             <span className="text-[10px] font-black uppercase text-slate-400">{periodLabel}</span>
           </div>
-          <div className="grid min-h-0 flex-1 grid-rows-2 divide-y divide-slate-100">
+          <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
             {recentActivity.map((item) => (
               <div key={`${item.action}-${item.chart}`} className="flex items-center justify-between gap-3 px-3 py-2">
                 <div>
@@ -587,7 +586,6 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-            {recentActivity.length === 1 && <div aria-hidden="true" />}
           </div>
         </Motion.div>
 

@@ -4,9 +4,7 @@ import FloatingToast from "../components/FloatingToast";
 import ReportDeleteModal from "../modals/reports/ReportDeleteModal";
 import {
   CalendarDays,
-  Download,
   FileText,
-  Printer,
   RotateCcw,
   Search,
   Trash2,
@@ -19,6 +17,8 @@ import { formatDisplayDate } from "../utils/dateFormatting";
 import { useAuth } from "../context/useAuth";
 import { readSystemSettings } from "../utils/systemSettings";
 import { recordTimeValue } from "../utils/recordSorting";
+
+const rowsPerPage = 25;
 
 // Chooses the timestamp that best represents the visible activity for each log row.
 function getLogActivityDate(log) {
@@ -48,81 +48,6 @@ function toDateKey(value) {
   return new Date(time).toISOString().slice(0, 10);
 }
 
-// Escapes values before inserting them into the Excel-compatible HTML workbook.
-function escapeExcelValue(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-// Builds and downloads a simple Excel-compatible report from the filtered table rows.
-function downloadExcel(rows, fileName) {
-  const headers = [
-    "Patient",
-    "People",
-    "Action",
-    "Timeline",
-    "Remarks",
-  ];
-
-  const tableRows = rows.map((log) => {
-    const people = [
-      `Borrowed: ${log.borrowedBy || "N/A"}`,
-      log.action === "returned" ? `Returned: ${log.returnedBy || log.borrowedBy || "N/A"}` : "",
-      log.department || "",
-    ].filter(Boolean);
-    const timeline = [
-      `Borrowed: ${formatDateTime(log.borrowedAt || log.timestamp)}`,
-      log.action === "returned" ? `Returned: ${formatDateTime(log.returnedAt)}` : "",
-      log.action === "canceled" ? `Canceled: ${formatDateTime(log.canceledAt || log.updatedAt)}` : "",
-    ].filter(Boolean);
-
-    return [
-      `${log.patientName || ""}\n${log.caseNumber || ""}`,
-      people.join("\n"),
-      log.action === "borrowed" ? "borrowed" : log.action === "canceled" ? "canceled" : "returned",
-      timeline.join("\n"),
-      log.remarks || "",
-    ];
-  });
-
-  const workbook = `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-      <head>
-        <meta charset="UTF-8" />
-        <style>
-          table { border-collapse: collapse; }
-          th, td { border: 1px solid #94a3b8; padding: 8px; vertical-align: top; white-space: pre-wrap; }
-          th { background: #dcfce7; font-weight: 700; }
-        </style>
-      </head>
-      <body>
-        <table>
-          <thead>
-            <tr>${headers.map((header) => `<th>${escapeExcelValue(header)}</th>`).join("")}</tr>
-          </thead>
-          <tbody>
-            ${tableRows
-              .map((row) => `<tr>${row.map((value) => `<td>${escapeExcelValue(value)}</td>`).join("")}</tr>`)
-              .join("")}
-          </tbody>
-        </table>
-      </body>
-    </html>
-  `;
-  const blob = new Blob([workbook], {
-    type: "application/vnd.ms-excel;charset=utf-8;",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${fileName || "chart-activity-report"}.xls`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function Reports() {
   const { isAdmin } = useAuth();
   const canManageReports = isAdmin;
@@ -139,7 +64,6 @@ export default function Reports() {
   const [infoMessage, setInfoMessage] = useState("");
   const [successMeta, setSuccessMeta] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
   const [isDeletingLog, setIsDeletingLog] = useState(false);
 
   useEffect(() => {
@@ -261,24 +185,6 @@ export default function Reports() {
             </p>
           </div>
 
-          {canManageReports && (
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={() => downloadExcel(filteredLogs, systemSettings.reportExportFileName)}
-                className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase transition"
-              >
-                <Download size={17} />
-                Export Excel
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="mrs-soft-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase transition"
-              >
-                <Printer size={17} />
-                Print
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="grid shrink-0 grid-cols-3 gap-2">
@@ -314,98 +220,99 @@ export default function Reports() {
           <div className="mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-2">
             <div className="p-3 border-b border-slate-100 bg-slate-50 space-y-3 shrink-0">
               <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
-                <div className="relative">
-                  <Search
-                    size={17}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
+                <label className="block">
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">Search</span>
+                  <div className="relative">
+                    <Search
+                      size={17}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      value={searchTerm}
+                      onChange={(event) => {
+                        setSearchTerm(event.target.value);
+                        setCurrentPage(1);
+                      }}
+                      placeholder="Search patient, case number, borrower, returner, or department"
+                      className="mrs-field w-full rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold"
+                    />
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">Start Date</span>
                   <input
-                    value={searchTerm}
+                    type="date"
+                    value={startDate}
                     onChange={(event) => {
-                      setSearchTerm(event.target.value);
+                      setStartDate(event.target.value);
                       setCurrentPage(1);
                     }}
-                    placeholder="Search patient, case number, borrower, returner, or department"
-                    className="mrs-field w-full rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold"
+                    className="mrs-field w-full rounded-xl py-2.5 px-3 text-sm font-bold"
                   />
-                </div>
-
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(event) => {
-                    setStartDate(event.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="mrs-field rounded-xl py-2.5 px-3 text-sm font-bold"
-                />
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(event) => {
-                    setEndDate(event.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="mrs-field rounded-xl py-2.5 px-3 text-sm font-bold"
-                />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">End Date</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(event) => {
+                      setEndDate(event.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="mrs-field w-full rounded-xl py-2.5 px-3 text-sm font-bold"
+                  />
+                </label>
                 <button
                   onClick={resetFilters}
-                  className="px-4 py-2.5 rounded-xl border-2 border-slate-200 text-xs font-black uppercase text-slate-500 hover:border-black hover:text-black transition-colors"
+                  className="mt-4 px-4 py-2.5 rounded-xl border-2 border-slate-200 text-xs font-black uppercase text-slate-500 hover:border-black hover:text-black transition-colors"
                 >
                   Reset
                 </button>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {["all", "borrowed", "returned", "canceled"].map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => {
-                      setActionFilter(filter);
-                      setCurrentPage(1);
-                    }}
-                    className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase border-2 transition-colors ${
-                      actionFilter === filter
-                        ? "bg-green-700 text-white border-green-700"
-                        : "bg-white text-slate-500 border-slate-200 hover:border-green-200 hover:text-green-700"
-                    }`}
-                  >
-                    {filter}
-                  </button>
-                ))}
-                <select
-                  value={rowsPerPage}
-                  onChange={(event) => {
-                    setRowsPerPage(Number(event.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="mrs-field rounded-xl px-3 py-2 text-[11px] font-black uppercase"
-                  aria-label="Rows per report page"
-                >
-                  <option value={10}>10 Rows</option>
-                  <option value={25}>25 Rows</option>
-                  <option value={50}>50 Rows</option>
-                </select>
+              <div className="flex flex-wrap items-end gap-2">
+                <div>
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">Action</span>
+                  <div className="flex flex-wrap gap-2">
+                    {["all", "borrowed", "returned", "canceled"].map((filter) => (
+                      <button
+                        key={filter}
+                        onClick={() => {
+                          setActionFilter(filter);
+                          setCurrentPage(1);
+                        }}
+                        className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase border-2 transition-colors ${
+                          actionFilter === filter
+                            ? "bg-green-700 text-white border-green-700"
+                            : "bg-white text-slate-500 border-slate-200 hover:border-green-200 hover:text-green-700"
+                        }`}
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
-              <table className={`w-full table-fixed text-left ${canManageReports ? "min-w-[980px]" : "min-w-[880px]"}`}>
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              <table className="w-full table-fixed text-left">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-slate-100 bg-white">
-                    <th className="w-[19%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="w-[19%] break-words p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Patient
                     </th>
-                    <th className="w-[22%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="w-[22%] break-words p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       People
                     </th>
-                    <th className="w-[12%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Action
+                    <th className="w-[12%] break-words p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Status
                     </th>
-                    <th className="w-[24%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="w-[24%] break-words p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Timeline
                     </th>
-                    <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="w-[14%] break-words p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Remarks
                     </th>
                     {canManageReports && (

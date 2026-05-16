@@ -3,18 +3,13 @@ import { BrowserRouter as Router } from "react-router-dom";
 
 import { AuthProvider } from "./context/AuthProvider";
 import AppRoutes from "./routes/AppRoutes";
-import { readSystemSettings } from "./utils/systemSettings";
+import { applySystemTheme } from "./utils/systemSettings";
 
 export default function App() {
   useLayoutEffect(() => {
     // Applies saved theme classes before routes paint so pages do not flash the wrong mode.
     const applyTheme = () => {
-      const { appearanceMode, lightComfortMode } = readSystemSettings();
-      document.documentElement.classList.toggle("dark", appearanceMode === "dark");
-      document.documentElement.classList.toggle(
-        "soft-light",
-        appearanceMode !== "dark" && lightComfortMode === "soft",
-      );
+      applySystemTheme();
     };
 
     applyTheme();

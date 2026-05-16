@@ -44,3 +44,12 @@ export function saveSystemSettings(settings) {
 
   localStorage.setItem(settingsStorageKey, JSON.stringify(cleanedSettings));
 }
+
+// Applies workstation theme classes consistently across app startup, navbar, and settings.
+export function applySystemTheme(settings = readSystemSettings()) {
+  const isDarkMode = settings.appearanceMode === "dark";
+  const isComfortMode = settings.lightComfortMode === "soft";
+
+  document.documentElement.classList.toggle("dark", isDarkMode);
+  document.documentElement.classList.toggle("soft-light", isComfortMode);
+}

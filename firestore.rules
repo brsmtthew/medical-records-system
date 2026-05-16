@@ -92,6 +92,21 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /medicalDocumentRequests/{requestId} {
+      allow read, create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /labResultRequests/{requestId} {
+      allow read, create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /vitalCertificateRequests/{requestId} {
+      allow read, create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
     match /auditLogs/{logId} {
       allow create: if isActiveStaff() && request.resource.data.userId == request.auth.uid;
       allow read, delete: if isAdmin();

@@ -8,6 +8,7 @@
 **Document Type:** Build Phase Documentation  
 **Prepared For:** Medical Records System Development and Deployment  
 **Prepared On:** May 10, 2026  
+**Last Updated:** May 16, 2026  
 
 ---
 
@@ -29,6 +30,8 @@ The system is designed for hospital medical records workflows where authorized p
 - Generate and download patient barcode labels.
 - Track physical chart borrowing and returning.
 - View chart movement reports.
+- Track medical documents, lab result requests, and vital certificate releases.
+- Preview and export system reports from a centralized print reports page.
 - Monitor dashboard analytics.
 - Manage staff and administrator access.
 - Configure departments, admission locations, and outpatient departments.
@@ -129,6 +132,7 @@ medical-records-system/
     package.json
   docs/
     BUILD_PHASE_DOCUMENT.md
+    SYSTEM_FLOW.md
   firebase.json
   firestore.rules
   package.json
@@ -181,12 +185,48 @@ Primary file:
 
 ### 6.5 Reports Module
 
-The reports module displays chart movement logs, filters activity, paginates report rows, prints report views, and exports Excel-compatible files for administrators.
+The reports module displays chart movement logs, filters activity, supports medical transaction reporting, and provides centralized print/export previews.
 
 Primary files:
 
 - `client/src/pages/Reports.jsx`
+- `client/src/pages/TrackingReports.jsx`
+- `client/src/pages/PrintReports.jsx`
 - `client/src/services/chartService.js`
+- `client/src/services/trackingService.js`
+
+### 6.5.1 Medical Document Tracking Module
+
+The medical document tracking module records requests for medical certificates, clinical abstracts, and certificates of confinement. New rows begin as `forRelease`, and release actions record receiver details, relationship, remarks, release timestamp, and logged-in releaser.
+
+Primary files:
+
+- `client/src/pages/MedicalDocuments.jsx`
+- `client/src/pages/TrackingPage.jsx`
+- `client/src/utils/trackingConfigs.js`
+- `client/src/services/trackingService.js`
+
+### 6.5.2 Lab Result Request Module
+
+The lab result module records paid and unpaid lab result copy requests. Each copy is calculated at PHP 2.00. Lab results cannot be released while unpaid; the release modal allows payment status to be updated before release.
+
+Primary files:
+
+- `client/src/pages/LabResults.jsx`
+- `client/src/pages/TrackingPage.jsx`
+- `client/src/utils/trackingConfigs.js`
+- `client/src/services/trackingService.js`
+
+### 6.5.3 Vital Certificate Tracking Module
+
+The vital certificate module records birth, death, and fetal death certificate review and release workflows. Records must be reviewed before release. The page uses type toggles so each certificate table displays only applicable fields.
+
+Primary files:
+
+- `client/src/pages/VitalCertificates.jsx`
+- `client/src/pages/TrackingPage.jsx`
+- `client/src/utils/trackingConfigs.js`
+- `client/src/services/trackingService.js`
 
 ### 6.6 Dashboard Module
 
@@ -215,6 +255,17 @@ Primary files:
 - `client/src/pages/Settings.jsx`
 - `client/src/utils/systemSettings.js`
 - `client/src/utils/notificationLog.js`
+
+### 6.9 Navigation and Layout Module
+
+The layout module provides the shared dashboard shell, organized sidebar sections, navbar account controls, notification dropdown, and global display behavior such as hidden scrollbars while preserving scroll interaction.
+
+Primary files:
+
+- `client/src/layouts/DashboardLayout.jsx`
+- `client/src/components/Sidebar.jsx`
+- `client/src/components/Navbar.jsx`
+- `client/src/index.css`
 
 ---
 
@@ -387,6 +438,8 @@ Security rules enforce:
 - Self-account read/update restrictions.
 - Audit log creation tied to the signed-in user.
 - Department management restricted to administrators.
+- Tracking collections protected for authenticated active staff/admin users.
+- Destructive tracking/report actions restricted to administrators where applicable.
 
 ---
 
@@ -488,6 +541,9 @@ The current build includes performance-oriented behavior for CRUD operations:
 - Main confirmation buttons show immediate pending states such as `Saving...` or `Deleting...`.
 - Duplicate click submissions are blocked while a write is in progress.
 - Realtime Firestore listeners update tables after successful writes.
+- Medical document and lab result deletes update the matching active transaction to `canceled` instead of creating duplicate report rows.
+- Toast notifications render above modal blur layers so validation messages remain visible during release actions.
+- Scrollbars are visually hidden in the app shell while mouse wheel, touchpad, keyboard, and touch scrolling remain active.
 
 These controls reduce perceived delay after button clicks and reduce avoidable Firestore round trips.
 
@@ -504,6 +560,8 @@ These controls reduce perceived delay after button clicks and reduce avoidable F
 | Staff/admin role misconfiguration | Incorrect access control | Verify users collection role and account status |
 | Large frontend bundle | Slower initial load | Consider route-level code splitting in future releases |
 | Network latency to Firestore | Delayed CRUD confirmation | Keep pending UI states and minimize extra reads |
+| Duplicate transaction display | Reports become confusing | Cancel/delete workflows update existing matching transaction rows |
+| Modal validation hidden by overlay | User may miss important warnings | Toast layer is kept above modal blur layers |
 
 ---
 
@@ -523,6 +581,10 @@ Before tagging or submitting a release, confirm:
 - Patient create, update, delete, and barcode download are tested.
 - Chart borrow and return workflows are tested.
 - Reports filtering, printing, pagination, and export are tested.
+- Medical document, lab result, and vital certificate tracking are tested.
+- Lab result unpaid release blocking is tested.
+- Vital certificate review-before-release behavior is tested.
+- Centralized Print Reports preview and export are tested.
 - Settings department management is tested.
 - Audit logs are written for critical actions.
 - No real `.env` files are staged.
@@ -541,6 +603,7 @@ The build phase is complete when:
 - Firestore rules enforce role-based access.
 - Admin-only actions are unavailable to staff users.
 - CRUD operations provide immediate UI feedback.
+- Document tracking records move correctly through for-release, reviewed, released, canceled, or voided states.
 - The application can be run locally and prepared for deployment.
 - No secrets or sensitive local files are included in source control.
 
@@ -568,6 +631,10 @@ Post-deployment smoke tests should include:
 - Chart borrow.
 - Chart return.
 - Report filter.
+- Medical document release.
+- Lab result paid release.
+- Vital certificate review and release.
+- Print reports preview.
 - User role check.
 - Settings update.
 - Sign out.
@@ -584,6 +651,7 @@ Future builds should consider:
 - Expanding server-side APIs if workflows move away from direct Firestore access.
 - Adding CI checks for lint, build, and functional tests.
 - Adding a formal production deployment guide.
+- Keeping `docs/SYSTEM_FLOW.md` updated when workflow behavior changes.
 
 ---
 

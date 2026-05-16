@@ -14,7 +14,10 @@ export function latestRecordTime(row) {
   return Math.max(
     recordTimeValue(row.updatedAt),
     recordTimeValue(row.returnedAt),
+    recordTimeValue(row.releasedAt),
+    recordTimeValue(row.reviewedAt),
     recordTimeValue(row.borrowedAt),
+    recordTimeValue(row.requestedAt),
     recordTimeValue(row.timestamp),
     recordTimeValue(row.createdAt),
   );

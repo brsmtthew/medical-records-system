@@ -18,7 +18,7 @@ router.use(requireAuth);
 router.get("/", requireRole(["admin", "staff"]), asyncHandler(listPatients));
 router.post(
   "/",
-  requireRole("admin"),
+  requireRole(["admin", "staff"]),
   validateRequest(patientCreateSchema),
   auditAction("patient_added", (req) => ({ caseNumber: req.body.caseNumber, patientName: req.body.name })),
   asyncHandler(createPatient),
