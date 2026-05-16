@@ -18,6 +18,7 @@ import {
   Circle,
   CheckCircle2,
   Info,
+  ImageOff,
   LogOut,
   Menu,
   Moon,
@@ -224,6 +225,12 @@ export default function Navbar({ onMenuClick }) {
     setAccountMessage("");
   };
 
+  const handlePhotoRemove = () => {
+    setAccountForm((current) => ({ ...current, photoDataUrl: "" }));
+    setAccountError("");
+    setAccountMessage("");
+  };
+
   // Persists account profile details to both Firebase Auth and the user document.
   const handleAccountSave = async (event) => {
     event.preventDefault();
@@ -307,13 +314,13 @@ export default function Navbar({ onMenuClick }) {
   const pageTitles = {
     "/dashboard": "Dashboard",
     "/patients": "Patients",
-    "/charts": "Charts",
+    "/charts": "Chart Circulation",
     "/chart-viewing": "Chart Viewing",
     "/chartviewing": "Chart Viewing",
-    "/reports": "Activity Logs",
+    "/reports": "Chart Reports",
     "/medical-documents": "Medical Documents",
-    "/lab-results": "Lab Results",
-    "/vital-certificates": "Vital Certificates",
+    "/lab-results": "Laboratory Results",
+    "/vital-certificates": "Civil Documents",
     "/tracking-reports": "Print Reports",
     "/settings": "Settings",
     "/users": "Users",
@@ -600,6 +607,16 @@ export default function Navbar({ onMenuClick }) {
                       Photo
                       <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
                     </label>
+                    {accountForm.photoDataUrl && (
+                      <button
+                        type="button"
+                        onClick={handlePhotoRemove}
+                        className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2.5 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-50"
+                      >
+                        <ImageOff size={16} />
+                        Remove Photo
+                      </button>
+                    )}
                     <p className="mt-3 text-center text-[10px] font-bold uppercase leading-relaxed text-slate-400">
                       JPG or PNG under 750 KB
                     </p>

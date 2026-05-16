@@ -19,6 +19,18 @@ import {
 } from "lucide-react";
 import logo from "../assets/TGMCI_LOGO.png";
 import fallbackLogo from "../assets/tgmci_logo.jpg";
+import chartReportsIcon from "../icons/chart reports.png";
+import chartStationIcon from "../icons/chart station.png";
+import chartViewingIcon from "../icons/chart viewing.png";
+import dashboardIcon from "../icons/dashboard.png";
+import labResultsIcon from "../icons/lab results.png";
+import medicalDocumentsIcon from "../icons/medical documents.png";
+import medicalReportsIcon from "../icons/medical reports.png";
+import patientIcon from "../icons/patient.png";
+import printReportsIcon from "../icons/print reports.png";
+import settingsIcon from "../icons/settings.png";
+import usersIcon from "../icons/users.png";
+import vitalCertsIcon from "../icons/vital certs.png";
 import { useAuth } from "../context/useAuth";
 
 export default function Sidebar({
@@ -38,38 +50,38 @@ export default function Sidebar({
     {
       label: "Workspace",
       items: [
-        { name: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-        { name: "Patients", icon: Users, path: "/patients" },
+        { name: "Dashboard", icon: LayoutDashboard, image: dashboardIcon, path: "/dashboard" },
+        { name: "Patients", icon: Users, image: patientIcon, path: "/patients" },
       ],
     },
     {
       label: "Charts",
       items: [
-        { name: "Charts Station", icon: FileText, path: "/charts" },
-        { name: "Chart Viewing", icon: FileSearch, path: "/chart-viewing" },
+        { name: "Chart Circulation", icon: FileText, image: chartStationIcon, path: "/charts" },
+        { name: "Chart Viewing", icon: FileSearch, image: chartViewingIcon, path: "/chart-viewing" },
       ],
     },
     {
       label: "Documents",
       items: [
-        { name: "Medical Docs", icon: Files, path: "/medical-documents" },
-        { name: "Lab Results", icon: FlaskConical, path: "/lab-results" },
-        { name: "Vital Certs", icon: BadgeCheck, path: "/vital-certificates" },
+        { name: "Medical Documents", icon: Files, image: medicalDocumentsIcon, path: "/medical-documents" },
+        { name: "Laboratory Results", icon: FlaskConical, image: labResultsIcon, path: "/lab-results" },
+        { name: "Civil Documents", icon: BadgeCheck, image: vitalCertsIcon, path: "/vital-certificates" },
       ],
     },
     {
       label: "Reports",
       items: [
-        { name: "Chart Report Logs", icon: BarChart3, path: "/reports" },
-        { name: "Medical Reports", icon: FileSearch, path: "/tracking-reports" },
-        { name: "Print Reports", icon: PrinterCheck, path: "/print-reports" },
+        { name: "Chart Reports", icon: BarChart3, image: chartReportsIcon, path: "/reports" },
+        { name: "Medical Reports", icon: FileSearch, image: medicalReportsIcon, path: "/tracking-reports" },
+        { name: "Print Reports", icon: PrinterCheck, image: printReportsIcon, path: "/print-reports" },
       ],
     },
     {
       label: "Administration",
       items: [
-        ...(isAdmin ? [{ name: "Users", icon: UserCog, path: "/users" }] : []),
-        { name: "Settings", icon: Settings, path: "/settings" },
+        ...(isAdmin ? [{ name: "Users", icon: UserCog, image: usersIcon, path: "/users" }] : []),
+        { name: "Settings", icon: Settings, image: settingsIcon, path: "/settings" },
       ],
     },
   ];
@@ -85,7 +97,7 @@ export default function Sidebar({
         <div className={`flex items-center min-w-0 ${isCollapsed ? "justify-center" : "w-full"}`}>
           <div
             className={`mrs-logo-frame shrink-0 rounded-lg border border-white/15 flex items-center justify-center shadow-xl shadow-slate-950/20 overflow-hidden transition-all duration-300 ${
-              isCollapsed ? "h-10 w-10 p-1.5 2xl:h-11 2xl:w-11" : "h-11 w-full p-1.5 2xl:h-12 2xl:p-2"
+              isCollapsed ? "h-10 w-10 p-1.5 2xl:h-11 2xl:w-11" : "h-[3.1rem] w-full p-1.5 2xl:h-[3.25rem]"
             }`}
           >
             {logoFailed ? (
@@ -96,7 +108,7 @@ export default function Sidebar({
               <img
                 src={logoSrc}
                 alt="TGMCI"
-                className="h-[115%] w-[115%] object-contain"
+                className="h-full w-full object-contain"
                 onError={() => {
                   if (logoSrc !== fallbackLogo) {
                     setLogoSrc(fallbackLogo);
@@ -154,14 +166,26 @@ export default function Sidebar({
                       }
                     `}
                   >
-                    <item.icon
-                      size={20}
-                      className={
-                        isActive
-                          ? "text-cyan-700"
-                          : "text-slate-400 group-hover:text-slate-700"
-                      }
-                    />
+                    {item.image ? (
+                      <span className={`mrs-sidebar-icon-frame flex shrink-0 items-center justify-center rounded-lg shadow-sm transition-all ${
+                        isCollapsed ? "size-9 p-1.5 2xl:size-10" : "size-7 p-1.5 2xl:size-8"
+                      }`}>
+                        <img
+                          src={item.image}
+                          alt=""
+                          className="h-full w-full object-contain"
+                        />
+                      </span>
+                    ) : (
+                      <item.icon
+                        size={20}
+                        className={
+                          isActive
+                            ? "text-cyan-700"
+                            : "text-slate-400 group-hover:text-slate-700"
+                        }
+                      />
+                    )}
 
                     {!isCollapsed && (
                       <span className="text-xs font-bold tracking-wide 2xl:text-sm">

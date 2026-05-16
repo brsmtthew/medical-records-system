@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
+import PatientCaseCell from "../components/PatientCaseCell";
 import {
   Check,
   Edit,
@@ -31,6 +32,7 @@ import {
   getTrackingColumns,
   releaseRelationshipOptions,
   releaseStatuses,
+  statusBadgeClass,
 } from "../utils/trackingConfigs";
 
 function normalizeSearchValue(row, columns) {
@@ -107,6 +109,48 @@ function FilterField({ label, children }) {
       </span>
       {children}
     </label>
+  );
+}
+
+function StatusLegend({ options }) {
+  if (!options.length) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-black uppercase">
+      {options.map((option) => (
+        <span key={option.value} className={`inline-flex rounded-full border px-3 py-1 ${statusBadgeClass(option.value)}`}>
+          {option.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function renderCellValue(column, row) {
+  const value = column.value(row);
+
+  if (column.patientCase) {
+    return <PatientCaseCell patientName={row.patientName} caseNumber={row.caseNumber} />;
+  }
+  if (column.dateRange) {
+    const [firstValue = "N/A", secondValue = "N/A"] = String(value || "")
+      .split("\n")
+      .map((item) => item.replace(/^[^:]+:\s*/, ""));
+
+    return (
+      <div className="space-y-1 text-[10px] font-black uppercase leading-tight">
+        <p className="break-words text-amber-700">{column.dateRange.firstLabel}: {firstValue}</p>
+        <p className="break-words text-green-700">{column.dateRange.secondLabel}: {secondValue}</p>
+      </div>
+    );
+  }
+
+  if (!column.statusKey) return value;
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${statusBadgeClass(row[column.statusKey] || column.statusFallback)}`}>
+      {value}
+    </span>
   );
 }
 
@@ -884,6 +928,7 @@ export default function TrackingPage({ config }) {
                 ))}
               </div>
             )}
+            <StatusLegend options={config.statusOptions} />
           </div>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
@@ -920,7 +965,7 @@ export default function TrackingPage({ config }) {
                               title={String(column.value(row) || "")}
                               className={cellClassName(column)}
                             >
-                              {column.render ? column.render(row) : column.value(row)}
+                              {column.render ? column.render(row) : renderCellValue(column, row)}
                             </td>
                           ))}
                           <td className="p-3 align-top xl:p-4">

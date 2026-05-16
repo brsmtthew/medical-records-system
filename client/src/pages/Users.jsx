@@ -3,6 +3,7 @@ import {
   ArrowUpDown,
   Search,
   ShieldCheck,
+  Trash2,
   UserCheck,
   UserCog,
   Users as UsersIcon,
@@ -12,7 +13,7 @@ import {
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
 import UserAccessConfirmModal from "../modals/users/UserAccessConfirmModal";
-import { subscribeToUsers, updateUserAccess } from "../services/userService";
+import { deleteUserProfile, subscribeToUsers, updateUserAccess } from "../services/userService";
 import { useAuth } from "../context/useAuth";
 
 function getInitials(name = "") {
@@ -84,6 +85,17 @@ export default function Users() {
     setPendingAccessAction({ type: "activate", user });
   };
 
+  const handleDeleteUser = (user) => {
+    const userId = user.uid || user.id;
+    if (userId === currentUser?.uid) {
+      setAccessError("You cannot delete your own signed-in account.");
+      return;
+    }
+
+    setAccessError("");
+    setPendingAccessAction({ type: "delete", user });
+  };
+
   const confirmAccessAction = async () => {
     if (!pendingAccessAction) return;
 
@@ -92,7 +104,9 @@ export default function Users() {
     const userName = user.fullName || user.email || "User";
 
     try {
-      if (type === "block") {
+      if (type === "delete") {
+        await deleteUserProfile(userId);
+      } else if (type === "block") {
         await updateUserAccess(userId, {
           accountStatus: "disabled",
           restrictionReason: reason,
@@ -105,7 +119,7 @@ export default function Users() {
       }
 
       setAccessError("");
-      setAccessMessage(`${userName} was ${type === "block" ? "blocked" : "activated"}.`);
+      setAccessMessage(`${userName} was ${type === "delete" ? "deleted" : type === "block" ? "blocked" : "activated"}.`);
       setPendingAccessAction(null);
     } catch (error) {
       setAccessError(error.message || `Unable to ${type} user.`);
@@ -253,10 +267,10 @@ export default function Users() {
 
         <div className="mrs-panel min-h-0 flex-1 overflow-hidden rounded-xl">
           <div className="min-h-0 h-full overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[960px] table-fixed text-left">
+            <table className="w-full min-w-[1040px] table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-slate-100 bg-white">
-                  <th className="w-[27%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="w-[25%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     User
                   </th>
                   <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -265,10 +279,10 @@ export default function Users() {
                   <th className="w-[13%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Status
                   </th>
-                  <th className="w-[28%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="w-[24%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Restriction Reason
                   </th>
-                  <th className="w-[18%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="w-[24%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Actions
                   </th>
                 </tr>
@@ -339,7 +353,7 @@ export default function Users() {
                         />
                       </td>
                       <td className="p-3">
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-2">
                           {isDisabled ? (
                             <button
                               type="button"
@@ -361,6 +375,17 @@ export default function Users() {
                               Block
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={isSelf}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                            aria-label={`Delete ${user.email || user.fullName || "user"}`}
+                            title="Delete user"
+                          >
+                            <Trash2 size={16} />
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>

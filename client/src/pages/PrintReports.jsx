@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
-import { Download, FileText, Printer, RotateCcw, Search } from "lucide-react";
+import PatientCaseCell from "../components/PatientCaseCell";
+import { Download, Eye, FileText, Printer, RotateCcw, Search, X } from "lucide-react";
 import { subscribeToChartLogs } from "../services/chartService";
 import { subscribeToTrackingRows } from "../services/trackingService";
 import {
   getTrackingColumns,
+  releaseStatuses,
+  statusBadgeClass,
   trackingReportConfigs,
 } from "../utils/trackingConfigs";
 import { formatDisplayDate } from "../utils/dateFormatting";
@@ -105,10 +108,24 @@ function FilterField({ label, children }) {
   );
 }
 
+function StatusLegend({ options }) {
+  if (!options.length) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-black uppercase">
+      {options.map((option) => (
+        <span key={option.value} className={`inline-flex rounded-full border px-3 py-1 ${statusBadgeClass(option.value)}`}>
+          {option.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const chartReportConfig = {
   collection: "chartReportLogs",
-  pluralLabel: "Chart Report Logs",
-  exportName: "chart-report-logs",
+  pluralLabel: "Chart Reports",
+  exportName: "chart-reports",
   searchPlaceholder: "Search patient, case number, borrower, returner, or department",
   statusOptions: [
     { value: "borrowed", label: "Borrowed" },
@@ -123,7 +140,7 @@ const chartReportConfig = {
     { label: "Returned", value: rows.filter((row) => row.action === "returned").length },
   ],
   columns: [
-    { label: "Patient", width: "w-[18%]", wrap: true, value: (row) => `${row.patientName || "N/A"}\n${row.caseNumber || "N/A"}` },
+    { label: "Patient", width: "w-[18%]", wrap: true, patientCase: true, value: (row) => `${row.patientName || "N/A"}\n${row.caseNumber || "N/A"}` },
     {
       label: "People",
       width: "w-[22%]",
@@ -134,7 +151,7 @@ const chartReportConfig = {
         row.department || "",
       ].filter(Boolean).join("\n"),
     },
-    { label: "Status", width: "w-[12%]", wrap: true, value: (row) => row.action || "N/A" },
+    { label: "Status", width: "w-[12%]", wrap: true, statusKey: "action", value: (row) => row.action || "N/A" },
     {
       label: "Timeline",
       width: "w-[26%]",
@@ -158,6 +175,125 @@ function cellClassName(column) {
     : `${base} overflow-hidden text-ellipsis whitespace-nowrap`;
 }
 
+function renderCellValue(column, row) {
+  const value = column.value(row);
+
+  if (column.patientCase) {
+    return <PatientCaseCell patientName={row.patientName} caseNumber={row.caseNumber} />;
+  }
+  if (column.dateRange) {
+    const [firstValue = "N/A", secondValue = "N/A"] = String(value || "")
+      .split("\n")
+      .map((item) => item.replace(/^[^:]+:\s*/, ""));
+
+    return (
+      <div className="space-y-1 text-[10px] font-black uppercase leading-tight">
+        <p className="break-words text-amber-700">{column.dateRange.firstLabel}: {firstValue}</p>
+        <p className="break-words text-green-700">{column.dateRange.secondLabel}: {secondValue}</p>
+      </div>
+    );
+  }
+
+  if (!column.statusKey) return value;
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${statusBadgeClass(row[column.statusKey] || column.statusFallback)}`}>
+      {value}
+    </span>
+  );
+}
+
+function reportStatusOptions(config) {
+  const mergedStatuses = [...config.statusOptions];
+  releaseStatuses.forEach((status) => {
+    if (!mergedStatuses.some((option) => option.value === status.value)) {
+      mergedStatuses.push(status);
+    }
+  });
+  return mergedStatuses;
+}
+
+function ExcelPreviewModal({ columns, fileName, isOpen, onClose, onExport, rows, title }) {
+  if (!isOpen) return null;
+
+  const previewRows = rows.slice(0, 25);
+
+  return (
+    <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="mrs-panel flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 p-4">
+          <div>
+            <p className="text-lg font-black uppercase text-slate-800">Excel Export Preview</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              {title} - {rows.length} row(s) ready for {fileName}.xls
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="mrs-soft-button rounded-xl p-2" aria-label="Close preview">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          <table className="w-full min-w-[900px] table-fixed text-left">
+            <thead className="sticky top-0 z-10 bg-white">
+              <tr className="border-b border-slate-100">
+                {columns.map((column) => (
+                  <th
+                    key={column.label}
+                    className={`${column.width || "w-[14%]"} break-words p-3 align-top text-[9px] font-black uppercase leading-tight tracking-widest text-slate-400`}
+                  >
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {previewRows.map((row, rowIndex) => (
+                <tr key={`${row.id || rowIndex}-excel-preview`} className="mrs-table-row">
+                  {columns.map((column) => (
+                    <td key={column.label} className={cellClassName(column)}>
+                      {column.value(row)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {previewRows.length === 0 && (
+                <tr>
+                  <td colSpan={columns.length} className="p-10 text-center">
+                    <FileText size={38} className="mx-auto mb-3 text-slate-300" />
+                    <p className="font-black uppercase text-slate-700">No Rows To Export</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-400">Adjust filters or add records first.</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex shrink-0 flex-col justify-between gap-3 border-t border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center">
+          <p className="text-xs font-semibold text-slate-500">
+            Preview shows first {previewRows.length} of {rows.length} row(s).
+          </p>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="mrs-soft-button rounded-xl px-4 py-3 text-xs font-black uppercase">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={rows.length === 0}
+              className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase disabled:opacity-60"
+            >
+              <Download size={16} />
+              Export Excel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PrintReports() {
   const [activeCollection, setActiveCollection] = useState(chartReportConfig.collection);
   const [chartRows, setChartRows] = useState([]);
@@ -168,6 +304,7 @@ export default function PrintReports() {
   const [endDate, setEndDate] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [isExcelPreviewOpen, setIsExcelPreviewOpen] = useState(false);
   const activeConfig = printReportConfigs.find((config) => config.collection === activeCollection) || chartReportConfig;
   const activeColumns = activeConfig.collection === chartReportConfig.collection
     ? activeConfig.columns
@@ -250,11 +387,11 @@ export default function PrintReports() {
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
-              onClick={() => downloadExcel(filteredRows, activeColumns, activeConfig.exportName)}
+              onClick={() => setIsExcelPreviewOpen(true)}
               className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
             >
-              <Download size={17} />
-              Export Excel
+              <Eye size={17} />
+              Preview Excel
             </button>
             <button
               type="button"
@@ -349,7 +486,7 @@ export default function PrintReports() {
                   className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
                 >
                   <option value="all">All Status</option>
-                  {activeConfig.statusOptions.map((option) => (
+                  {reportStatusOptions(activeConfig).map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
@@ -381,6 +518,7 @@ export default function PrintReports() {
                 ))}
               </div>
             )}
+            <StatusLegend options={reportStatusOptions(activeConfig)} />
           </div>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
@@ -399,7 +537,7 @@ export default function PrintReports() {
                   <tr key={`${activeConfig.collection}-${row.id}`} className="mrs-table-row">
                     {activeColumns.map((column) => (
                       <td key={column.label} title={String(column.value(row) || "")} className={cellClassName(column)}>
-                        {column.value(row)}
+                        {renderCellValue(column, row)}
                       </td>
                     ))}
                   </tr>
@@ -421,6 +559,19 @@ export default function PrintReports() {
           </div>
         </div>
       </div>
+
+      <ExcelPreviewModal
+        columns={activeColumns}
+        fileName={activeConfig.exportName}
+        isOpen={isExcelPreviewOpen}
+        onClose={() => setIsExcelPreviewOpen(false)}
+        onExport={() => {
+          downloadExcel(filteredRows, activeColumns, activeConfig.exportName);
+          setIsExcelPreviewOpen(false);
+        }}
+        rows={filteredRows}
+        title={activeConfig.pluralLabel}
+      />
 
       <FloatingToast
         toast={loadError ? { type: "error", message: loadError } : null}

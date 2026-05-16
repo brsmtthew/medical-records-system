@@ -160,6 +160,15 @@
       #ffffff;
   }
 
+  .mrs-sidebar-icon-frame {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1;
+  }
+
+  .mrs-sidebar-icon-frame img {
+    filter: contrast(1.25) saturate(1.08);
+  }
+
   .mrs-nav-list {
     display: flex;
     gap: 0.5rem;
@@ -202,21 +211,31 @@
     color: #15803d;
   }
 
-  .mrs-status-borrowed,
+  .mrs-status-borrowed {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+
   .mrs-status-danger {
     border-color: #fecaca;
     background: #fef2f2;
     color: #b91c1c;
   }
 
-  .mrs-status-inpatient,
+  .mrs-status-inpatient {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #15803d;
+  }
+
+  .mrs-status-outpatient,
   .mrs-status-info {
     border-color: #bfdbfe;
     background: #eff6ff;
     color: #1d4ed8;
   }
 
-  .mrs-status-outpatient,
   .mrs-status-neutral {
     border-color: #e2e8f0;
     background: #f8fafc;
@@ -227,6 +246,12 @@
     border-color: #fde68a;
     background: #fffbeb;
     color: #b45309;
+  }
+
+  .mrs-status-voided {
+    border-color: #c4b5fd;
+    background: #f5f3ff;
+    color: #6d28d9;
   }
 }
 
@@ -473,6 +498,12 @@
     background-color: rgb(255 255 255) !important;
   }
 
+  html.dark .mrs-sidebar-icon-frame {
+    background: rgb(255 255 255) !important;
+    border-color: rgb(226 232 240);
+    box-shadow: 0 8px 18px rgba(2, 6, 23, 0.24);
+  }
+
   html.dark.soft-light body {
     background: rgb(22 31 47);
     color: rgb(226 232 240);
@@ -589,6 +620,14 @@
   html.dark .text-blue-600,
   html.dark .text-blue-500 {
     color: rgb(147 197 253);
+  }
+
+  html.dark .text-violet-900,
+  html.dark .text-violet-800,
+  html.dark .text-violet-700,
+  html.dark .text-violet-600,
+  html.dark .text-violet-500 {
+    color: rgb(196 181 253);
   }
 
   html.dark .text-red-700,

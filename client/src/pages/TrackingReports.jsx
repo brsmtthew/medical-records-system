@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
+import PatientCaseCell from "../components/PatientCaseCell";
 import { FileText, RotateCcw, Search, Trash2 } from "lucide-react";
 import {
   deleteTrackingRow,
@@ -11,6 +12,7 @@ import {
   optionLabel,
   relationshipOptions,
   releaseStatuses,
+  statusBadgeClass,
   trackingReportConfigs,
 } from "../utils/trackingConfigs";
 import { formatDisplayDate } from "../utils/dateFormatting";
@@ -88,14 +90,9 @@ function statusLabel(row) {
 
 function statusBadge(row) {
   const status = row.releaseStatus || "forRelease";
-  const classes = status === "released"
-    ? "border-green-200 bg-green-50 text-green-700"
-    : ["canceled", "voided"].includes(status)
-      ? "border-amber-200 bg-amber-50 text-amber-700"
-      : "border-blue-200 bg-blue-50 text-blue-700";
 
   return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${classes}`}>
+    <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${statusBadgeClass(status)}`}>
       {statusLabel(row)}
     </span>
   );
@@ -107,6 +104,7 @@ function getMedicalReportColumns() {
       label: "Patient / Case No.",
       width: "w-[22%]",
       wrap: true,
+      patientCase: true,
       value: (row) => `${row.patientName || "N/A"}\n${row.caseNumber || "N/A"}`,
     },
     {
@@ -145,9 +143,12 @@ function getMedicalReportColumns() {
 
 function reportStatusOptions(config) {
   const hasCanceled = config.statusOptions.some((option) => option.value === "canceled");
-  return hasCanceled
+  const statuses = hasCanceled
     ? config.statusOptions
     : [...config.statusOptions, { value: "canceled", label: "Canceled" }];
+  return statuses.some((option) => option.value === "voided")
+    ? statuses
+    : [...statuses, { value: "voided", label: "Voided" }];
 }
 
 function FilterField({ label, children }) {
@@ -159,6 +160,28 @@ function FilterField({ label, children }) {
       {children}
     </label>
   );
+}
+
+function StatusLegend({ options }) {
+  if (!options.length) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-black uppercase">
+      {options.map((option) => (
+        <span key={option.value} className={`inline-flex rounded-full border px-3 py-1 ${statusBadgeClass(option.value)}`}>
+          {option.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function renderCellValue(column, row) {
+  if (column.patientCase) {
+    return <PatientCaseCell patientName={row.patientName} caseNumber={row.caseNumber} />;
+  }
+
+  return column.value(row);
 }
 
 function ConfirmationModal({ confirmation, onCancel, pendingAction }) {
@@ -293,7 +316,7 @@ export default function TrackingReports() {
               Medical <span className="text-green-700">Reports</span>
             </h1>
             <p className="text-xs font-medium text-slate-500">
-              Preview medical document, lab result, and vital certificate reports.
+              Preview medical document, laboratory result, and civil document reports.
             </p>
           </div>
         </div>
@@ -415,6 +438,7 @@ export default function TrackingReports() {
                 ))}
               </div>
             )}
+            <StatusLegend options={reportStatusOptions(activeConfig)} />
           </div>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
@@ -455,7 +479,7 @@ export default function TrackingReports() {
                               title={String(column.value(row) || "")}
                               className={cellClassName(column)}
                             >
-                              {column.render ? column.render(row) : column.value(row)}
+                              {column.render ? column.render(row) : renderCellValue(column, row)}
                             </td>
                           ))}
                           {isAdmin && (

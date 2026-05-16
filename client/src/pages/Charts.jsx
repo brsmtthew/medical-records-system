@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
+import PatientCaseCell from "../components/PatientCaseCell";
 import ChartHistoryModal from "../modals/chart/ChartHistoryModal";
 import ChartTransactionConfirmModal from "../modals/chart/ChartTransactionConfirmModal";
 import { motion as Motion, AnimatePresence } from "framer-motion";
@@ -412,7 +413,7 @@ export default function Charts() {
       <div className="mb-2 flex shrink-0 flex-col justify-between gap-2 xl:flex-row xl:items-center">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tight">
-            Chart <span className="text-green-700">Tracking</span>
+            Chart <span className="text-green-700">Circulation</span>
           </h1>
           <p className="text-xs font-medium text-slate-500">
             Physical record circulation, borrower accountability, and return monitoring.
@@ -657,9 +658,8 @@ export default function Charts() {
                         }`}
                       >
                         <td className="p-3">
-                          <div className="font-black text-slate-800 uppercase leading-tight mb-1 break-words">{chart.patientName}</div>
+                          <PatientCaseCell patientName={chart.patientName} caseNumber={chart.caseNumber} />
                           <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <code className="text-xs font-mono text-green-900 font-black tracking-wide">{chart.caseNumber}</code>
                             <span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase ${
                               recordType === "old"
                                 ? "bg-amber-50 text-amber-700 border-amber-200"

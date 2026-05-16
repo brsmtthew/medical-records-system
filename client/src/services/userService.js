@@ -5,6 +5,7 @@ export {
   deleteAdmissionLocation,
   deleteDepartment,
   deleteOutpatientDepartment,
+  deleteUserProfile,
   fallbackAdmissionLocations,
   fallbackDepartments,
   fallbackOutpatientDepartments,

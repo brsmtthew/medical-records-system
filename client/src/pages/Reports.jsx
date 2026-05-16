@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
+import PatientCaseCell from "../components/PatientCaseCell";
 import ReportDeleteModal from "../modals/reports/ReportDeleteModal";
 import {
   CalendarDays,
@@ -326,10 +327,10 @@ export default function Reports() {
                   {paginatedLogs.map((log) => (
                     <tr key={log.id} className="mrs-table-row">
                       <td className="p-3">
-                        <p className="font-black text-slate-800 break-words">{highlightSearch(log.patientName)}</p>
-                        <p className="text-[10px] font-bold uppercase text-green-700">
-                          {highlightSearch(log.caseNumber)}
-                        </p>
+                        <PatientCaseCell
+                          patientName={highlightSearch(log.patientName)}
+                          caseNumber={highlightSearch(log.caseNumber)}
+                        />
                       </td>
                       <td className="p-3">
                         <p className="text-sm font-black text-slate-700">Borrowed: {highlightSearch(log.borrowedBy || "N/A")}</p>
@@ -449,10 +450,7 @@ export default function Reports() {
                 <div key={chart.id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-black text-slate-800 truncate">{chart.patientName}</p>
-                      <p className="text-[10px] font-bold uppercase text-slate-400">
-                        {chart.caseNumber}
-                      </p>
+                      <PatientCaseCell patientName={chart.patientName} caseNumber={chart.caseNumber} />
                     </div>
                     <span className="shrink-0 px-2 py-1 rounded-lg bg-blue-100 text-blue-700 text-[10px] font-black border border-blue-200 uppercase">
                       Borrowed

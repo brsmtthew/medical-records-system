@@ -485,6 +485,18 @@ export async function updateUserAccess(userId, updates) {
   });
 }
 
+// Removes a user profile from the admin user list. The matching Firebase Auth
+// account can no longer enter because sign-in now requires an existing profile.
+export async function deleteUserProfile(userId) {
+  const database = requireDb();
+  const { user } = await requireActiveRole({ adminOnly: true });
+  if (user.uid === userId) {
+    throw new Error("You cannot delete your own signed-in account.");
+  }
+
+  await deleteDoc(doc(database, "users", userId));
+}
+
 // Creates a patient and its matching available chart document.
 export async function createPatient(patient) {
   const database = requireDb();

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
+import PatientCaseCell from "../components/PatientCaseCell";
 import { motion as Motion } from "framer-motion";
 import {
   Bar,
@@ -326,7 +327,7 @@ export default function Dashboard() {
       ? event.log.returnedBy || event.log.borrowedBy || "N/A"
       : event.log.borrowedBy || "N/A",
     time: event.date ? formatDisplayDate(event.date) : "",
-    tone: event.type === "borrowed" ? "red" : "green",
+    tone: event.type === "borrowed" ? "blue" : "green",
   }));
   const periodLabel = selectedPeriod === "today"
     ? formatDateInputLabel(selectedDate)
@@ -364,9 +365,9 @@ export default function Dashboard() {
       label: "Borrowed Charts",
       value: allBorrowedCharts,
       icon: Archive,
-      color: "bg-red-50 text-red-700",
+      color: "bg-blue-50 text-blue-700",
       trend: "Active circulation",
-      trendColor: "text-red-600",
+      trendColor: "text-blue-700",
     },
     {
       label: "Recent Activity",
@@ -558,9 +559,9 @@ export default function Dashboard() {
             {recentActivity.map((item) => (
               <div key={`${item.action}-${item.chart}`} className="flex items-center justify-between gap-3 px-3 py-2">
                 <div>
-                  <p className="font-black text-slate-800 text-sm">{item.patientName}</p>
-                  <p className="text-[10px] font-bold uppercase text-slate-400">
-                    {item.chart} - {item.person} - {item.time}
+                  <PatientCaseCell patientName={item.patientName} caseNumber={item.chart} />
+                  <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">
+                    {item.person} - {item.time}
                   </p>
                 </div>
                 <span

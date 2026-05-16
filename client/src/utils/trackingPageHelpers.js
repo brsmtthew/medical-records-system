@@ -41,6 +41,12 @@ export function trackingDateRangeColumn(label, firstLabel, firstKey, secondLabel
     label,
     width,
     wrap: true,
+    dateRange: {
+      firstKey,
+      firstLabel,
+      secondKey,
+      secondLabel,
+    },
     value: (row) => {
       const formatPart = (key) => {
         const time = recordTimeValue(row[key]);

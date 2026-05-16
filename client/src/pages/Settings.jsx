@@ -1194,7 +1194,7 @@ export default function Settings({ initialTab = "rules" }) {
 
                 {safeActiveTab === "notifications" && (
                   <div className="flex min-h-0 flex-1 flex-col gap-4">
-                    <div className="flex flex-col gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="mrs-panel flex flex-col gap-3 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm font-black uppercase text-slate-700">Notification Action Log</p>
                         <p className="mt-1 text-xs font-semibold text-slate-500">
@@ -1216,28 +1216,28 @@ export default function Settings({ initialTab = "rules" }) {
                       </button>
                     </div>
 
-                    <div className="mrs-panel min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl">
-                      <table className="w-full min-w-[960px] table-fixed text-left">
+                    <div className="mrs-panel min-h-0 flex-1 overflow-x-hidden overflow-y-auto rounded-xl">
+                      <table className="w-full table-fixed text-left">
                         <thead className="sticky top-0 z-10 bg-slate-50">
                           <tr className="border-b border-slate-100">
-                            <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Timestamp</th>
-                            <th className="w-[17%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
-                            <th className="w-[20%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Patient Name</th>
-                            <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Case Number</th>
-                            <th className="w-[16%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Action</th>
-                            <th className="w-[15%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Message</th>
+                            <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Timestamp</th>
+                            <th className="w-[16%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
+                            <th className="w-[15%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Patient Name</th>
+                            <th className="w-[11%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Case Number</th>
+                            <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Action</th>
+                            <th className="w-[30%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Message</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {notificationLogs.map((log) => (
                             <tr key={log.id} className="mrs-table-row">
-                              <td className="p-3 text-xs font-bold text-slate-600">{formatLogTimestamp(log.createdAt)}</td>
+                              <td className="break-words p-3 text-xs font-bold text-slate-600">{formatLogTimestamp(log.createdAt)}</td>
                               <td className="p-3">
                                 <p className="text-sm font-black uppercase text-slate-800 break-words">
                                   {log.userName || "Unknown User"}
                                 </p>
                                 {log.userEmail && (
-                                  <p className="mt-1 text-[10px] font-bold text-slate-400 break-words">
+                                  <p className="mt-1 break-all text-[10px] font-bold text-slate-400">
                                     {log.userEmail}
                                   </p>
                                 )}
@@ -1249,11 +1249,11 @@ export default function Settings({ initialTab = "rules" }) {
                                 {log.caseNumber || "N/A"}
                               </td>
                               <td className="p-3">
-                                <span className="inline-flex rounded-full border-2 border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase text-slate-700">
+                                <span className="inline-flex max-w-full rounded-full border-2 border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-black uppercase text-slate-700 whitespace-normal break-words">
                                   {log.action || log.title || "Notification"}
                                 </span>
                               </td>
-                              <td className="p-3 text-xs font-semibold text-slate-500 break-words">{log.message}</td>
+                              <td className="break-words p-3 text-xs font-semibold leading-relaxed text-slate-500">{log.message}</td>
                             </tr>
                           ))}
 
