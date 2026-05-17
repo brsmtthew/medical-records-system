@@ -171,13 +171,13 @@ export default function Users() {
               Manage admin and staff access from a dedicated admin workspace.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:min-w-[28rem]">
+          <div className="flex flex-wrap gap-1.5">
             {[
               { label: "Total", value: users.length, icon: UsersIcon },
               { label: "Admins", value: adminUsers, icon: UserCog },
               { label: "Blocked", value: blockedUsers, icon: UserX },
             ].map((item) => (
-              <div key={item.label} className="mrs-card rounded-xl p-3">
+              <div key={item.label} className="mrs-dashboard-stat mrs-card rounded-xl p-2">
                 <div className="flex items-center gap-2">
                   <div className="rounded-xl border border-green-100 bg-green-50 p-2 text-green-700">
                     <item.icon size={17} />
@@ -192,53 +192,8 @@ export default function Users() {
           </div>
         </div>
 
-        <div className="grid shrink-0 gap-2 xl:grid-cols-3">
-          <div className="rounded-xl border border-green-100 bg-green-50 p-3 xl:col-span-2">
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-white p-2 text-green-700">
-                <ShieldCheck size={21} />
-              </div>
-              <div>
-                <p className="text-sm font-black uppercase text-slate-800">Secure Admin Creation</p>
-                <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600">
-                  Public account creation stays limited to staff. Admin access should be granted only by an existing admin.
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
-            <p className="text-sm font-black uppercase text-blue-800">Staff Restrictions</p>
-            <p className="mt-1 text-xs font-semibold leading-relaxed text-blue-700">
-              Staff cannot manage users, clear admin logs, or edit protected system controls.
-            </p>
-          </div>
-        </div>
-
-        <div className="mrs-nav-list shrink-0 overflow-x-auto pb-1">
-          {userNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = userFilter === item.id;
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setUserFilter(item.id)}
-                className={`mrs-nav-pill shrink-0 gap-2 px-3 py-2 text-sm ${
-                  isActive ? "mrs-nav-pill-active" : ""
-                }`}
-              >
-                <Icon size={16} />
-                <span>{item.label}</span>
-                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-600">
-                  {item.value}
-                </span>
-              </button>
-            );
-          })}
-        </div>
         <div className="mrs-panel shrink-0 rounded-xl p-3">
-          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_12rem_12rem]">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -248,6 +203,18 @@ export default function Users() {
                 className="mrs-field w-full rounded-lg py-2.5 pl-9 pr-3 text-sm font-bold"
               />
             </div>
+            <select
+              value={userFilter}
+              onChange={(event) => setUserFilter(event.target.value)}
+              className="mrs-field rounded-lg px-3 py-2.5 text-xs font-black uppercase"
+              aria-label="Filter users"
+            >
+              {userNavItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label} ({item.value})
+                </option>
+              ))}
+            </select>
             <label className="flex items-center gap-2">
               <ArrowUpDown size={16} className="text-slate-400" />
               <select
@@ -280,7 +247,7 @@ export default function Users() {
                     Status
                   </th>
                   <th className="w-[24%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Restriction Reason
+                    Block Reason
                   </th>
                   <th className="w-[24%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Actions
@@ -332,11 +299,7 @@ export default function Users() {
                         </select>
                       </td>
                       <td className="p-3">
-                        <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${
-                          isDisabled
-                            ? "border-red-200 bg-red-50 text-red-700"
-                            : "border-green-200 bg-green-50 text-green-700"
-                        }`}>
+                        <span className={`mrs-status-badge ${isDisabled ? "mrs-status-danger" : "mrs-status-success"}`}>
                           {isDisabled ? "Blocked" : "Active"}
                         </span>
                       </td>

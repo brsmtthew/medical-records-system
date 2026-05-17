@@ -3,7 +3,7 @@ import { History, X } from "lucide-react";
 import { formatDisplayDate } from "../../utils/dateFormatting";
 
 const modalCardClass =
-  "relative max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-950/20";
+  "mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto rounded-2xl p-4";
 
 export default function ChartHistoryModal({ chart, onClose }) {
   const visibleLogs = (chart?.history || []).filter((log) => log.borrower !== "System");

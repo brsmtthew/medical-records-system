@@ -10,7 +10,10 @@ import {
   Bell,
   Building2,
   Check,
+  Code2,
   Edit,
+  Eye,
+  Info,
   Moon,
   Plus,
   RotateCcw,
@@ -64,6 +67,7 @@ const tabs = [
   { id: "rules", label: "System Settings", icon: SettingsIcon },
   { id: "departmentEditor", label: "Department Editor", icon: Building2 },
   { id: "notifications", label: "Notification Action Log", icon: Bell },
+  { id: "about", label: "About System", icon: Info },
 ];
 
 const departmentEditorSections = [
@@ -109,6 +113,44 @@ function Field({ label, children, hint }) {
   );
 }
 
+function NotificationLogViewModal({ log, onClose }) {
+  if (!log) return null;
+
+  const details = [
+    { label: "Time", value: formatLogTimestamp(log.createdAt) },
+    { label: "User", value: log.userName || "Unknown User" },
+    { label: "Email", value: log.userEmail || "N/A" },
+    { label: "Patient", value: log.patientName || "N/A" },
+    { label: "Case", value: log.caseNumber || "N/A" },
+    { label: "Action", value: log.action || log.title || "Notification" },
+    { label: "Message", value: log.message || "N/A", wide: true },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <div className="mrs-panel w-full max-w-2xl overflow-hidden rounded-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 p-4">
+          <div>
+            <p className="text-lg font-black uppercase text-slate-800">Notification Details</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Review the full action log entry.</p>
+          </div>
+          <button type="button" onClick={onClose} className="mrs-soft-button rounded-xl p-2" aria-label="Close notification details">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-2">
+          {details.map((item) => (
+            <div key={item.label} className={`rounded-xl border border-slate-100 bg-white p-3 ${item.wide ? "sm:col-span-2" : ""}`}>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
+              <p className="mt-1 whitespace-pre-line break-words text-sm font-black text-slate-800">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings({ initialTab = "rules" }) {
   const { currentUser, userProfile, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -133,12 +175,13 @@ export default function Settings({ initialTab = "rules" }) {
   const [accessError, setAccessError] = useState("");
   const [accessMessage, setAccessMessage] = useState("");
   const [clearLogsMessage, setClearLogsMessage] = useState("");
+  const [selectedNotificationLog, setSelectedNotificationLog] = useState(null);
   const [pendingAccessAction, setPendingAccessAction] = useState(null);
   const [pendingDepartmentEntry, setPendingDepartmentEntry] = useState(null);
   const [pendingDepartmentAction, setPendingDepartmentAction] = useState(null);
   const [isDepartmentActionSaving, setIsDepartmentActionSaving] = useState(false);
   const visibleTabs = useMemo(
-    () => (isAdmin ? tabs : tabs.filter((tab) => tab.id === "rules")),
+    () => (isAdmin ? tabs : tabs.filter((tab) => ["rules", "about"].includes(tab.id))),
     [isAdmin],
   );
 
@@ -619,7 +662,7 @@ export default function Settings({ initialTab = "rules" }) {
 
   return (
     <DashboardLayout>
-      <div className="flex h-full min-h-0 max-w-7xl flex-col overflow-hidden">
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
         <div className="mb-2 flex shrink-0 flex-col justify-between gap-2 xl:flex-row xl:items-center">
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tight">
@@ -631,33 +674,12 @@ export default function Settings({ initialTab = "rules" }) {
                 : "Staff can access system settings only. Department lists, access control, and logs stay admin-only."}
             </p>
           </div>
-
-          {isAdmin && (
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {isAdmin && (
-              <button
-                onClick={() => setIsResetConfirmOpen(true)}
-                className="mrs-soft-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
-              >
-                <RotateCcw size={17} />
-                Defaults
-              </button>
-            )}
-            <button
-              onClick={saveSettings}
-              className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase transition"
-            >
-              <Save size={17} />
-              Save Settings
-            </button>
-          </div>
-          )}
         </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden lg:grid-cols-12">
-          <div className="lg:col-span-3 min-h-0">
-            <div className="mrs-panel rounded-2xl p-3">
-              <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-2">
+          <div className="lg:col-span-3">
+            <div className="mrs-settings-menu mrs-panel flex flex-col rounded-2xl p-2.5">
+              <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-1.5 lg:overflow-visible">
               {visibleTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = safeActiveTab === tab.id;
@@ -665,12 +687,16 @@ export default function Settings({ initialTab = "rules" }) {
                   <button
                     key={tab.id}
                     onClick={() => handleTabSelect(tab.id)}
-                    className={`flex shrink-0 items-center gap-3 px-4 py-3 rounded-xl text-sm font-black transition-colors lg:w-full ${
-                      isActive ? "bg-green-700 text-white" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                    className={`flex shrink-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs font-black transition-colors lg:w-full ${
+                      isActive ? "border-green-200 bg-green-700 text-white shadow-sm" : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >
-                    <Icon size={18} />
-                    {tab.label}
+                    <span className={`inline-flex size-7 shrink-0 items-center justify-center rounded-lg ${
+                      isActive ? "bg-white/15 text-white" : "bg-slate-50 text-slate-400"
+                    }`}>
+                      <Icon size={16} />
+                    </span>
+                    <span className="whitespace-nowrap text-left">{tab.label}</span>
                   </button>
                 );
               })}
@@ -680,15 +706,36 @@ export default function Settings({ initialTab = "rules" }) {
 
           <div className="flex min-h-0 flex-col gap-2 overflow-hidden lg:col-span-9">
             <div className="mrs-panel rounded-2xl overflow-hidden flex-1 min-h-0 flex flex-col">
-              <div className="flex flex-col justify-between gap-2 border-b border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-center">
+              <div className="flex flex-col justify-between gap-2 border-b border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-green-100 text-green-700">
+                  <div className="p-2.5 rounded-xl bg-green-100 text-green-700 shadow-sm">
                     <ActiveIcon size={21} />
                   </div>
                   <div>
                     <h2 className="font-black uppercase text-slate-800">{activeTabMeta.label}</h2>
+                    <p className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                      Review and maintain this section without leaving settings.
+                    </p>
                   </div>
                 </div>
+                {isAdmin && safeActiveTab === "rules" && (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      onClick={() => setIsResetConfirmOpen(true)}
+                      className="mrs-soft-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
+                    >
+                      <RotateCcw size={17} />
+                      Defaults
+                    </button>
+                    <button
+                      onClick={saveSettings}
+                      className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase transition"
+                    >
+                      <Save size={17} />
+                      Save Settings
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
@@ -815,7 +862,7 @@ export default function Settings({ initialTab = "rules" }) {
                           ].map((item) => (
                             <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-2.5">
                               <p className="text-[10px] font-black uppercase text-slate-400">{item.label}</p>
-                              <p className="mt-0.5 text-xl font-black text-slate-800">{item.value}</p>
+                              <p className="mt-0.5 text-lg font-black text-slate-800">{item.value}</p>
                             </div>
                           ))}
                         </div>
@@ -862,14 +909,18 @@ export default function Settings({ initialTab = "rules" }) {
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-100">
+                      <div className="grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 bg-slate-50 px-3 py-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Department Name</p>
+                        <p className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</p>
+                      </div>
                       {departments.map((department) => (
                         <div
                           key={department.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 border-2 border-slate-100 rounded-xl p-3"
+                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2 last:border-b-0"
                         >
                           {editingDepartment?.id === department.id ? (
-                            <form onSubmit={handleUpdateDepartment} className="flex-1 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                            <form onSubmit={handleUpdateDepartment} className="col-span-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                               <input
                                 value={editingDepartment.name}
                                 onChange={(event) => setEditingDepartment({ ...editingDepartment, name: event.target.value })}
@@ -884,12 +935,12 @@ export default function Settings({ initialTab = "rules" }) {
                             </form>
                           ) : (
                             <>
-                              <p className="font-black text-slate-800">{department.name}</p>
-                              <div className="flex gap-2">
+                              <p className="break-words text-xs font-black uppercase text-slate-800">{department.name}</p>
+                              <div className="flex justify-end gap-2">
                                 <button
                                   type="button"
                                   onClick={() => setEditingDepartment(department)}
-                                  className="p-2 rounded-xl border-2 border-slate-200 text-slate-500 hover:border-black hover:text-black"
+                                  className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                                   aria-label={`Edit ${department.name}`}
                                 >
                                   <Edit size={17} />
@@ -939,14 +990,18 @@ export default function Settings({ initialTab = "rules" }) {
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-100">
+                      <div className="grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 bg-slate-50 px-3 py-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Admission Location</p>
+                        <p className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</p>
+                      </div>
                       {admissionLocations.map((location) => (
                         <div
                           key={location.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 border-2 border-slate-100 rounded-xl p-3"
+                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2 last:border-b-0"
                         >
                           {editingAdmissionLocation?.id === location.id ? (
-                            <form onSubmit={handleUpdateAdmissionLocation} className="flex-1 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                            <form onSubmit={handleUpdateAdmissionLocation} className="col-span-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                               <input
                                 value={editingAdmissionLocation.name}
                                 onChange={(event) => setEditingAdmissionLocation({ ...editingAdmissionLocation, name: event.target.value })}
@@ -961,12 +1016,12 @@ export default function Settings({ initialTab = "rules" }) {
                             </form>
                           ) : (
                             <>
-                              <p className="font-black text-slate-800">{location.name}</p>
-                              <div className="flex gap-2">
+                              <p className="break-words text-xs font-black uppercase text-slate-800">{location.name}</p>
+                              <div className="flex justify-end gap-2">
                                 <button
                                   type="button"
                                   onClick={() => setEditingAdmissionLocation(location)}
-                                  className="p-2 rounded-xl border-2 border-slate-200 text-slate-500 hover:border-black hover:text-black"
+                                  className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                                   aria-label={`Edit ${location.name}`}
                                 >
                                   <Edit size={17} />
@@ -1016,14 +1071,18 @@ export default function Settings({ initialTab = "rules" }) {
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-100">
+                      <div className="grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 bg-slate-50 px-3 py-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Outpatient Department</p>
+                        <p className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</p>
+                      </div>
                       {outpatientDepartments.map((department) => (
                         <div
                           key={department.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 border-2 border-slate-100 rounded-xl p-3"
+                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2 last:border-b-0"
                         >
                           {editingOutpatientDepartment?.id === department.id ? (
-                            <form onSubmit={handleUpdateOutpatientDepartment} className="flex-1 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                            <form onSubmit={handleUpdateOutpatientDepartment} className="col-span-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                               <input
                                 value={editingOutpatientDepartment.name}
                                 onChange={(event) => setEditingOutpatientDepartment({ ...editingOutpatientDepartment, name: event.target.value })}
@@ -1038,12 +1097,12 @@ export default function Settings({ initialTab = "rules" }) {
                             </form>
                           ) : (
                             <>
-                              <p className="font-black text-slate-800">{department.name}</p>
-                              <div className="flex gap-2">
+                              <p className="break-words text-xs font-black uppercase text-slate-800">{department.name}</p>
+                              <div className="flex justify-end gap-2">
                                 <button
                                   type="button"
                                   onClick={() => setEditingOutpatientDepartment(department)}
-                                  className="p-2 rounded-xl border-2 border-slate-200 text-slate-500 hover:border-black hover:text-black"
+                                  className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                                   aria-label={`Edit ${department.name}`}
                                 >
                                   <Edit size={17} />
@@ -1115,11 +1174,7 @@ export default function Settings({ initialTab = "rules" }) {
                                   {user.email || "No email saved"}
                                 </p>
                               </div>
-                              <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-[10px] font-black uppercase ${
-                                isDisabled
-                                  ? "border-red-200 bg-red-50 text-red-700"
-                                  : "border-green-200 bg-green-50 text-green-700"
-                              }`}>
+                              <span className={`mrs-status-badge w-fit ${isDisabled ? "mrs-status-danger" : "mrs-status-success"}`}>
                                 {isDisabled ? "Blocked" : "Active"}
                               </span>
                             </div>
@@ -1220,20 +1275,21 @@ export default function Settings({ initialTab = "rules" }) {
                       <table className="w-full table-fixed text-left">
                         <thead className="sticky top-0 z-10 bg-slate-50">
                           <tr className="border-b border-slate-100">
-                            <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Timestamp</th>
-                            <th className="w-[16%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
-                            <th className="w-[15%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Patient Name</th>
-                            <th className="w-[11%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Case Number</th>
-                            <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Action</th>
-                            <th className="w-[30%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Message</th>
+                            <th className="w-[10%] p-3 text-[9px] font-black uppercase tracking-widest text-slate-400 xl:text-[10px]">Time</th>
+                            <th className="w-[16%] p-3 text-[9px] font-black uppercase tracking-widest text-slate-400 xl:text-[10px]">User</th>
+                            <th className="w-[14%] p-3 text-[9px] font-black uppercase tracking-widest text-slate-400 xl:text-[10px]">Patient</th>
+                            <th className="w-[10%] p-3 text-[9px] font-black uppercase tracking-widest text-slate-400 xl:text-[10px]">Case</th>
+                            <th className="w-[14%] p-3 text-[9px] font-black uppercase tracking-widest text-slate-400 xl:text-[10px]">Action</th>
+                            <th className="w-[28%] p-3 text-[9px] font-black uppercase tracking-widest text-slate-400 xl:text-[10px]">Message</th>
+                            <th className="w-[8%] p-3 text-right text-[9px] font-black uppercase tracking-widest text-slate-400 xl:text-[10px]">View</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {notificationLogs.map((log) => (
                             <tr key={log.id} className="mrs-table-row">
-                              <td className="break-words p-3 text-xs font-bold text-slate-600">{formatLogTimestamp(log.createdAt)}</td>
+                              <td className="break-words p-3 text-[10px] font-bold leading-snug text-slate-600 xl:text-[11px]">{formatLogTimestamp(log.createdAt)}</td>
                               <td className="p-3">
-                                <p className="text-sm font-black uppercase text-slate-800 break-words">
+                                <p className="break-words text-[11px] font-black uppercase text-slate-800 xl:text-xs">
                                   {log.userName || "Unknown User"}
                                 </p>
                                 {log.userEmail && (
@@ -1242,7 +1298,7 @@ export default function Settings({ initialTab = "rules" }) {
                                   </p>
                                 )}
                               </td>
-                              <td className="p-3 text-sm font-black uppercase text-slate-800 break-words">
+                              <td className="p-3 text-xs font-black uppercase text-slate-800 break-words">
                                 {log.patientName || "N/A"}
                               </td>
                               <td className="p-3 font-mono text-xs font-black text-green-800 break-words">
@@ -1253,13 +1309,24 @@ export default function Settings({ initialTab = "rules" }) {
                                   {log.action || log.title || "Notification"}
                                 </span>
                               </td>
-                              <td className="break-words p-3 text-xs font-semibold leading-relaxed text-slate-500">{log.message}</td>
+                              <td className="break-words p-3 text-[11px] font-semibold leading-snug text-slate-500">{log.message}</td>
+                              <td className="p-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedNotificationLog(log)}
+                                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition-colors hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700"
+                                  aria-label={`View notification log ${log.action || log.title || log.id}`}
+                                  title="View log"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                              </td>
                             </tr>
                           ))}
 
                           {notificationLogs.length === 0 && (
                             <tr>
-                              <td colSpan="6" className="p-10 text-center">
+                              <td colSpan="7" className="p-10 text-center">
                                 <Bell size={38} className="mx-auto mb-3 text-slate-300" />
                                 <p className="font-black uppercase text-slate-700">No notification logs yet</p>
                                 <p className="mt-1 text-sm font-semibold text-slate-400">
@@ -1273,18 +1340,79 @@ export default function Settings({ initialTab = "rules" }) {
                     </div>
                   </div>
                 )}
+
+                {safeActiveTab === "about" && (
+                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.1fr_1fr]">
+                    <div className="rounded-xl border border-green-100 bg-green-50 p-3">
+                      <p className="text-sm font-black uppercase text-green-800">Medical Records System</p>
+                      <p className="mt-1 text-xs font-semibold leading-relaxed text-green-700">
+                        A local hospital records workspace for patient registry, chart circulation, document requests, print reports, staff access, and audit history.
+                      </p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        {[
+                          { label: "App Version", value: "1.0.0" },
+                          { label: "Client", value: "React 19 / Vite 8" },
+                          { label: "Database", value: "Firebase Firestore" },
+                        ].map((item) => (
+                          <div key={item.label} className="rounded-xl border border-green-100 bg-white p-2.5">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
+                            <p className="mt-1 text-sm font-black uppercase text-slate-800">{item.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="rounded-xl bg-white p-2 text-blue-700 shadow-sm">
+                          <Code2 size={20} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-black uppercase text-blue-800">Developer</p>
+                          <p className="mt-1 text-lg font-black uppercase text-slate-900">Boris</p>
+                          <p className="mt-1 text-xs font-semibold leading-relaxed text-blue-700">
+                            Designed and developed for the TGMCI Medical Records workflow.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 space-y-1.5 text-xs font-semibold leading-relaxed text-blue-700">
+                        <p>Frontend: React, Tailwind CSS, Recharts, Framer Motion.</p>
+                        <p>Backend: Express API utilities and Firebase-backed client services.</p>
+                        <p>Security: role-aware routes, account status checks, sanitized record payloads, and Firestore rules.</p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 xl:col-span-2">
+                      <p className="text-sm font-black uppercase text-slate-800">System Modules</p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                        {[
+                          "Patient Registry",
+                          "Chart Circulation",
+                          "Medical Documents",
+                          "Laboratory Results",
+                          "Civil Documents",
+                          "Chart Reports",
+                          "Print Reports",
+                          "User Access",
+                        ].map((module) => (
+                          <div key={module} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                            <p className="text-[10px] font-black uppercase text-slate-700">{module}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             {isAdmin && (
-              <div className="grid shrink-0 grid-cols-1 gap-3 pb-1 md:grid-cols-2 xl:grid-cols-4">
+              <div className="flex shrink-0 flex-wrap gap-1.5 pb-1">
                 {[
                   { label: "Borrowing Departments", value: departments.length || fallbackDepartments.length, icon: Building2 },
                   { label: "Admission Departments", value: admissionLocations.length || fallbackAdmissionLocations.length, icon: Building2 },
                   { label: "Outpatient Departments", value: outpatientDepartments.length || fallbackOutpatientDepartments.length, icon: Building2 },
                   { label: "Report Filter", value: settings.defaultReportFilter, icon: SettingsIcon },
                 ].map((item) => (
-                  <div key={item.label} className="mrs-card rounded-2xl p-3">
+                  <div key={item.label} className="mrs-dashboard-stat mrs-card rounded-xl p-2">
                     <div className="flex items-center gap-3">
                       <div className="rounded-xl border border-green-100 bg-green-50 p-2 text-green-700">
                         <item.icon size={19} />
@@ -1314,6 +1442,10 @@ export default function Settings({ initialTab = "rules" }) {
             logCount={notificationLogs.length}
             onCancel={() => setIsClearLogsConfirmOpen(false)}
             onConfirm={clearNotificationLogs}
+          />
+          <NotificationLogViewModal
+            log={selectedNotificationLog}
+            onClose={() => setSelectedNotificationLog(null)}
           />
           <DepartmentEditorEntryModal
             isOpen={Boolean(pendingDepartmentEntry)}

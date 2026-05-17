@@ -1,4 +1,9 @@
-import { nowLocalKey, trackingDateRangeColumn, trackingDateTimeColumn } from "./trackingPageHelpers";
+import {
+  formatTrackingDateOnly,
+  formatTrackingDateTimeWithTime,
+  nowLocalKey,
+  trackingDateRangeColumn,
+} from "./trackingPageHelpers";
 
 export const documentTypes = [
   { value: "medicalCertificate", label: "Medical Certificate" },
@@ -61,6 +66,11 @@ export const releaseRelationshipOptions = [
   { value: "others", label: "Others" },
 ];
 
+export const trackingRelationshipOptions = [
+  { value: "patient", label: "Patient Itself" },
+  ...releaseRelationshipOptions,
+];
+
 export function optionLabel(options, value) {
   return options.find((option) => option.value === value)?.label || value || "N/A";
 }
@@ -85,54 +95,73 @@ export function statusTextClass(status) {
 
 export function statusBadgeClass(status) {
   const classes = {
-    borrowed: "border-blue-200 bg-blue-50 text-blue-700",
-    canceled: "border-amber-200 bg-amber-50 text-amber-700",
-    forRelease: "border-blue-200 bg-blue-50 text-blue-700",
-    forReview: "border-blue-200 bg-blue-50 text-blue-700",
-    paid: "border-green-200 bg-green-50 text-green-700",
-    released: "border-green-200 bg-green-50 text-green-700",
-    returned: "border-green-200 bg-green-50 text-green-700",
-    reviewed: "border-cyan-200 bg-cyan-50 text-cyan-700",
-    unpaid: "border-red-200 bg-red-50 text-red-700",
-    voided: "border-violet-300 bg-violet-50 text-violet-700",
+    active: "mrs-status-success",
+    borrowed: "mrs-status-info",
+    canceled: "mrs-status-warning",
+    forRelease: "mrs-status-info",
+    forReview: "mrs-status-info",
+    paid: "mrs-status-success",
+    released: "mrs-status-success",
+    returned: "mrs-status-success",
+    reviewed: "mrs-status-info",
+    unpaid: "mrs-status-danger",
+    voided: "mrs-status-voided",
   };
 
-  return classes[status] || "border-slate-200 bg-slate-50 text-slate-700";
+  return classes[status] || "mrs-status-neutral";
 }
 
 export function peso(value) {
   return `PHP ${Number(value || 0).toFixed(2)}`;
 }
 
-export function getTrackingColumns(config, selectedType = "") {
+export function getTrackingColumns(config) {
   if (config.collection === "medicalDocumentRequests") {
-    return config.columns.filter((column) => column.label !== "Document");
+    return config.columns.filter((column) => column.label !== "Document Type");
   }
 
   if (config.collection !== "vitalCertificateRequests") return config.columns;
 
   return config.columns.filter((column) => {
-    if (column.label === "Type") return false;
-    if (selectedType === "birth" && column.label === "Date of Death") return false;
-    if (["death", "fetalDeath"].includes(selectedType) && column.label === "Birthday") return false;
+    if (column.label === "Certificate Type") return false;
     return true;
   });
 }
 
-function typeListLabel(row) {
+function typeListLabel(row, options = certificateTypes) {
   const types = Array.isArray(row.typeList) ? row.typeList : [];
-  return types.length ? types.map((type) => optionLabel(certificateTypes, type)).join(", ") : "N/A";
+  return types.length ? types.map((type) => optionLabel(options, type)).join(", ") : "N/A";
+}
+
+function medicalDocumentTypeLabel(row) {
+  const label = typeListLabel(row, documentTypes);
+  return label === "N/A" ? optionLabel(documentTypes, row.documentType) : label;
 }
 
 function withRelationship(name, relationship) {
   const displayName = name || "N/A";
-  const displayRelationship = optionLabel(relationshipOptions, relationship);
+  const displayRelationship = optionLabel(trackingRelationshipOptions, relationship);
   return relationship ? `${displayName}\n${displayRelationship}` : displayName;
 }
 
 function reviewedLabel(row) {
-  const reviewedAt = trackingDateTimeColumn("Reviewed", "reviewedAt", "").value(row);
-  return `Reviewed: ${reviewedAt}\nBy: ${row.reviewedBy || "N/A"}`;
+  const reviewedAt = formatTrackingDateTimeWithTime(row.reviewedAt);
+  const reviewer = row.reviewedBy || "N/A";
+  const relationship = row.reviewRelationship
+    ? ` (${optionLabel(releaseRelationshipOptions, row.reviewRelationship)})`
+    : "";
+  return `Reviewed: ${reviewedAt}\n${reviewer}${relationship}`;
+}
+
+function labCopiesAmountLabel(row) {
+  return `Copies: ${row.copyCount || 0}\nAmount: ${peso(row.totalAmount)}`;
+}
+
+function civilDateLabel(row) {
+  const lines = [];
+  if (row.birthday) lines.push(`Birthday: ${formatTrackingDateOnly(row.birthday)}`);
+  if (row.dateOfDeath) lines.push(`Death: ${formatTrackingDateOnly(row.dateOfDeath)}`);
+  return lines.length ? lines.join("\n") : "N/A";
 }
 
 function patientCaseLabel(row) {
@@ -156,6 +185,7 @@ export const medicalDocumentConfig = {
     patientName: "",
     caseNumber: "",
     documentType: "medicalCertificate",
+    typeList: ["medicalCertificate"],
     releaseStatus: "forRelease",
     requestedAt: nowLocalKey(),
     releasedAt: "",
@@ -164,24 +194,24 @@ export const medicalDocumentConfig = {
   },
   fields: [
     { key: "patientName", label: "Patient Name", type: "patient" },
+    { key: "typeList", label: "Document Type", type: "multicheck", options: documentTypes },
     { key: "requestedAt", label: "Requested Date", type: "datetime-local" },
   ],
   editFields: [
     { key: "requestedAt", label: "Requested Date", type: "datetime-local" },
     { key: "releasedAt", label: "Released Date", type: "datetime-local" },
     { key: "receivedBy", label: "Received By", type: "text" },
-    { key: "receiverRelationship", label: "Relationship", type: "select", options: relationshipOptions },
+    { key: "receiverRelationship", label: "Relationship", type: "select", options: trackingRelationshipOptions },
     { key: "remarks", label: "Remarks", type: "text" },
   ],
   columns: [
-    { label: "Patient / Case No.", width: "w-[18%]", wrap: true, patientCase: true, value: patientCaseLabel },
-    { label: "Document", width: "w-[14%]", value: (row) => optionLabel(documentTypes, row.documentType) },
-    { label: "Status", width: "w-[10%]", wrap: true, statusKey: "releaseStatus", statusFallback: "forRelease", value: (row) => optionLabel(releaseStatuses, row.releaseStatus) },
-    trackingDateRangeColumn("Requested / Released", "Requested", "requestedAt", "Released", "releasedAt", "w-[16%]"),
-    { label: "Received By", width: "w-[12%]", wrap: true, value: (row) => row.receivedBy || "N/A" },
-    { label: "Relationship", width: "w-[11%]", value: (row) => optionLabel(relationshipOptions, row.receiverRelationship) },
-    { label: "Remarks", width: "w-[12%]", value: (row) => row.remarks || "" },
-    { label: "Released By", width: "w-[12%]", wrap: true, value: (row) => row.releasedBy || "N/A" },
+    { label: "Patient / Case", width: "w-[18%]", wrap: true, patientCase: true, value: patientCaseLabel },
+    { label: "Document Type", width: "w-[14%]", wrap: true, compact: true, indicator: "info", value: medicalDocumentTypeLabel },
+    { label: "Release", width: "w-[10%]", wrap: true, statusKey: "releaseStatus", statusFallback: "forRelease", value: (row) => optionLabel(releaseStatuses, row.releaseStatus) },
+    trackingDateRangeColumn("Request Dates", "Requested", "requestedAt", "Released", "releasedAt", "w-[18%]"),
+    { label: "Receiver", width: "w-[15%]", wrap: true, compact: true, value: (row) => withRelationship(row.receivedBy, row.receiverRelationship) },
+    { label: "Remarks", width: "w-[12%]", wrap: true, compact: true, value: (row) => row.remarks || "N/A" },
+    { label: "Released Staff", width: "w-[13%]", wrap: true, compact: true, value: (row) => row.releasedBy || "N/A" },
   ],
   statusOptions: documentReleaseStatuses,
   statusValue: (row) => row.releaseStatus || "forRelease",
@@ -192,7 +222,7 @@ export const medicalDocumentConfig = {
   ],
   validate: (form) => {
     if (!form.patientName.trim()) return "Enter the patient name.";
-    if (!form.documentType) return "Choose a document type.";
+    if (!Array.isArray(form.typeList) || form.typeList.length === 0) return "Choose at least one document type.";
     if (!form.requestedAt) return "Enter the requested date.";
     return "";
   },
@@ -200,6 +230,9 @@ export const medicalDocumentConfig = {
     patientName: row.patientName || "",
     caseNumber: row.caseNumber || "",
     documentType: row.documentType || "medicalCertificate",
+    typeList: Array.isArray(row.typeList) && row.typeList.length
+      ? row.typeList
+      : [row.documentType || "medicalCertificate"],
     releaseStatus: row.releaseStatus || "forRelease",
     requestedAt: row.requestedAt || nowLocalKey(),
     releasedAt: row.releasedAt || "",
@@ -248,20 +281,18 @@ export const labResultConfig = {
     { key: "requestedAt", label: "Requested Date", type: "datetime-local" },
     { key: "releasedAt", label: "Released Date", type: "datetime-local" },
     { key: "receivedBy", label: "Received By", type: "text" },
-    { key: "receiverRelationship", label: "Relationship", type: "select", options: relationshipOptions },
+    { key: "receiverRelationship", label: "Relationship", type: "select", options: trackingRelationshipOptions },
     { key: "remarks", label: "Remarks", type: "text" },
   ],
   columns: [
-    { label: "Patient / Case No.", width: "w-[16%]", wrap: true, patientCase: true, value: patientCaseLabel },
-    { label: "Copies", width: "w-[8%]", value: (row) => row.copyCount || 0 },
-    { label: "Amount", width: "w-[10%]", value: (row) => peso(row.totalAmount) },
+    { label: "Patient / Case", width: "w-[16%]", wrap: true, patientCase: true, value: patientCaseLabel },
+    { label: "Copies / Amount", width: "w-[13%]", wrap: true, compact: true, value: labCopiesAmountLabel },
     { label: "Payment", width: "w-[10%]", statusKey: "paymentStatus", statusFallback: "unpaid", value: (row) => optionLabel(paymentStatuses, row.paymentStatus || "unpaid") },
-    { label: "Release Status", width: "w-[10%]", wrap: true, statusKey: "releaseStatus", statusFallback: "forRelease", value: (row) => optionLabel(releaseStatuses, row.releaseStatus) },
-    trackingDateRangeColumn("Requested / Released", "Requested", "requestedAt", "Released", "releasedAt", "w-[15%]"),
-    { label: "Received By", width: "w-[12%]", wrap: true, value: (row) => row.receivedBy || "N/A" },
-    { label: "Relationship", width: "w-[11%]", value: (row) => optionLabel(relationshipOptions, row.receiverRelationship) },
-    { label: "Remarks", width: "w-[12%]", value: (row) => row.remarks || "" },
-    { label: "Released By", width: "w-[12%]", wrap: true, value: (row) => row.releasedBy || "N/A" },
+    { label: "Release", width: "w-[10%]", wrap: true, statusKey: "releaseStatus", statusFallback: "forRelease", value: (row) => optionLabel(releaseStatuses, row.releaseStatus) },
+    trackingDateRangeColumn("Request Dates", "Requested", "requestedAt", "Released", "releasedAt", "w-[17%]"),
+    { label: "Receiver", width: "w-[14%]", wrap: true, compact: true, value: (row) => withRelationship(row.receivedBy, row.receiverRelationship) },
+    { label: "Remarks", width: "w-[10%]", wrap: true, compact: true, value: (row) => row.remarks || "N/A" },
+    { label: "Released Staff", width: "w-[10%]", wrap: true, compact: true, value: (row) => row.releasedBy || "N/A" },
   ],
   statusOptions: [...paymentStatuses, ...documentReleaseStatuses],
   statusValue: (row) => row.releaseStatus === "released" ? "released" : row.paymentStatus || "unpaid",
@@ -316,6 +347,7 @@ export const vitalCertificateConfig = {
     requestedAt: nowLocalKey(),
     reviewedAt: "",
     releasedAt: "",
+    reviewRelationship: "",
     receivedBy: "",
     remarks: "",
   },
@@ -332,26 +364,26 @@ export const vitalCertificateConfig = {
     { key: "requestedAt", label: "Recorded Date", type: "datetime-local" },
     { key: "reviewedAt", label: "Reviewed Date", type: "datetime-local" },
     { key: "reviewedBy", label: "Reviewed By", type: "text" },
+    { key: "reviewRelationship", label: "Review Relationship", type: "select", options: releaseRelationshipOptions },
     { key: "receivedBy", label: "Received By", type: "text" },
-    { key: "receiverRelationship", label: "Relationship", type: "select", options: relationshipOptions },
+    { key: "receiverRelationship", label: "Relationship", type: "select", options: trackingRelationshipOptions },
   ],
   columns: [
-    { label: "Patient / Case No.", width: "w-[16%]", wrap: true, patientCase: true, value: patientCaseLabel },
-    { label: "Type", width: "w-[14%]", value: typeListLabel },
-    { label: "Birthday", width: "w-[10%]", value: (row) => row.birthday || "N/A" },
-    { label: "Date of Death", width: "w-[10%]", value: (row) => row.dateOfDeath || "N/A" },
+    { label: "Patient / Case", width: "w-[16%]", wrap: true, patientCase: true, value: patientCaseLabel },
+    { label: "Certificate Type", width: "w-[13%]", wrap: true, compact: true, indicator: "info", value: typeListLabel },
+    { label: "Civil Dates", width: "w-[12%]", wrap: true, compact: true, dateLines: true, value: civilDateLabel },
     {
-      label: "Review Status",
+      label: "Review",
       width: "w-[12%]",
       statusKey: "reviewStatus",
       statusFallback: "forReview",
       value: (row) => optionLabel(reviewStatuses, row.reviewStatus || "forReview"),
     },
-    trackingDateRangeColumn("Recorded / Released", "Recorded", "requestedAt", "Released", "releasedAt", "w-[14%]"),
-    { label: "Reviewed / By", width: "w-[14%]", wrap: true, value: reviewedLabel },
-    { label: "Received By", width: "w-[13%]", wrap: true, value: (row) => withRelationship(row.receivedBy, row.receiverRelationship) },
-    { label: "Release Status", width: "w-[12%]", statusKey: "releaseStatus", statusFallback: "forRelease", value: (row) => optionLabel(releaseStatuses, row.releaseStatus || "forRelease") },
-    { label: "Released By", width: "w-[12%]", value: (row) => row.releasedBy || "N/A" },
+    trackingDateRangeColumn("Process Dates", "Recorded", "requestedAt", "Released", "releasedAt", "w-[15%]"),
+    { label: "Reviewer", width: "w-[14%]", wrap: true, compact: true, value: reviewedLabel },
+    { label: "Receiver", width: "w-[12%]", wrap: true, compact: true, value: (row) => withRelationship(row.receivedBy, row.receiverRelationship) },
+    { label: "Release", width: "w-[10%]", statusKey: "releaseStatus", statusFallback: "forRelease", value: (row) => optionLabel(releaseStatuses, row.releaseStatus || "forRelease") },
+    { label: "Released Staff", width: "w-[11%]", wrap: true, compact: true, value: (row) => row.releasedBy || "N/A" },
   ],
   statusOptions: vitalCertificateStatuses.filter((status) => status.value !== "voided"),
   statusValue: (row) => row.releaseStatus === "released" ? "released" : row.reviewStatus || "forReview",
@@ -385,6 +417,7 @@ export const vitalCertificateConfig = {
     reviewedAt: row.reviewedAt || "",
     releasedAt: row.releasedAt || "",
     reviewedBy: row.reviewedBy || "",
+    reviewRelationship: row.reviewRelationship || "",
     receivedBy: row.receivedBy || "",
     receiverRelationship: row.receiverRelationship || "",
     remarks: row.remarks || "",

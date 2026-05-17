@@ -484,10 +484,10 @@ export default function Patients() {
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="mb-2 flex shrink-0 flex-col justify-between gap-2 px-1 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl font-black tracking-tight text-gray-900 sm:text-2xl">
-            PATIENT <span className="text-green-600">REGISTRY</span>
+          <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
+            Patient <span className="text-green-700">Registry</span>
           </h1>
-          <p className="mt-0.5 text-xs font-medium text-gray-400">Hospital Records & Management</p>
+          <p className="mt-0.5 text-xs font-medium text-slate-500">Hospital records and management.</p>
         </div>
         {canManagePatients && (
           <button
@@ -504,21 +504,21 @@ export default function Patients() {
         )}
       </div>
 
-      <div className="mb-2 grid shrink-0 grid-cols-3 gap-2">
+      <div className="mb-2 flex shrink-0 flex-wrap gap-1.5">
         {stats.map((item) => (
           <div
             key={item.label}
-            className="mrs-surface rounded-xl p-3"
+            className="mrs-dashboard-stat mrs-surface rounded-xl p-2"
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
                   {item.label}
                 </p>
-                <p className="mt-0.5 text-xl font-black text-slate-800">{item.value}</p>
+                <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
               </div>
-              <div className={`rounded-lg p-2 ${item.color}`}>
-                <item.icon size={18} />
+              <div className={`rounded-lg p-1.5 ${item.color}`}>
+                <item.icon size={15} />
               </div>
             </div>
           </div>
@@ -588,7 +588,7 @@ export default function Patients() {
 
               <button
                 onClick={resetFilters}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5 text-[10px] font-black uppercase text-slate-500 transition-colors hover:border-black hover:text-black"
+                className="mrs-soft-button inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-[10px] font-black uppercase"
               >
                 <X size={14} />
                 Reset
@@ -638,16 +638,16 @@ export default function Patients() {
                     </td>
                     <td className="px-3 py-2 rounded-r-xl border-y border-r border-slate-200 bg-white text-right group-hover:bg-slate-50">
                       <div className="flex justify-end gap-1">
-                        <button onClick={() => setViewPatient(p)} className="rounded-lg border border-transparent p-1.5 transition-all hover:border-black hover:bg-gray-50">
+                        <button onClick={() => setViewPatient(p)} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-500 transition-colors hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700" title="View patient">
                           <Eye size={16} />
                         </button>
                         {canManagePatients && (
-                          <button onClick={() => { setEditPatient({ ...p, previousCaseNumber: p.caseNumber }); setEditError(""); }} className="rounded-lg border border-transparent p-1.5 transition-all hover:border-black hover:bg-gray-50">
+                          <button onClick={() => { setEditPatient({ ...p, previousCaseNumber: p.caseNumber }); setEditError(""); }} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700" title="Edit patient">
                             <Edit size={16} />
                           </button>
                         )}
                         {canDeletePatients && (
-                          <button onClick={() => setDeletePatient(p)} className="rounded-lg border border-transparent p-1.5 text-red-500 transition-all hover:border-black hover:bg-red-50">
+                          <button onClick={() => setDeletePatient(p)} className="rounded-lg border border-red-100 bg-red-50 p-1.5 text-red-500 transition-colors hover:border-red-200 hover:bg-red-100 hover:text-red-700" title="Delete patient">
                             <Trash2 size={16} />
                           </button>
                         )}
@@ -658,7 +658,7 @@ export default function Patients() {
 
                 {filteredPatients.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="bg-white rounded-2xl border-2 border-black p-10 text-center">
+                    <td colSpan="5" className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
                       <ClipboardList size={40} className="mx-auto text-slate-300 mb-3" />
                       <p className="font-black text-slate-700 uppercase">
                         {isLoading ? "Loading patients..." : "No patients found"}

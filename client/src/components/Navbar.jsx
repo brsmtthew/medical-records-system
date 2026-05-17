@@ -329,7 +329,7 @@ export default function Navbar({ onMenuClick }) {
 
   return (
     <>
-    <div className="mrs-navbar sticky top-0 z-50 flex h-14 w-full items-center justify-between gap-2 border-b px-3 py-2 backdrop-blur-xl sm:px-4 md:px-5">
+    <div className="mrs-navbar sticky top-0 z-50 flex h-16 w-full items-center justify-between gap-3 border-b px-3 py-2 backdrop-blur-xl sm:px-4 md:px-5">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 md:gap-4">
         <Motion.button
           whileHover={{ y: -1 }}
@@ -341,20 +341,21 @@ export default function Navbar({ onMenuClick }) {
           <Menu size={22} />
         </Motion.button>
 
-        <div className="flex min-w-0 flex-col">
-          <h1 className="text-base font-bold tracking-tight text-slate-900 leading-tight sm:text-lg sm:leading-none truncate">
-            {pageTitle}
-          </h1>
-          <div className="mt-0.5 flex items-center gap-2">
-            <span className="hidden sm:inline rounded bg-cyan-50 px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest text-cyan-700">
-              TGMCI Medical Records
-            </span>
+        <div className="mrs-topbar-title flex min-w-0 items-center gap-3">
+          <div className="hidden h-10 w-1 rounded-full bg-gradient-to-b from-green-500 to-cyan-500 sm:block" />
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400">
+              TGMCI Records
+            </p>
+            <h1 className="truncate text-base font-black tracking-tight text-slate-900 leading-tight sm:text-xl sm:leading-none">
+              {pageTitle}
+            </h1>
           </div>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-        <div className="hidden xl:flex items-center gap-2 text-slate-500 px-3 2xl:px-4 border-r border-slate-200">
+      <div className="flex shrink-0 items-center gap-2">
+        <div className="mrs-topbar-chip hidden xl:flex items-center gap-2 px-3 py-2">
           <Calendar size={16} />
           <span className="text-xs font-bold uppercase tracking-wider">
             {new Date().toLocaleDateString("en-US", {
@@ -373,7 +374,7 @@ export default function Navbar({ onMenuClick }) {
               setShowProfile(false);
               setUnreadNotifications(0);
             }}
-          className="relative flex size-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition-colors hover:border-green-300 hover:bg-green-50"
+          className="mrs-topbar-action relative flex size-10 items-center justify-center rounded-xl border text-slate-700 transition-colors"
             aria-label="Open notifications"
           >
             <Bell size={19} />
@@ -464,7 +465,7 @@ export default function Navbar({ onMenuClick }) {
         <button
           type="button"
           onClick={toggleAppearanceMode}
-          className="mrs-icon-button hidden size-9 border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50 sm:inline-flex"
+          className="mrs-topbar-action hidden size-10 items-center justify-center rounded-xl border text-slate-700 transition-colors sm:inline-flex"
           aria-label={appearanceMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           title={appearanceMode === "dark" ? "Light mode" : "Dark mode"}
         >
@@ -478,9 +479,9 @@ export default function Navbar({ onMenuClick }) {
               setShowProfile((value) => !value);
               setShowNotifications(false);
             }}
-            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm hover:border-green-300 hover:bg-green-50/50 sm:pr-2"
+            className="mrs-profile-button flex cursor-pointer items-center gap-2 rounded-xl border p-1 shadow-sm sm:pr-3"
           >
-            <div className="w-8 h-8 bg-green-700 rounded-md flex items-center justify-center text-white font-black text-xs shadow-sm overflow-hidden">
+            <div className="w-9 h-9 bg-green-700 rounded-lg flex items-center justify-center text-white font-black text-xs shadow-sm overflow-hidden">
               {photoDataUrl ? (
                 <img src={photoDataUrl} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -573,25 +574,28 @@ export default function Navbar({ onMenuClick }) {
               initial={{ opacity: 0, y: 12, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.97 }}
-              className="mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl overflow-y-auto rounded-2xl p-4 sm:p-5"
+              className="mrs-account-modal mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-hidden rounded-2xl"
             >
               <button
                 onClick={() => setShowAccountSettings(false)}
-                className="absolute top-4 right-4 p-2 rounded-xl hover:bg-slate-100"
+                className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-white/80 text-slate-500 hover:bg-white hover:text-slate-900"
                 aria-label="Close account settings"
               >
                 <X size={20} />
               </button>
 
-              <h2 className="pr-9 text-lg font-black text-slate-800 uppercase mb-1 sm:text-xl">Account Settings</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase mb-4">
-                Update your profile details and account photo.
-              </p>
+              <div className="mrs-account-header p-5 pr-14">
+                <p className="text-[10px] font-black uppercase tracking-[0.26em] text-green-700">Profile Center</p>
+                <h2 className="mt-1 text-xl font-black text-slate-900 uppercase">Account Settings</h2>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Manage your identity, contact details, and password in one place.
+                </p>
+              </div>
 
-              <form onSubmit={handleAccountSave} className="space-y-4">
-                <div className="grid gap-4 lg:grid-cols-[12rem_1fr]">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                    <label className="group relative mx-auto flex h-28 w-28 cursor-pointer items-center justify-center overflow-hidden rounded-2xl bg-green-700 text-3xl font-black text-white shadow-lg shadow-green-900/10">
+              <form onSubmit={handleAccountSave} className="max-h-[calc(100dvh-8rem)] space-y-4 overflow-y-auto p-4 sm:p-5">
+                <div className="grid gap-4 lg:grid-cols-[10rem_1fr]">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <label className="group relative mx-auto flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-xl bg-green-700 text-2xl font-black text-white shadow-lg shadow-green-900/10">
                       {accountForm.photoDataUrl ? (
                         <img src={accountForm.photoDataUrl} alt="" className="w-full h-full object-cover" />
                       ) : (
@@ -604,7 +608,7 @@ export default function Navbar({ onMenuClick }) {
                     </label>
                     <label className="mrs-soft-button mt-3 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black uppercase">
                       <Camera size={16} />
-                      Photo
+                      Upload
                       <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
                     </label>
                     {accountForm.photoDataUrl && (
@@ -674,7 +678,7 @@ export default function Navbar({ onMenuClick }) {
                       </label>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                         <p className="text-sm font-black uppercase text-slate-800">Security</p>
                         <p className="text-[11px] font-semibold text-slate-500">
@@ -717,7 +721,7 @@ export default function Navbar({ onMenuClick }) {
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-end gap-2">
+                <div className="flex flex-col sm:flex-row justify-end gap-2 border-t border-slate-100 pt-4">
                   <button
                     type="button"
                     onClick={() => setShowAccountSettings(false)}

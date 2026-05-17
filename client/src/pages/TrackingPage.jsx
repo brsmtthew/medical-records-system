@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import {
   addTrackingRow,
-  cancelTrackingRow,
   deleteTrackingRow,
   deleteTrackingRowType,
   markTrackingRowReviewed,
@@ -31,7 +30,6 @@ import { useAuth } from "../context/useAuth";
 import {
   getTrackingColumns,
   releaseRelationshipOptions,
-  releaseStatuses,
   statusBadgeClass,
 } from "../utils/trackingConfigs";
 
@@ -63,13 +61,13 @@ function isLabResultConfig(config) {
   return config.collection === "labResultRequests";
 }
 
-function rowHasCertificateType(row, type) {
+function rowHasSelectedType(row, type) {
   return Array.isArray(row.typeList) && row.typeList.includes(type);
 }
 
 function rowMatchesSelectedType(config, row, type) {
   if (!config.typeOptions || !type) return true;
-  if (isVitalConfig(config)) return rowHasCertificateType(row, type);
+  if (rowHasSelectedType(row, type)) return true;
   if (config.typeFilterKey) return row[config.typeFilterKey] === type;
   return true;
 }
@@ -95,10 +93,54 @@ function rowMatchesDateRange(row, startDate, endDate) {
 }
 
 function cellClassName(column) {
-  const base = "p-3 align-top text-xs font-bold leading-snug text-slate-700 xl:p-4 xl:text-sm";
+  const base = column.compact
+    ? "p-3 align-top text-[10px] font-bold leading-tight text-slate-700 xl:p-4 xl:text-[11px]"
+    : "p-3 align-top text-[11px] font-semibold leading-snug text-slate-700 xl:p-4 xl:text-xs";
   return column.wrap
     ? `${base} whitespace-pre-line break-words`
     : `${base} overflow-hidden text-ellipsis whitespace-nowrap`;
+}
+
+function indicatorClassName(tone = "neutral") {
+  const classes = {
+    info: "border-blue-200 bg-blue-50 text-blue-700",
+    neutral: "border-slate-200 bg-slate-50 text-slate-700",
+    success: "border-green-200 bg-green-50 text-green-700",
+    warning: "border-amber-200 bg-amber-50 text-amber-700",
+  };
+
+  return classes[tone] || classes.neutral;
+}
+
+function renderMultilineValue(value) {
+  const lines = String(value || "N/A").split("\n").filter(Boolean);
+
+  return (
+    <div className="mrs-value-stack space-y-1 text-[10px] font-bold uppercase leading-tight xl:text-[11px]">
+      {lines.map((line, index) => {
+        const [label, ...rest] = line.split(":");
+        const hasLabel = rest.length > 0;
+        const colorClass = index === 0 ? "text-blue-700" : "text-green-700";
+
+        return (
+          <p key={`${line}-${index}`} className="whitespace-normal break-words text-slate-700">
+            {hasLabel ? (
+              <>
+                <span className={`mrs-value-label ${colorClass}`}>{label.trim()}</span>
+                <span className="mrs-value-main">{stackDateTimeText(rest.join(":").trim() || "N/A")}</span>
+              </>
+            ) : (
+              <span className={colorClass}>{line}</span>
+            )}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function stackDateTimeText(value) {
+  return String(value || "N/A");
 }
 
 function FilterField({ label, children }) {
@@ -118,7 +160,7 @@ function StatusLegend({ options }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-black uppercase">
       {options.map((option) => (
-        <span key={option.value} className={`inline-flex rounded-full border px-3 py-1 ${statusBadgeClass(option.value)}`}>
+        <span key={option.value} className={`mrs-status-badge ${statusBadgeClass(option.value)}`}>
           {option.label}
         </span>
       ))}
@@ -138,17 +180,48 @@ function renderCellValue(column, row) {
       .map((item) => item.replace(/^[^:]+:\s*/, ""));
 
     return (
-      <div className="space-y-1 text-[10px] font-black uppercase leading-tight">
-        <p className="break-words text-amber-700">{column.dateRange.firstLabel}: {firstValue}</p>
-        <p className="break-words text-green-700">{column.dateRange.secondLabel}: {secondValue}</p>
+      <div className="mrs-value-stack space-y-1 text-[10px] font-black uppercase leading-tight">
+        <p className="break-words">
+          <span className="mrs-value-label text-amber-700">{column.dateRange.firstLabel}</span>
+          <span className="mrs-value-main">{stackDateTimeText(firstValue)}</span>
+        </p>
+        <p className="break-words">
+          <span className="mrs-value-label text-green-700">{column.dateRange.secondLabel}</span>
+          <span className="mrs-value-main">{stackDateTimeText(secondValue)}</span>
+        </p>
       </div>
     );
+  }
+  if (column.dateLines) {
+    const lines = String(value || "N/A").split("\n").filter(Boolean);
+
+    return (
+      <div className="mrs-value-stack space-y-1 text-[10px] font-black uppercase leading-tight">
+        {lines.map((line, index) => (
+          <p key={`${line}-${index}`} className={`${index === 0 ? "text-amber-700" : "text-green-700"} whitespace-normal break-words`}>
+            {line}
+          </p>
+        ))}
+      </div>
+    );
+  }
+
+  if (column.indicator) {
+    return (
+      <span className={`inline-flex max-w-full rounded-lg border px-2 py-1 text-[10px] font-black uppercase leading-tight whitespace-normal ${indicatorClassName(column.indicator)}`}>
+        {value || "N/A"}
+      </span>
+    );
+  }
+
+  if (column.wrap && String(value || "").includes("\n")) {
+    return renderMultilineValue(value);
   }
 
   if (!column.statusKey) return value;
 
   return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${statusBadgeClass(row[column.statusKey] || column.statusFallback)}`}>
+    <span className={`mrs-status-badge ${statusBadgeClass(row[column.statusKey] || column.statusFallback)}`}>
       {value}
     </span>
   );
@@ -335,18 +408,18 @@ function ReleaseModal({ config, isOpen, item, onCancel, onConfirm, pendingAction
   const [receivedBy, setReceivedBy] = useState("");
   const [receiverRelationship, setReceiverRelationship] = useState("representative");
   const [paymentStatus, setPaymentStatus] = useState(item?.paymentStatus || "unpaid");
-  const [remarks, setRemarks] = useState(config.collection === "vitalCertificateRequests" ? "released" : "");
+  const [remarks, setRemarks] = useState("");
 
   if (!isOpen || !item) return null;
+  const isVitalRelease = config.collection === "vitalCertificateRequests";
   const isManualReceiver = receiverRelationship === "others";
   const receiverName = receivedBy;
-  const receiverOptions = config.collection === "vitalCertificateRequests"
+  const receiverOptions = isVitalRelease
     ? releaseRelationshipOptions
     : [
         { value: "patient", label: "Patient Itself" },
         ...releaseRelationshipOptions,
       ];
-  const releaseModalStatuses = releaseStatuses.filter((option) => ["forRelease", "released"].includes(option.value));
 
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
@@ -391,28 +464,18 @@ function ReleaseModal({ config, isOpen, item, onCancel, onConfirm, pendingAction
             autoFocus
           />
         </label>
-        <label className="mt-3 block">
-          <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-400">
-            {config.collection === "vitalCertificateRequests" ? "Release Status" : "Remarks"}
-          </span>
-          {config.collection === "vitalCertificateRequests" ? (
-            <select
-              value={remarks}
-              onChange={(event) => setRemarks(event.target.value)}
-              className="mrs-field w-full rounded-xl px-3 py-2.5 text-sm font-bold"
-            >
-              {releaseModalStatuses.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          ) : (
+        {!isVitalRelease && (
+          <label className="mt-3 block">
+            <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-400">
+              Remarks
+            </span>
             <input
               value={remarks}
               onChange={(event) => setRemarks(event.target.value)}
               className="mrs-field w-full rounded-xl px-3 py-2.5 text-sm font-bold"
             />
-          )}
-        </label>
+          </label>
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onCancel} className="mrs-soft-button rounded-xl px-4 py-3 text-xs font-black uppercase">
             Cancel
@@ -423,7 +486,7 @@ function ReleaseModal({ config, isOpen, item, onCancel, onConfirm, pendingAction
               receivedBy: receiverRelationship === "patient" ? item.patientName || "" : receiverName,
               receiverRelationship,
               paymentStatus,
-              remarks,
+              remarks: isVitalRelease ? "released" : remarks,
             })}
             disabled={pendingAction === "release"}
             className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase disabled:opacity-60"
@@ -466,6 +529,7 @@ function ConfirmationModal({ confirmation, onCancel, pendingAction }) {
 
 function ReviewModal({ isOpen, item, onCancel, onConfirm, pendingAction }) {
   const [reviewedBy, setReviewedBy] = useState("");
+  const [reviewRelationship, setReviewRelationship] = useState("representative");
 
   if (!isOpen || !item) return null;
 
@@ -476,6 +540,18 @@ function ReviewModal({ isOpen, item, onCancel, onConfirm, pendingAction }) {
         <p className="mt-1 text-xs font-semibold text-slate-500">
           Enter the person who reviewed {item.patientName || "this certificate"}.
         </p>
+        <label className="mt-4 block">
+          <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-400">Relationship</span>
+          <select
+            value={reviewRelationship}
+            onChange={(event) => setReviewRelationship(event.target.value)}
+            className="mrs-field w-full rounded-xl px-3 py-2.5 text-sm font-bold"
+          >
+            {releaseRelationshipOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
         <label className="mt-4 block">
           <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-400">Reviewed By</span>
           <input
@@ -491,7 +567,7 @@ function ReviewModal({ isOpen, item, onCancel, onConfirm, pendingAction }) {
           </button>
           <button
             type="button"
-            onClick={() => onConfirm({ reviewedBy })}
+            onClick={() => onConfirm({ reviewedBy, reviewRelationship })}
             disabled={pendingAction === "review"}
             className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase disabled:opacity-60"
           >
@@ -638,7 +714,7 @@ export default function TrackingPage({ config }) {
     const typedForm = isVitalConfig(config)
       ? { ...config.defaultForm, typeList: [selectedType] }
       : isMedicalDocumentConfig(config)
-        ? { ...config.defaultForm, documentType: selectedType }
+        ? { ...config.defaultForm, documentType: selectedType, typeList: [selectedType] }
         : config.defaultForm;
     setForm(typedForm);
     setEditingId("");
@@ -652,14 +728,29 @@ export default function TrackingPage({ config }) {
         await updateTrackingRow(config.collection, editingId, form);
         setSuccessMessage(`${config.singleLabel} was updated.`);
       } else {
-        await addTrackingRow(config.collection, {
-          ...form,
-          releaseStatus: "forRelease",
-          releasedAt: "",
-          receivedBy: "",
-          receiverRelationship: "",
-          remarks: "",
-        });
+        const selectedTypes = Array.isArray(form.typeList) && form.typeList.length ? form.typeList : [form.documentType].filter(Boolean);
+        const rowsToAdd = ["medicalDocumentRequests", "vitalCertificateRequests"].includes(config.collection)
+          ? selectedTypes.map((type) => ({
+              ...form,
+              documentType: isMedicalDocumentConfig(config) ? type : form.documentType || "",
+              typeList: [type],
+              reviewStatus: isVitalConfig(config) ? "forReview" : form.reviewStatus || "",
+              releaseStatus: "forRelease",
+              reviewedAt: "",
+              releasedAt: "",
+              receivedBy: "",
+              receiverRelationship: "",
+              remarks: "",
+            }))
+          : [{
+              ...form,
+              releaseStatus: "forRelease",
+              releasedAt: "",
+              receivedBy: "",
+              receiverRelationship: "",
+              remarks: "",
+            }];
+        await Promise.all(rowsToAdd.map((row) => addTrackingRow(config.collection, row)));
         setSuccessMessage(`${config.singleLabel} was recorded for release.`);
       }
       setLoadError("");
@@ -696,13 +787,17 @@ export default function TrackingPage({ config }) {
 
   const handleReviewed = async (payload) => {
     if (!reviewItem) return;
+    if (!payload.reviewRelationship) {
+      setLoadError("Choose the reviewer relationship.");
+      return;
+    }
     if (!payload.reviewedBy.trim()) {
       setLoadError("Enter the person who reviewed the certificate.");
       return;
     }
     try {
       setPendingAction("review");
-      await markTrackingRowReviewed(config.collection, reviewItem.id, payload);
+      await markTrackingRowReviewed(config.collection, reviewItem.id, { ...payload, type: selectedType });
       setSuccessMessage(`${config.singleLabel} was marked reviewed.`);
       setConfirmation(null);
       setReviewItem(null);
@@ -715,6 +810,10 @@ export default function TrackingPage({ config }) {
 
   const confirmReviewed = (payload) => {
     if (!reviewItem) return;
+    if (!payload.reviewRelationship) {
+      setLoadError("Choose the reviewer relationship.");
+      return;
+    }
     if (!payload.reviewedBy.trim()) {
       setLoadError("Enter the person who reviewed the certificate.");
       return;
@@ -744,7 +843,7 @@ export default function TrackingPage({ config }) {
 
     try {
       setPendingAction("release");
-      await releaseTrackingRow(config.collection, releaseItem.id, payload);
+      await releaseTrackingRow(config.collection, releaseItem.id, { ...payload, type: selectedType });
       setSuccessMessage(`${config.singleLabel} was released.`);
       setConfirmation(null);
       setReleaseItem(null);
@@ -784,9 +883,9 @@ export default function TrackingPage({ config }) {
     }
     try {
       setPendingAction(`delete-${row.id}`);
-      if (["medicalDocumentRequests", "labResultRequests"].includes(config.collection)) {
-        await cancelTrackingRow(config.collection, row.id, config.pluralLabel);
-        setSuccessMessage(`${config.singleLabel} was canceled.`);
+      if (isMedicalDocumentConfig(config) && Array.isArray(row.typeList) && row.typeList.length > 1) {
+        await deleteTrackingRowType(config.collection, row.id, selectedType);
+        setSuccessMessage(`${config.singleLabel} type was deleted.`);
       } else if (isVitalConfig(config) && Array.isArray(row.typeList) && row.typeList.length > 1) {
         await deleteTrackingRowType(config.collection, row.id, selectedType);
         setSuccessMessage(`${config.singleLabel} type was deleted.`);
@@ -807,7 +906,7 @@ export default function TrackingPage({ config }) {
       setLoadError("Only admins can delete tracking records.");
       return;
     }
-    const deleteMessage = isVitalConfig(config) && Array.isArray(row.typeList) && row.typeList.length > 1
+    const deleteMessage = ["medicalDocumentRequests", "vitalCertificateRequests"].includes(config.collection) && Array.isArray(row.typeList) && row.typeList.length > 1
       ? `Delete only the ${selectedType} type from this record? Other selected types will stay.`
       : `Delete this ${config.singleLabel.toLowerCase()}?`;
     setConfirmation({
@@ -850,11 +949,11 @@ export default function TrackingPage({ config }) {
           </button>
         </div>
 
-        <div className="grid shrink-0 grid-cols-1 gap-2 md:grid-cols-3">
+        <div className="flex shrink-0 flex-wrap gap-1.5">
           {stats.map((item) => (
-            <div key={item.label} className="mrs-surface rounded-xl p-3">
+            <div key={item.label} className="mrs-dashboard-stat mrs-surface rounded-xl p-2">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
-              <p className="mt-1 text-xl font-black text-slate-800">{item.value}</p>
+              <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
             </div>
           ))}
         </div>
@@ -931,7 +1030,7 @@ export default function TrackingPage({ config }) {
             <StatusLegend options={config.statusOptions} />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
             {visibleTypes.map((type) => {
               const tableRows = config.typeOptions ? displayedRows : filteredRows;
 
@@ -943,11 +1042,11 @@ export default function TrackingPage({ config }) {
                       <p className="text-xs font-bold text-slate-400">{tableRows.length} record(s)</p>
                     </div>
                   )}
-                  <table className="w-full table-fixed text-left">
+                  <table className="w-full min-w-[980px] table-fixed text-left">
                     <thead className="sticky top-0 z-10 bg-white">
                       <tr className="border-b border-slate-100">
                         {activeColumns.map((column) => (
-                          <th key={column.label} className={`${column.width || "w-[14%]"} break-words p-3 align-top text-[9px] font-black uppercase leading-tight tracking-widest text-slate-400 xl:p-4 xl:text-[10px]`}>
+                          <th key={column.label} className={`${column.width || "w-[14%]"} whitespace-normal p-3 align-top text-[9px] font-black uppercase leading-tight tracking-widest text-slate-400 xl:p-4 xl:text-[10px]`}>
                             {column.label}
                           </th>
                         ))}
@@ -999,7 +1098,7 @@ export default function TrackingPage({ config }) {
                                 <button
                                   type="button"
                                   onClick={() => setViewItem(row)}
-                                  className="rounded-xl border border-cyan-100 p-2 text-cyan-600 hover:border-cyan-300"
+                                  className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition-colors hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700"
                                   aria-label={`View ${config.singleLabel}`}
                                   title="View released record"
                                 >
@@ -1009,7 +1108,7 @@ export default function TrackingPage({ config }) {
                               <button
                                 type="button"
                                 onClick={() => startEdit(row)}
-                                className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:border-black hover:text-black"
+                                className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                                 aria-label={`Edit ${config.singleLabel}`}
                               >
                                 <Edit size={16} />

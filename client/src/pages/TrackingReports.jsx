@@ -23,17 +23,13 @@ function reportSearchValue(row, columns) {
   return columns.map((column) => column.value(row)).join(" ").toLowerCase();
 }
 
-function isVitalConfig(config) {
-  return config.collection === "vitalCertificateRequests";
-}
-
-function rowHasCertificateType(row, type) {
+function rowHasSelectedType(row, type) {
   return Array.isArray(row.typeList) && row.typeList.includes(type);
 }
 
 function rowMatchesSelectedType(config, row, type) {
   if (!config.typeOptions || !type) return true;
-  if (isVitalConfig(config)) return rowHasCertificateType(row, type);
+  if (rowHasSelectedType(row, type)) return true;
   if (config.typeFilterKey) return row[config.typeFilterKey] === type;
   return true;
 }
@@ -59,10 +55,54 @@ function rowMatchesDateRange(row, startDate, endDate) {
 }
 
 function cellClassName(column) {
-  const base = "p-3 align-top text-xs font-bold leading-snug text-slate-700 xl:p-4 xl:text-sm";
+  const base = column.compact
+    ? "p-3 align-top text-[10px] font-bold leading-tight text-slate-700 xl:p-4 xl:text-[11px]"
+    : "p-3 align-top text-[11px] font-semibold leading-snug text-slate-700 xl:p-4 xl:text-xs";
   return column.wrap
     ? `${base} whitespace-pre-line break-words`
     : `${base} overflow-hidden text-ellipsis whitespace-nowrap`;
+}
+
+function indicatorClassName(tone = "neutral") {
+  const classes = {
+    info: "border-blue-200 bg-blue-50 text-blue-700",
+    neutral: "border-slate-200 bg-slate-50 text-slate-700",
+    success: "border-green-200 bg-green-50 text-green-700",
+    warning: "border-amber-200 bg-amber-50 text-amber-700",
+  };
+
+  return classes[tone] || classes.neutral;
+}
+
+function renderMultilineValue(value) {
+  const lines = String(value || "N/A").split("\n").filter(Boolean);
+
+  return (
+    <div className="mrs-value-stack space-y-1 text-[10px] font-bold uppercase leading-tight xl:text-[11px]">
+      {lines.map((line, index) => {
+        const [label, ...rest] = line.split(":");
+        const hasLabel = rest.length > 0;
+        const colorClass = index === 0 ? "text-blue-700" : "text-green-700";
+
+        return (
+          <p key={`${line}-${index}`} className="whitespace-normal break-words text-slate-700">
+            {hasLabel ? (
+              <>
+                <span className={`mrs-value-label ${colorClass}`}>{label.trim()}</span>
+                <span className="mrs-value-main">{stackDateTimeText(rest.join(":").trim() || "N/A")}</span>
+              </>
+            ) : (
+              <span className={colorClass}>{line}</span>
+            )}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function stackDateTimeText(value) {
+  return String(value || "N/A");
 }
 
 function formatReportDateTime(value) {
@@ -74,7 +114,7 @@ function formatReportDateTime(value) {
     hour: "numeric",
     minute: "2-digit",
   });
-  return `${formatDisplayDate(time)}\n${timePart}`;
+  return `${formatDisplayDate(time)} ${timePart}`;
 }
 
 function receiverLabel(row) {
@@ -92,7 +132,7 @@ function statusBadge(row) {
   const status = row.releaseStatus || "forRelease";
 
   return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${statusBadgeClass(status)}`}>
+    <span className={`mrs-status-badge ${statusBadgeClass(status)}`}>
       {statusLabel(row)}
     </span>
   );
@@ -101,7 +141,7 @@ function statusBadge(row) {
 function getMedicalReportColumns() {
   return [
     {
-      label: "Patient / Case No.",
+      label: "Patient / Case",
       width: "w-[22%]",
       wrap: true,
       patientCase: true,
@@ -168,7 +208,7 @@ function StatusLegend({ options }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-black uppercase">
       {options.map((option) => (
-        <span key={option.value} className={`inline-flex rounded-full border px-3 py-1 ${statusBadgeClass(option.value)}`}>
+        <span key={option.value} className={`mrs-status-badge ${statusBadgeClass(option.value)}`}>
           {option.label}
         </span>
       ))}
@@ -177,11 +217,61 @@ function StatusLegend({ options }) {
 }
 
 function renderCellValue(column, row) {
+  const value = column.value(row);
+
   if (column.patientCase) {
     return <PatientCaseCell patientName={row.patientName} caseNumber={row.caseNumber} />;
   }
+  if (column.dateRange) {
+    const [firstValue = "N/A", secondValue = "N/A"] = String(value || "")
+      .split("\n")
+      .map((item) => item.replace(/^[^:]+:\s*/, ""));
 
-  return column.value(row);
+    return (
+      <div className="mrs-value-stack space-y-1 text-[10px] font-black uppercase leading-tight">
+        <p className="break-words">
+          <span className="mrs-value-label text-amber-700">{column.dateRange.firstLabel}</span>
+          <span className="mrs-value-main">{stackDateTimeText(firstValue)}</span>
+        </p>
+        <p className="break-words">
+          <span className="mrs-value-label text-green-700">{column.dateRange.secondLabel}</span>
+          <span className="mrs-value-main">{stackDateTimeText(secondValue)}</span>
+        </p>
+      </div>
+    );
+  }
+  if (column.dateLines) {
+    const lines = String(value || "N/A").split("\n").filter(Boolean);
+
+    return (
+      <div className="mrs-value-stack space-y-1 text-[10px] font-black uppercase leading-tight">
+        {lines.map((line, index) => (
+          <p key={`${line}-${index}`} className={`${index === 0 ? "text-amber-700" : "text-green-700"} whitespace-normal break-words`}>
+            {line}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  if (column.indicator) {
+    return (
+      <span className={`inline-flex max-w-full rounded-lg border px-2 py-1 text-[10px] font-black uppercase leading-tight whitespace-normal ${indicatorClassName(column.indicator)}`}>
+        {value || "N/A"}
+      </span>
+    );
+  }
+  if (column.wrap && String(value || "").includes("\n")) {
+    return renderMultilineValue(value);
+  }
+  if (column.statusKey) {
+    return (
+      <span className={`mrs-status-badge ${statusBadgeClass(row[column.statusKey] || column.statusFallback)}`}>
+        {value}
+      </span>
+    );
+  }
+
+  return value;
 }
 
 function ConfirmationModal({ confirmation, onCancel, pendingAction }) {
@@ -275,7 +365,7 @@ export default function TrackingReports() {
 
     try {
       setPendingAction(`delete-${row.id}`);
-      if (isVitalConfig(activeConfig) && Array.isArray(row.typeList) && row.typeList.length > 1) {
+      if (["medicalDocumentRequests", "vitalCertificateRequests"].includes(activeConfig.collection) && Array.isArray(row.typeList) && row.typeList.length > 1) {
         await deleteTrackingRowType(activeConfig.collection, row.id, selectedType);
       } else {
         await deleteTrackingRow(activeConfig.collection, row.id);
@@ -296,7 +386,7 @@ export default function TrackingReports() {
       return;
     }
 
-    const deleteMessage = isVitalConfig(activeConfig) && Array.isArray(row.typeList) && row.typeList.length > 1
+    const deleteMessage = ["medicalDocumentRequests", "vitalCertificateRequests"].includes(activeConfig.collection) && Array.isArray(row.typeList) && row.typeList.length > 1
       ? `Delete only the ${selectedType} type from this report record? Other selected types will stay.`
       : "Delete this report record?";
     setConfirmation({
@@ -321,7 +411,7 @@ export default function TrackingReports() {
           </div>
         </div>
 
-        <div className="no-print grid shrink-0 grid-cols-1 gap-2 md:grid-cols-3">
+        <div className="no-print flex shrink-0 flex-wrap gap-1.5">
           {trackingReportConfigs.map((config) => (
             <button
               key={config.collection}
@@ -334,14 +424,14 @@ export default function TrackingReports() {
                 setEndDate("");
                 setSelectedType(config.typeOptions?.[0]?.value || "");
               }}
-              className={`rounded-xl border p-3 text-left transition-colors ${
+              className={`rounded-xl border p-2.5 text-left transition-colors ${
                 activeConfig.collection === config.collection
                   ? "border-green-300 bg-green-50"
                   : "mrs-surface"
               }`}
             >
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{config.pluralLabel}</p>
-              <p className="mt-1 text-xl font-black text-slate-800">{(rowsByCollection[config.collection] || []).length}</p>
+              <p className="mt-0.5 text-lg font-black text-slate-800">{(rowsByCollection[config.collection] || []).length}</p>
             </button>
           ))}
         </div>
@@ -360,11 +450,11 @@ export default function TrackingReports() {
                 Showing {displayedRows.length} of {rows.length} rows
               </p>
             </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <div className="mt-4 flex flex-wrap gap-1.5">
               {activeStats.map((item) => (
-                <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div key={item.label} className="mrs-dashboard-stat rounded-xl border border-slate-200 bg-slate-50 p-2">
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
-                  <p className="mt-1 text-lg font-black text-slate-800">{item.value}</p>
+                  <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
                 </div>
               ))}
             </div>
@@ -441,7 +531,7 @@ export default function TrackingReports() {
             <StatusLegend options={reportStatusOptions(activeConfig)} />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
             {(activeConfig.typeOptions ? activeConfig.typeOptions.filter((type) => type.value === selectedType) : [{ value: "all", label: "" }]).map((type) => {
               const tableRows = activeConfig.typeOptions
                 ? displayedRows
@@ -455,11 +545,11 @@ export default function TrackingReports() {
                       <p className="text-xs font-bold text-slate-400">{tableRows.length} record(s)</p>
                     </div>
                   )}
-                  <table className="w-full table-fixed text-left">
+                  <table className="w-full min-w-[980px] table-fixed text-left">
                     <thead className="sticky top-0 z-10 bg-white">
                       <tr className="border-b border-slate-100">
                         {activeColumns.map((column) => (
-                          <th key={column.label} className={`${column.width || "w-[14%]"} break-words p-3 align-top text-[9px] font-black uppercase leading-tight tracking-widest text-slate-400 xl:p-4 xl:text-[10px]`}>
+                          <th key={column.label} className={`${column.width || "w-[14%]"} whitespace-normal p-3 align-top text-[9px] font-black uppercase leading-tight tracking-widest text-slate-400 xl:p-4 xl:text-[10px]`}>
                             {column.label}
                           </th>
                         ))}

@@ -14,7 +14,7 @@ const toneClasses = {
 
 export default function StatusBadge({ children, className = "", tone = "neutral" }) {
   return (
-    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wide ${toneClasses[tone] || toneClasses.neutral} ${className}`}>
+    <span className={`mrs-status-badge ${toneClasses[tone] || toneClasses.neutral} ${className}`}>
       {children}
     </span>
   );

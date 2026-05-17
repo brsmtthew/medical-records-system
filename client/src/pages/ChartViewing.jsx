@@ -26,7 +26,6 @@ const chartViewingSession = {
   selectedPath: "",
   searchQuery: "",
   folderName: "",
-  recentCharts: [],
 };
 
 // Reads the in-memory folder preview state used while navigating inside the app.
@@ -66,7 +65,6 @@ export default function ChartViewing() {
   });
   const [searchQuery, setSearchQuery] = useState(() => readChartViewingSession().searchQuery);
   const [folderName, setFolderName] = useState(() => readChartViewingSession().folderName);
-  const [recentCharts, setRecentCharts] = useState(() => readChartViewingSession().recentCharts || []);
   const [pendingFiles, setPendingFiles] = useState(null);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -86,16 +84,6 @@ export default function ChartViewing() {
     setPdfPage(1);
     setIsPreviewLoading(Boolean(chart));
     updateChartViewingSession({ selectedPath: chart?.path || "" });
-    if (chart) {
-      setRecentCharts((current) => {
-        const nextHistory = [
-          { name: chart.name, path: chart.path, viewedAt: new Date().toISOString() },
-          ...current.filter((item) => item.path !== chart.path),
-        ].slice(0, 5);
-        updateChartViewingSession({ recentCharts: nextHistory });
-        return nextHistory;
-      });
-    }
   }, []);
 
   // Updates chart search text and keeps it in the current session state.
@@ -507,26 +495,6 @@ export default function ChartViewing() {
             </div>
           </div>
         </div>
-        {recentCharts.length > 0 && (
-          <div className="mrs-panel shrink-0 rounded-xl p-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Recently Viewed</p>
-            <div className="mt-2 flex gap-2 overflow-x-auto">
-              {recentCharts.map((item) => (
-                <button
-                  key={item.path}
-                  type="button"
-                  onClick={() => {
-                    const match = charts.find((chart) => chart.path === item.path);
-                    if (match) selectChart(match);
-                  }}
-                  className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-black text-slate-700 hover:bg-slate-50"
-                >
-                  {item.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
       <ChartFolderLoadModal
         fileCount={pendingFiles?.length || 0}
