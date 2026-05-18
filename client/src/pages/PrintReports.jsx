@@ -456,7 +456,7 @@ export default function PrintReports() {
   return (
     <DashboardLayout>
       <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
-        <div className="no-print flex shrink-0 flex-col justify-between gap-3 xl:flex-row xl:items-center">
+        <div className="no-print grid shrink-0 grid-cols-1 gap-2 xl:grid-cols-[minmax(18rem,auto)_minmax(0,1fr)] xl:items-end">
           <div>
             <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
               Print <span className="text-green-700">Reports</span>
@@ -465,73 +465,76 @@ export default function PrintReports() {
               One place to preview, print, and export all reports in the system.
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => setIsExcelPreviewOpen(true)}
-              className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
-            >
-              <Eye size={17} />
-              Preview Excel
-            </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="mrs-soft-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
-            >
-              <Printer size={17} />
-              Print
-            </button>
+          <div className="grid min-w-0 grid-cols-4 gap-1.5 xl:justify-self-end xl:w-[min(56rem,100%)]">
+            {printReportConfigs.map((config) => (
+              <button
+                key={config.collection}
+                type="button"
+                onClick={() => switchReport(config)}
+                className={`mrs-dashboard-stat-fill rounded-xl border p-2 text-left transition-colors ${
+                  activeConfig.collection === config.collection
+                    ? "border-green-300 bg-green-50"
+                    : "mrs-surface"
+                }`}
+              >
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{config.pluralLabel}</p>
+                <p className="mt-0.5 text-base font-black leading-none text-slate-800">
+                  {config.collection === chartReportConfig.collection
+                    ? chartRows.length
+                    : (rowsByCollection[config.collection] || []).length}
+                </p>
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="no-print flex shrink-0 flex-wrap gap-1.5">
-          {printReportConfigs.map((config) => (
-            <button
-              key={config.collection}
-              type="button"
-              onClick={() => switchReport(config)}
-              className={`rounded-xl border p-2.5 text-left transition-colors ${
-                activeConfig.collection === config.collection
-                  ? "border-green-300 bg-green-50"
-                  : "mrs-surface"
-              }`}
-            >
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{config.pluralLabel}</p>
-              <p className="mt-0.5 text-lg font-black text-slate-800">
-                {config.collection === chartReportConfig.collection
-                  ? chartRows.length
-                  : (rowsByCollection[config.collection] || []).length}
-              </p>
-            </button>
-          ))}
-        </div>
-
         <div className="mrs-panel mrs-print-area flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl">
-          <div className="mrs-report-header shrink-0 border-b border-slate-100 bg-white p-5">
-            <p className="text-[10px] font-black uppercase tracking-widest text-green-700">TGMCI Medical Records</p>
-            <div className="mt-2 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
-              <div>
+          <div className="mrs-report-header grid shrink-0 gap-3 border-b border-slate-100 bg-white p-3 xl:grid-cols-[minmax(18rem,auto)_minmax(0,1fr)] xl:items-end">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-green-700">TGMCI Medical Records</p>
+              <div className="mt-2">
                 <h2 className="text-xl font-black uppercase text-slate-900">{activeConfig.pluralLabel} Report</h2>
                 <p className="text-xs font-semibold text-slate-500">
                   Generated {new Date().toLocaleString()}
                 </p>
               </div>
-              <p className="text-xs font-black uppercase text-slate-500">
-                Showing {filteredRows.length} of {rows.length} rows
-              </p>
+              <div className="mt-1">
+                <p className="text-xs font-black uppercase text-slate-500">
+                  Showing {filteredRows.length} of {rows.length} rows
+                </p>
+              </div>
             </div>
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {activeStats.map((item) => (
-                <div key={item.label} className="mrs-dashboard-stat rounded-xl border border-slate-200 bg-slate-50 p-2">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
-                  <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
-                </div>
-              ))}
+            <div className="min-w-0 space-y-2 xl:justify-self-end xl:w-[min(42rem,100%)]">
+              <div className="no-print flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsExcelPreviewOpen(true)}
+                  className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-[10px] font-black uppercase"
+                >
+                  <Eye size={15} />
+                  Preview Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="mrs-soft-button inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-[10px] font-black uppercase"
+                >
+                  <Printer size={15} />
+                  Print
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {activeStats.map((item) => (
+                  <div key={item.label} className="mrs-dashboard-stat mrs-dashboard-stat-fill mrs-surface rounded-xl p-2">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
+                    <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="no-print shrink-0 space-y-3 border-b border-slate-100 bg-slate-50 p-3">
+          <div className="no-print shrink-0 space-y-2 border-b border-slate-100 bg-slate-50 p-2">
             <div className="grid gap-2 lg:grid-cols-[1fr_auto_auto_auto_auto]">
               <FilterField label="Search">
                 <div className="relative">
@@ -540,7 +543,7 @@ export default function PrintReports() {
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
                     placeholder={activeConfig.searchPlaceholder}
-                    className="mrs-field w-full rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold"
+                    className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
                   />
                 </div>
               </FilterField>
@@ -549,7 +552,7 @@ export default function PrintReports() {
                   type="date"
                   value={startDate}
                   onChange={(event) => setStartDate(event.target.value)}
-                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                  className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-black uppercase"
                 />
               </FilterField>
               <FilterField label="End Date">
@@ -557,14 +560,14 @@ export default function PrintReports() {
                   type="date"
                   value={endDate}
                   onChange={(event) => setEndDate(event.target.value)}
-                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                  className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-black uppercase"
                 />
               </FilterField>
               <FilterField label="Status">
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value)}
-                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                  className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-black uppercase"
                 >
                   <option value="all">All Status</option>
                   {reportStatusOptions(activeConfig).map((option) => (
@@ -575,20 +578,20 @@ export default function PrintReports() {
               <button
                 type="button"
                 onClick={resetFilters}
-                className="mrs-soft-button mt-4 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
+                className="mrs-soft-button mt-4 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase"
               >
                 <RotateCcw size={15} />
                 Reset
               </button>
             </div>
             {activeConfig.typeOptions && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {activeConfig.typeOptions.map((type) => (
                   <button
                     key={type.value}
                     type="button"
                     onClick={() => setSelectedType(type.value)}
-                    className={`rounded-xl border px-3 py-2 text-[10px] font-black uppercase transition-colors ${
+                    className={`rounded-lg border px-2.5 py-1.5 text-[9px] font-black uppercase transition-colors ${
                       selectedType === type.value
                         ? "border-green-700 bg-green-700 text-white"
                         : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:text-green-700"

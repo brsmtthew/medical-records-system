@@ -321,7 +321,8 @@ export default function Navbar({ onMenuClick }) {
     "/medical-documents": "Medical Documents",
     "/lab-results": "Laboratory Results",
     "/vital-certificates": "Civil Documents",
-    "/tracking-reports": "Print Reports",
+    "/tracking-reports": "Medical Reports",
+    "/print-reports": "Print Reports",
     "/settings": "Settings",
     "/users": "Users",
   };
@@ -354,9 +355,9 @@ export default function Navbar({ onMenuClick }) {
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <div className="mrs-topbar-chip hidden xl:flex items-center gap-2 px-3 py-2">
-          <Calendar size={16} />
+      <div className="mrs-topbar-tray flex shrink-0 items-center gap-1.5 rounded-2xl border p-1">
+        <div className="mrs-topbar-chip hidden h-8 items-center gap-2 px-2.5 xl:flex">
+          <Calendar size={14} />
           <span className="text-xs font-bold uppercase tracking-wider">
             {new Date().toLocaleDateString("en-US", {
             month: "short",
@@ -374,12 +375,12 @@ export default function Navbar({ onMenuClick }) {
               setShowProfile(false);
               setUnreadNotifications(0);
             }}
-          className="mrs-topbar-action relative flex size-10 items-center justify-center rounded-xl border text-slate-700 transition-colors"
+          className="mrs-topbar-action relative flex size-8 items-center justify-center rounded-xl border text-slate-700 transition-colors"
             aria-label="Open notifications"
           >
-            <Bell size={19} />
+            <Bell size={16} />
             {visibleUnreadNotifications > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-black leading-4 text-white shadow-sm">
+              <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[9px] font-black leading-3 text-white shadow-sm">
                 {visibleUnreadNotifications > 9 ? "9+" : visibleUnreadNotifications}
               </span>
             )}
@@ -465,11 +466,11 @@ export default function Navbar({ onMenuClick }) {
         <button
           type="button"
           onClick={toggleAppearanceMode}
-          className="mrs-topbar-action hidden size-10 items-center justify-center rounded-xl border text-slate-700 transition-colors sm:inline-flex"
+          className="mrs-topbar-action hidden size-8 items-center justify-center rounded-xl border text-slate-700 transition-colors sm:inline-flex"
           aria-label={appearanceMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           title={appearanceMode === "dark" ? "Light mode" : "Dark mode"}
         >
-          {appearanceMode === "dark" ? <Sun size={19} /> : <Moon size={19} />}
+          {appearanceMode === "dark" ? <Sun size={16} /> : <Moon size={16} />}
         </button>
 
         <div className="relative">
@@ -479,9 +480,9 @@ export default function Navbar({ onMenuClick }) {
               setShowProfile((value) => !value);
               setShowNotifications(false);
             }}
-            className="mrs-profile-button flex cursor-pointer items-center gap-2 rounded-xl border p-1 shadow-sm sm:pr-3"
+            className="mrs-profile-button flex cursor-pointer items-center gap-2 rounded-xl border p-1 shadow-sm sm:pr-2"
           >
-            <div className="w-9 h-9 bg-green-700 rounded-lg flex items-center justify-center text-white font-black text-xs shadow-sm overflow-hidden">
+            <div className="flex size-8 items-center justify-center overflow-hidden rounded-lg bg-green-700 text-xs font-black text-white shadow-sm">
               {photoDataUrl ? (
                 <img src={photoDataUrl} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -490,12 +491,12 @@ export default function Navbar({ onMenuClick }) {
             </div>
             <div className="hidden sm:flex flex-col text-left">
               <div className="flex items-center gap-1.5">
-                <span className="block max-w-28 truncate whitespace-nowrap text-xs font-black text-slate-800 leading-tight 2xl:max-w-40">
+                <span className="block max-w-28 truncate whitespace-nowrap text-[11px] font-black leading-tight text-slate-800 2xl:max-w-40">
                   {displayName}
                 </span>
                 <Circle size={8} className="fill-green-500 text-green-500" />
               </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+              <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-400">
                 {accountProfile?.department || "Medical Records"}
               </span>
             </div>

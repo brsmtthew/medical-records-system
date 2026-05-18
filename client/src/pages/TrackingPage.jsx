@@ -67,7 +67,7 @@ function rowHasSelectedType(row, type) {
 
 function rowMatchesSelectedType(config, row, type) {
   if (!config.typeOptions || !type) return true;
-  if (rowHasSelectedType(row, type)) return true;
+  if (Array.isArray(row.typeList) && row.typeList.length) return rowHasSelectedType(row, type);
   if (config.typeFilterKey) return row[config.typeFilterKey] === type;
   return true;
 }
@@ -679,6 +679,10 @@ export default function TrackingPage({ config }) {
     : filteredRows;
 
   const stats = config.stats(activeRows);
+  const headerStats = [
+    { label: "Total Patients", value: patients.length },
+    ...stats,
+  ];
   const visibleTypes = config.typeOptions?.filter((type) => type.value === selectedType) || [{ value: "all", label: "" }];
 
   const resetForm = () => {
@@ -932,34 +936,44 @@ export default function TrackingPage({ config }) {
   return (
     <DashboardLayout>
       <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
-        <div className="flex shrink-0 flex-col justify-between gap-3 xl:flex-row xl:items-center">
+        <div className="grid shrink-0 grid-cols-1 gap-2 xl:grid-cols-[minmax(22rem,auto)_minmax(0,1fr)] xl:items-end">
           <div>
             <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
               {config.titlePrefix} <span className="text-green-700">{config.titleAccent}</span>
             </h1>
             <p className="text-xs font-medium text-slate-500">{config.description}</p>
           </div>
-          <button
-            type="button"
-            onClick={openCreateForm}
-            className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
-          >
-            <Plus size={17} />
-            Add Record
-          </button>
+          <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-4 xl:justify-self-end xl:w-[min(56rem,100%)]">
+            {headerStats.map((item) => (
+              <div key={item.label} className="mrs-dashboard-stat mrs-dashboard-stat-fill mrs-surface rounded-xl p-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
+                <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-1.5">
-          {stats.map((item) => (
-            <div key={item.label} className="mrs-dashboard-stat mrs-surface rounded-xl p-2">
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
-              <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
-            </div>
-          ))}
+        <div className="flex shrink-0 flex-col justify-between gap-2 px-1 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="font-black uppercase text-slate-800">{config.pluralLabel}</h2>
+            <p className="text-xs font-bold text-slate-400">
+              Showing {displayedRows.length} of {activeRows.length} records
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={openCreateForm}
+              className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-[10px] font-black uppercase"
+            >
+              <Plus size={15} />
+              Add Record
+            </button>
+          </div>
         </div>
 
         <div className="mrs-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl">
-          <div className="shrink-0 space-y-3 border-b border-slate-100 bg-slate-50 p-3">
+          <div className="mrs-filter-strip shrink-0 space-y-2 border-b border-slate-100 p-2">
             <div className="grid gap-2 lg:grid-cols-[1fr_auto_auto_auto_auto]">
               <FilterField label="Search">
                 <div className="relative">
@@ -968,7 +982,7 @@ export default function TrackingPage({ config }) {
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
                     placeholder={config.searchPlaceholder}
-                    className="mrs-field w-full rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold"
+                    className="mrs-field w-full rounded-lg py-1.5 pl-9 pr-3 text-xs font-bold"
                   />
                 </div>
               </FilterField>
@@ -977,7 +991,7 @@ export default function TrackingPage({ config }) {
                   type="date"
                   value={startDate}
                   onChange={(event) => setStartDate(event.target.value)}
-                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                  className="mrs-field w-full rounded-lg px-3 py-1.5 text-xs font-black uppercase"
                 />
               </FilterField>
               <FilterField label="End Date">
@@ -985,14 +999,14 @@ export default function TrackingPage({ config }) {
                   type="date"
                   value={endDate}
                   onChange={(event) => setEndDate(event.target.value)}
-                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                  className="mrs-field w-full rounded-lg px-3 py-1.5 text-xs font-black uppercase"
                 />
               </FilterField>
               <FilterField label="Status">
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value)}
-                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                  className="mrs-field w-full rounded-lg px-3 py-1.5 text-xs font-black uppercase"
                 >
                   <option value="all">All Status</option>
                   {config.statusOptions.map((option) => (
@@ -1003,20 +1017,20 @@ export default function TrackingPage({ config }) {
               <button
                 type="button"
                 onClick={resetFilters}
-                className="mrs-soft-button mt-4 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
+                className="mrs-soft-button mt-4 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase"
               >
                 <RotateCcw size={15} />
                 Reset
               </button>
             </div>
             {config.typeOptions && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {config.typeOptions.map((type) => (
                   <button
                     key={type.value}
                     type="button"
                     onClick={() => setSelectedType(type.value)}
-                    className={`rounded-xl border px-3 py-2 text-[10px] font-black uppercase transition-colors ${
+                    className={`rounded-lg border px-2.5 py-1.5 text-[9px] font-black uppercase transition-colors ${
                       selectedType === type.value
                         ? "border-green-700 bg-green-700 text-white"
                         : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:text-green-700"
@@ -1037,14 +1051,14 @@ export default function TrackingPage({ config }) {
               return (
                 <div key={type.value} className={config.typeOptions ? "border-b border-slate-100 last:border-b-0" : ""}>
                   {config.typeOptions && (
-                    <div className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3">
+                    <div className="mrs-section-band sticky left-0 z-10 border-b border-slate-100 px-4 py-2">
                       <p className="text-sm font-black uppercase text-slate-800">{type.label} {config.typeHeadingSuffix || "Records"}</p>
                       <p className="text-xs font-bold text-slate-400">{tableRows.length} record(s)</p>
                     </div>
                   )}
                   <table className="w-full min-w-[980px] table-fixed text-left">
-                    <thead className="sticky top-0 z-10 bg-white">
-                      <tr className="border-b border-slate-100">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="mrs-section-band border-b border-slate-100">
                         {activeColumns.map((column) => (
                           <th key={column.label} className={`${column.width || "w-[14%]"} whitespace-normal p-3 align-top text-[9px] font-black uppercase leading-tight tracking-widest text-slate-400 xl:p-4 xl:text-[10px]`}>
                             {column.label}
@@ -1131,10 +1145,10 @@ export default function TrackingPage({ config }) {
 
                       {tableRows.length === 0 && (
                         <tr>
-                          <td colSpan={activeColumns.length + 1} className="p-10 text-center">
-                            <FileCheck2 size={38} className="mx-auto mb-3 text-slate-300" />
+                          <td colSpan={activeColumns.length + 1} className="p-8 text-center">
+                            <FileCheck2 size={34} className="mx-auto mb-2 text-slate-300" />
                             <p className="font-black uppercase text-slate-700">No Records Found</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-400">
+                            <p className="mt-1 text-xs font-semibold text-slate-400">
                               Add a record or adjust the filters.
                             </p>
                           </td>
@@ -1146,7 +1160,7 @@ export default function TrackingPage({ config }) {
               );
             })}
           </div>
-          <div className="shrink-0 border-t border-slate-100 bg-slate-50 p-3 text-xs font-bold text-slate-500">
+          <div className="mrs-filter-strip shrink-0 border-t border-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
             Showing {displayedRows.length} of {activeRows.length} {config.pluralLabel.toLowerCase()}.
           </div>
         </div>

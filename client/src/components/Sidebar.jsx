@@ -8,6 +8,7 @@ import {
   FileSearch,
   BarChart3,
   BadgeCheck,
+  ClipboardList,
   Files,
   FlaskConical,
   PrinterCheck,
@@ -61,7 +62,7 @@ export default function Sidebar({
       label: "Reports",
       items: [
         { name: "Chart Reports", icon: BarChart3, path: "/reports" },
-        { name: "Medical Reports", icon: FileSearch, path: "/tracking-reports" },
+        { name: "Medical Reports", icon: ClipboardList, path: "/tracking-reports" },
         { name: "Print Reports", icon: PrinterCheck, path: "/print-reports" },
       ],
     },

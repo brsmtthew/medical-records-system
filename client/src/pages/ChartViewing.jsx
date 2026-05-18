@@ -66,6 +66,7 @@ export default function ChartViewing() {
   const [searchQuery, setSearchQuery] = useState(() => readChartViewingSession().searchQuery);
   const [folderName, setFolderName] = useState(() => readChartViewingSession().folderName);
   const [pendingFiles, setPendingFiles] = useState(null);
+  const [isFolderPickerConfirmOpen, setIsFolderPickerConfirmOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const [notice, setNotice] = useState(null);
   const [sortMode, setSortMode] = useState("path");
@@ -185,6 +186,11 @@ export default function ChartViewing() {
     setPendingFiles(null);
   };
 
+  const openFolderPicker = () => {
+    setIsFolderPickerConfirmOpen(false);
+    folderInputRef.current?.click();
+  };
+
   const sortedCharts = useMemo(() => {
     return [...charts].sort((first, second) => {
       if (sortMode === "name") return first.name.localeCompare(second.name);
@@ -265,7 +271,7 @@ export default function ChartViewing() {
               Clear
             </button>
             <button
-              onClick={() => folderInputRef.current?.click()}
+              onClick={() => setIsFolderPickerConfirmOpen(true)}
               className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-black uppercase transition"
             >
               <FolderOpen size={18} />
@@ -496,6 +502,15 @@ export default function ChartViewing() {
           </div>
         </div>
       </div>
+      <ChartFolderLoadModal
+        confirmLabel="Choose Folder"
+        description="The browser will ask permission to read files from the folder you select. Files stay local and are only used for previews in this screen."
+        isOpen={isFolderPickerConfirmOpen}
+        onCancel={() => setIsFolderPickerConfirmOpen(false)}
+        onConfirm={openFolderPicker}
+        subtitle="Local access only"
+        title="Choose Chart Folder?"
+      />
       <ChartFolderLoadModal
         fileCount={pendingFiles?.length || 0}
         isOpen={Boolean(pendingFiles)}

@@ -1,7 +1,16 @@
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import { FolderOpen } from "lucide-react";
 
-export default function ChartFolderLoadModal({ fileCount, isOpen, onCancel, onConfirm }) {
+export default function ChartFolderLoadModal({
+  confirmLabel = "Load",
+  description,
+  fileCount,
+  isOpen,
+  onCancel,
+  onConfirm,
+  subtitle,
+  title = "Load Chart Folder?",
+}) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -25,14 +34,14 @@ export default function ChartFolderLoadModal({ fileCount, isOpen, onCancel, onCo
                 <FolderOpen size={24} />
               </div>
               <div>
-                <h2 className="text-xl font-black text-slate-800 uppercase">Load Chart Folder?</h2>
+                <h2 className="text-xl font-black text-slate-800 uppercase">{title}</h2>
                 <p className="text-xs font-bold text-slate-400 uppercase">
-                  {fileCount} selected file(s)
+                  {subtitle || `${fileCount} selected file(s)`}
                 </p>
               </div>
             </div>
             <p className="mb-6 text-sm font-semibold text-slate-500">
-              This will replace the current local chart preview list.
+              {description || "This will replace the current local chart preview list."}
             </p>
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -47,7 +56,7 @@ export default function ChartFolderLoadModal({ fileCount, isOpen, onCancel, onCo
                 onClick={onConfirm}
                 className="mrs-blue-button rounded-xl py-3 text-xs font-black uppercase"
               >
-                Load
+                {confirmLabel}
               </button>
             </div>
           </Motion.div>

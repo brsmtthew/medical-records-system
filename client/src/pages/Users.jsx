@@ -152,17 +152,17 @@ export default function Users() {
     });
   }, [searchTerm, sortMode, userFilter, users]);
   const userNavItems = [
-    { id: "all", label: "All Users", value: users.length, icon: UsersIcon },
-    { id: "active", label: "Active", value: activeUsers, icon: UserCheck },
-    { id: "blocked", label: "Blocked", value: blockedUsers, icon: UserX },
-    { id: "admins", label: "Admins", value: adminUsers, icon: ShieldCheck },
-    { id: "staff", label: "Staff", value: staffUsers, icon: UserCog },
+    { id: "all", label: "All Users", value: users.length, icon: UsersIcon, tone: "text-green-700", iconClass: "border-green-200 bg-green-50 text-green-700" },
+    { id: "active", label: "Active", value: activeUsers, icon: UserCheck, tone: "text-blue-700", iconClass: "border-blue-200 bg-blue-50 text-blue-700" },
+    { id: "blocked", label: "Blocked", value: blockedUsers, icon: UserX, tone: "text-red-700", iconClass: "border-red-200 bg-red-50 text-red-700" },
+    { id: "admins", label: "Admins", value: adminUsers, icon: ShieldCheck, tone: "text-amber-700", iconClass: "border-amber-200 bg-amber-50 text-amber-700" },
+    { id: "staff", label: "Staff", value: staffUsers, icon: UserCog, tone: "text-cyan-700", iconClass: "border-cyan-200 bg-cyan-50 text-cyan-700" },
   ];
 
   return (
     <DashboardLayout>
       <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
-        <div className="flex shrink-0 flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex shrink-0 flex-col gap-2">
           <div>
             <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
               User <span className="text-green-700">Management</span>
@@ -171,28 +171,31 @@ export default function Users() {
               Manage admin and staff access from a dedicated admin workspace.
             </p>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { label: "Total", value: users.length, icon: UsersIcon },
-              { label: "Admins", value: adminUsers, icon: UserCog },
-              { label: "Blocked", value: blockedUsers, icon: UserX },
-            ].map((item) => (
-              <div key={item.label} className="mrs-dashboard-stat mrs-card rounded-xl p-2">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-xl border border-green-100 bg-green-50 p-2 text-green-700">
-                    <item.icon size={17} />
+          <div className="grid shrink-0 grid-cols-2 gap-1.5 sm:grid-cols-5">
+            {userNavItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setUserFilter(item.id)}
+                className={`mrs-mini-stat mrs-card rounded-xl p-2.5 pl-3 text-left transition-colors ${item.tone} ${
+                  userFilter === item.id ? "border-green-400 bg-green-50 shadow-sm" : "hover:border-green-200 hover:bg-slate-50"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[10px] font-black uppercase text-slate-500">{item.label}</p>
+                    <p className="mt-1 text-lg font-black leading-none text-slate-800">{item.value}</p>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-slate-400">{item.label}</p>
-                    <p className="text-lg font-black text-slate-800">{item.value}</p>
+                  <div className={`shrink-0 rounded-xl border p-1.5 ${item.iconClass}`}>
+                    <item.icon size={16} />
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
 
-        <div className="mrs-panel shrink-0 rounded-xl p-3">
+        <div className="mrs-panel mrs-filter-strip shrink-0 rounded-xl p-2">
           <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_12rem_12rem]">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -200,13 +203,13 @@ export default function Users() {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search users, email, or department"
-                className="mrs-field w-full rounded-lg py-2.5 pl-9 pr-3 text-sm font-bold"
+                className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
               />
             </div>
             <select
               value={userFilter}
               onChange={(event) => setUserFilter(event.target.value)}
-              className="mrs-field rounded-lg px-3 py-2.5 text-xs font-black uppercase"
+              className="mrs-field rounded-lg px-3 py-2 text-xs font-black uppercase"
               aria-label="Filter users"
             >
               {userNavItems.map((item) => (
@@ -220,7 +223,7 @@ export default function Users() {
               <select
                 value={sortMode}
                 onChange={(event) => setSortMode(event.target.value)}
-                className="mrs-field rounded-lg px-3 py-2.5 text-xs font-black uppercase"
+                className="mrs-field rounded-lg px-3 py-2 text-xs font-black uppercase"
                 aria-label="Sort users"
               >
                 <option value="name">Sort By Name</option>
@@ -236,7 +239,7 @@ export default function Users() {
           <div className="min-h-0 h-full overflow-x-auto overflow-y-auto">
             <table className="w-full min-w-[1040px] table-fixed text-left">
               <thead className="sticky top-0 z-10">
-                <tr className="border-b border-slate-100 bg-white">
+                <tr className="mrs-section-band border-b border-slate-100">
                   <th className="w-[25%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     User
                   </th>

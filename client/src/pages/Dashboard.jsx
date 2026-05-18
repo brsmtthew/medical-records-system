@@ -206,27 +206,35 @@ function buildChartMovementEvents(logs, period, selectedDate, selectedMonth, sel
 
 // Renders a compact top-line metric card with a consistent animation.
 function StatCard({ item, index }) {
+  const accents = [
+    "from-cyan-500/18 to-cyan-500/0 text-cyan-700 border-cyan-200",
+    "from-green-500/18 to-green-500/0 text-green-700 border-green-200",
+    "from-blue-500/18 to-blue-500/0 text-blue-700 border-blue-200",
+    "from-amber-500/18 to-amber-500/0 text-amber-700 border-amber-200",
+  ];
+  const accent = accents[index % accents.length];
+
   return (
     <Motion.div
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06 }}
-      className="mrs-dashboard-stat mrs-surface rounded-xl p-2"
+      className={`mrs-dashboard-stat mrs-dashboard-stat-fill mrs-surface relative overflow-hidden rounded-xl border bg-gradient-to-r p-2.5 ${accent}`}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest">
+      <div className="flex h-full items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
             {item.label}
           </p>
-          <h2 className="mt-0.5 text-base font-black leading-none text-slate-900">{item.value}</h2>
+          <h2 className="mt-0.5 text-lg font-black leading-none text-slate-900">{item.value}</h2>
           {item.trend && (
-            <p className={`mt-1 text-[9px] font-black uppercase leading-tight ${item.trendColor}`}>
+            <p className={`mt-1 truncate text-[9px] font-black uppercase leading-tight ${item.trendColor}`}>
               {item.trend}
             </p>
           )}
         </div>
-        <div className={`rounded-lg p-1.5 ${item.color}`}>
-          <item.icon size={15} />
+        <div className={`shrink-0 rounded-lg p-1.5 shadow-sm ${item.color}`}>
+          <item.icon size={16} />
         </div>
       </div>
     </Motion.div>
@@ -252,8 +260,8 @@ function ServiceList({ title, services, tone }) {
   const barColor = tone === "green" ? "bg-green-600" : "bg-blue-600";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-xl bg-white p-2.5">
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-slate-200 bg-white p-2">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
         <p className="text-[10px] font-black uppercase text-slate-500">{title}</p>
         <span className="text-[10px] font-black text-slate-400">{services.reduce((total, service) => total + service.value, 0)}</span>
       </div>
@@ -273,8 +281,8 @@ function ServiceList({ title, services, tone }) {
           </div>
         ))}
         {services.length === 0 && (
-          <div className="flex h-full min-h-20 items-center justify-center rounded-xl bg-slate-50 p-3 text-center">
-            <p className="text-xs font-black uppercase text-slate-500">No service data</p>
+          <div className="flex h-full min-h-12 items-center justify-center rounded-lg bg-slate-50 p-2 text-center">
+            <p className="text-[10px] font-black uppercase text-slate-500">No service data</p>
           </div>
         )}
       </div>
@@ -418,14 +426,22 @@ export default function Dashboard() {
             Chart movement, patient mix, and active circulation records.
           </p>
         </div>
-        <div className="mrs-surface flex flex-col gap-2 rounded-xl p-1.5 sm:flex-row xl:mt-5">
-          <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+      </Motion.div>
+
+      <div className="mb-2 grid shrink-0 grid-cols-1 gap-2 xl:grid-cols-12 xl:items-stretch">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 xl:col-span-7">
+          {stats.map((item, index) => (
+            <StatCard key={item.label} item={item} index={index} />
+          ))}
+        </div>
+        <div className="mrs-panel flex h-full min-h-[4.55rem] flex-col justify-center rounded-xl p-2 xl:col-span-5">
+          <div className="grid grid-cols-4 gap-1 rounded-lg bg-slate-50 p-1">
             {periodOptions.map((period) => (
               <button
                 key={period.id}
                 onClick={() => setSelectedPeriod(period.id)}
-                  className={`rounded-lg px-2 py-1.5 text-[10px] font-black uppercase sm:px-3 ${
-                  selectedPeriod === period.id ? "bg-green-700 text-white shadow-sm" : "text-slate-500 hover:bg-slate-50"
+                className={`rounded-md px-2 py-1.5 text-[10px] font-black uppercase transition ${
+                  selectedPeriod === period.id ? "bg-green-700 text-white shadow-sm" : "text-slate-500 hover:bg-white"
                 }`}
               >
                 {period.label}
@@ -433,79 +449,80 @@ export default function Dashboard() {
             ))}
           </div>
           {selectedPeriod !== "all" && (
-          <div className="min-w-40">
-            {selectedPeriod === "today" && (
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(event) => setSelectedDate(event.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-green-500"
-                aria-label="Select day"
-              />
-            )}
-            {selectedPeriod === "monthly" && (
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(event) => setSelectedMonth(event.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-green-500"
-                aria-label="Select month"
-              />
-            )}
-            {selectedPeriod === "yearly" && (
-              <input
-                type="number"
-                min="2000"
-                max="2100"
-                value={selectedYear}
-                onChange={(event) => setSelectedYear(event.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-green-500"
-                aria-label="Select year"
-              />
-            )}
-          </div>
+            <div className="mt-1.5">
+              {selectedPeriod === "today" && (
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  className="mrs-field h-7 w-full rounded-lg px-3 text-[10px] font-black"
+                  aria-label="Select day"
+                />
+              )}
+              {selectedPeriod === "monthly" && (
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(event) => setSelectedMonth(event.target.value)}
+                  className="mrs-field h-7 w-full rounded-lg px-3 text-[10px] font-black"
+                  aria-label="Select month"
+                />
+              )}
+              {selectedPeriod === "yearly" && (
+                <input
+                  type="number"
+                  min="2000"
+                  max="2100"
+                  value={selectedYear}
+                  onChange={(event) => setSelectedYear(event.target.value)}
+                  className="mrs-field h-7 w-full rounded-lg px-3 text-[10px] font-black"
+                  aria-label="Select year"
+                />
+              )}
+            </div>
           )}
         </div>
-      </Motion.div>
-
-      <div className="mb-2 flex shrink-0 flex-wrap gap-1.5">
-        {stats.map((item, index) => (
-          <StatCard key={item.label} item={item} index={index} />
-        ))}
       </div>
 
       <div className="grid flex-1 grid-cols-1 gap-2 overflow-hidden xl:grid-cols-12 xl:grid-rows-[minmax(0,1fr)_minmax(0,0.52fr)]">
         <Motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="mrs-panel flex min-h-0 flex-col rounded-xl p-3 xl:col-span-7"
+          className="mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-7"
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+          <div className="flex flex-col justify-between gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
-              <Archive className="text-green-700" size={20} />
-            <h3 className="text-sm font-black uppercase tracking-tight text-slate-800">
-                Chart Movement by Department
-              </h3>
+              <div className="rounded-lg border border-green-200 bg-green-50 p-1.5 text-green-700">
+                <Archive size={16} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase leading-none tracking-tight text-slate-800">
+                  Chart Movement
+                </h3>
+                <p className="mt-1 text-[9px] font-black uppercase text-slate-400">By department</p>
+              </div>
             </div>
-            <span className="text-[10px] font-black uppercase text-slate-400">
-              {selectedPeriod} report log departments - {periodLabel}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[8px] font-black uppercase text-blue-700">Borrowed</span>
+              <span className="rounded-full border border-green-200 bg-green-50 px-2 py-1 text-[8px] font-black uppercase text-green-700">Returned</span>
+              <span className="ml-1 text-[9px] font-black uppercase text-slate-400">{periodLabel}</span>
+            </div>
           </div>
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 p-2">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartMovementData} margin={{ top: 10, right: 10, bottom: 0, left: -16 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef2f7" />
+            <BarChart data={chartMovementData} margin={{ top: 8, right: 8, bottom: -2, left: -18 }} barGap={8}>
+              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="rgba(148, 163, 184, 0.42)" />
               <XAxis
                 dataKey="name"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: "#64748b", fontWeight: 700, fontSize: 12 }}
+                tick={{ fill: "#94a3b8", fontWeight: 800, fontSize: 10 }}
               />
               <YAxis
                 allowDecimals={false}
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: "#64748b", fontSize: 12 }}
+                tick={{ fill: "#94a3b8", fontSize: 10, fontWeight: 800 }}
               />
               <Tooltip
                 contentStyle={chartTooltipStyle}
@@ -513,8 +530,8 @@ export default function Dashboard() {
                 itemStyle={chartTooltipItemStyle}
                 labelStyle={chartTooltipLabelStyle}
               />
-              <Bar dataKey="borrowed" name="Borrowed" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="returned" name="Returned" fill="#15803d" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="borrowed" name="Borrowed" fill="#3b82f6" radius={[9, 9, 3, 3]} maxBarSize={44} />
+              <Bar dataKey="returned" name="Returned" fill="#16a34a" radius={[9, 9, 3, 3]} maxBarSize={44} />
             </BarChart>
           </ResponsiveContainer>
           </div>
@@ -523,48 +540,56 @@ export default function Dashboard() {
         <Motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mrs-panel flex min-h-0 flex-col rounded-xl p-3 xl:col-span-5"
+          className="mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-5"
         >
-          <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-3 py-2">
             <div className="flex items-center gap-2">
-              <Users className="text-green-700" size={20} />
-            <h3 className="text-sm font-black uppercase tracking-tight text-slate-800">
-                Patient Analytics
-              </h3>
+              <div className="rounded-lg border border-green-200 bg-green-50 p-1.5 text-green-700">
+                <Users size={16} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase leading-none tracking-tight text-slate-800">
+                  Patient Analytics
+                </h3>
+                <p className="mt-1 text-[9px] font-black uppercase text-slate-400">{periodLabel}</p>
+              </div>
             </div>
-            <span className="text-[10px] font-black uppercase text-slate-400">All Totals</span>
+            <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-right">
+              <p className="text-[8px] font-black uppercase text-slate-400">Total</p>
+              <p className="text-sm font-black leading-none text-slate-900">{periodPatientTotal}</p>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5 p-2 pb-1.5">
             {patientMix.map((item) => (
-              <div key={item.name} className="rounded-xl bg-slate-50 p-2.5">
+              <div key={item.name} className="rounded-xl border border-slate-200 bg-white p-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[10px] font-black uppercase text-slate-500">{item.name}</span>
-                  <span className={`text-sm font-black ${item.text}`}>{item.value}</span>
+                  <span className={`text-xs font-black ${item.text}`}>{item.value}</span>
                 </div>
-                <div className="mt-2 h-2 rounded-full bg-white">
+                <div className="mt-1.5 h-1.5 rounded-full bg-slate-100">
                   <div
                     className={`h-full rounded-full ${item.color}`}
                     style={{ width: `${Math.max(5, (item.value / maxPatientMix) * 100)}%` }}
                   />
                 </div>
-                <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">
+                <p className="mt-1 text-[9px] font-bold uppercase text-slate-400">
                   {periodPatientTotal ? ((item.value / periodPatientTotal) * 100).toFixed(1) : "0.0"}%
                 </p>
               </div>
             ))}
           </div>
 
-          <div className="mt-2 flex min-h-0 flex-1 flex-col rounded-xl border border-slate-100 bg-slate-50 p-2.5">
-            <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="m-2 mt-0 flex min-h-0 flex-1 flex-col rounded-xl border border-slate-200 bg-slate-50 p-2">
+            <div className="mb-1.5 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Stethoscope size={16} className="text-blue-700" />
-                <p className="text-xs font-black uppercase text-slate-800">Hospital Services</p>
+                <p className="text-[11px] font-black uppercase text-slate-800">Hospital Services</p>
               </div>
               <span className="text-[10px] font-black uppercase text-slate-400">
                 From loc/dept
               </span>
             </div>
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-1.5 sm:grid-cols-2">
               <ServiceList title="Inpatient Services" services={inpatientServices} tone="green" />
               <ServiceList title="Outpatient Services" services={outpatientServices} tone="blue" />
             </div>
@@ -576,24 +601,34 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           className="mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-6"
         >
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
             <div className="flex items-center gap-2">
-            <ClipboardCheck size={19} className="text-green-700" />
-            <h3 className="font-black uppercase text-slate-800">Recent Activities</h3>
+              <div className="rounded-lg border border-green-200 bg-green-50 p-1.5 text-green-700">
+                <ClipboardCheck size={16} />
+              </div>
+              <div>
+                <h3 className="font-black uppercase leading-none text-slate-800">Recent Activities</h3>
+                <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">Latest chart movement</p>
+              </div>
             </div>
             <span className="text-[10px] font-black uppercase text-slate-400">{periodLabel}</span>
           </div>
-          <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
+          <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto bg-slate-50 p-2">
             {recentActivity.map((item) => (
-              <div key={`${item.action}-${item.chart}`} className="flex items-center justify-between gap-3 px-3 py-2">
-                <div>
-                  <PatientCaseCell patientName={item.patientName} caseNumber={item.chart} />
-                  <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">
-                    {item.person} - {item.time}
-                  </p>
+              <div key={`${item.action}-${item.chart}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-2.5">
+                <div className="min-w-0 flex items-center gap-3">
+                  <div className={`h-9 w-1.5 rounded-full ${
+                    item.tone === "blue" ? "bg-blue-500" : "bg-green-500"
+                  }`} />
+                  <div className="min-w-0">
+                    <PatientCaseCell patientName={item.patientName} caseNumber={item.chart} />
+                    <p className="mt-1 truncate text-[10px] font-bold uppercase text-slate-400">
+                      {item.person} - {item.time}
+                    </p>
+                  </div>
                 </div>
                 <span
-                  className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase ${
+                  className={`shrink-0 rounded-full border px-3 py-1 text-[9px] font-black uppercase ${
                     item.tone === "red"
                       ? "bg-red-50 text-red-700 border-red-200"
                       : item.tone === "blue"
@@ -606,12 +641,13 @@ export default function Dashboard() {
               </div>
             ))}
             {recentActivity.length === 0 && (
-              <div className="row-span-2 flex items-center justify-center px-4 py-6 text-center">
+              <div className="flex h-full min-h-24 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center">
                 <div>
-                <p className="font-black text-slate-700 uppercase">No activity yet</p>
-                <p className="text-xs font-semibold text-slate-400 mt-1">
-                  No chart movement in this period.
-                </p>
+                  <ClipboardCheck size={26} className="mx-auto mb-2 text-slate-300" />
+                  <p className="font-black text-slate-700 uppercase">No activity yet</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-400">
+                    No chart movement in this period.
+                  </p>
                 </div>
               </div>
             )}
@@ -623,30 +659,52 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           className="mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-6"
         >
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
             <div className="flex items-center gap-2">
-              <ClipboardCheck size={19} className="text-amber-700" />
-              <h3 className="font-black uppercase text-slate-800">Activity Status</h3>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-1.5 text-amber-700">
+                <ClipboardCheck size={16} />
+              </div>
+              <div>
+                <h3 className="font-black uppercase leading-none text-slate-800">Activity Status</h3>
+                <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">Current circulation snapshot</p>
+              </div>
             </div>
             <span className="text-[10px] font-black uppercase text-slate-400">{periodLabel}</span>
           </div>
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 bg-slate-50 p-2.5 sm:grid-cols-3">
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 bg-slate-50 p-2 sm:grid-cols-3">
             {alerts.map((item, index) => {
-              const tones = [
-                "border-blue-200 bg-blue-50 text-blue-700",
-                "border-green-200 bg-green-50 text-green-700",
-                "border-cyan-200 bg-cyan-50 text-cyan-700",
+              const toneStyles = [
+                {
+                  accent: "bg-blue-500",
+                  badge: "border-blue-200 bg-blue-50 text-blue-700",
+                  value: "text-blue-700",
+                },
+                {
+                  accent: "bg-green-500",
+                  badge: "border-green-200 bg-green-50 text-green-700",
+                  value: "text-green-700",
+                },
+                {
+                  accent: "bg-orange-500",
+                  badge: "border-orange-200 bg-white text-orange-600",
+                  value: "text-orange-600",
+                },
               ];
+              const tone = toneStyles[index];
 
               return (
-                <div key={item.label} className="flex h-full flex-col justify-between rounded-xl border border-slate-200 bg-white p-3">
-                  <div>
-                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black uppercase ${tones[index]}`}>
+                <div key={item.label} className="relative flex h-full min-h-24 flex-col justify-between overflow-hidden rounded-xl border border-slate-200 bg-white p-3">
+                  <div className={`absolute inset-x-0 top-0 h-1 ${tone.accent}`} />
+                  <div className="min-w-0">
+                    <span className={`inline-flex max-w-full rounded-full border px-2.5 py-1 text-[8px] font-black uppercase leading-tight ${tone.badge}`}>
                       {item.label}
                     </span>
-                    <p className="mt-2 text-[11px] font-semibold leading-snug text-slate-500">{item.detail}</p>
+                    <p className="mt-2 text-[10px] font-semibold leading-snug text-slate-500">{item.detail}</p>
                   </div>
-                  <span className="mt-2 text-2xl font-black leading-none text-slate-800">{item.value}</span>
+                  <div className="mt-3 flex items-end justify-between gap-2">
+                    <span className={`text-2xl font-black leading-none ${tone.value}`}>{item.value}</span>
+                    <span className="text-[9px] font-black uppercase text-slate-400">Total</span>
+                  </div>
                 </div>
               );
             })}

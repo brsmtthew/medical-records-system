@@ -3,14 +3,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
-  Building2,
-  ClipboardCheck,
   Eye,
   EyeOff,
   HeartPulse,
   LockKeyhole,
   Mail,
-  ShieldCheck,
   UserRound,
 } from "lucide-react";
 import logo from "../assets/TGMCI_LOGO.png";
@@ -23,6 +20,7 @@ import {
   signInWithEmail,
 } from "../services/authService";
 import { isStrongPassword, normalizeEmail, sanitizeText } from "../utils/security";
+import hospitalImage from "../assets/hospital image.jpg";
 
 const authErrorMessages = {
   "auth/email-already-in-use": "An account already exists for this email. Sign in instead.",
@@ -43,6 +41,7 @@ export default function Login() {
   const { authLoading, isAuthenticated, invalidFirebaseConfig = [], missingFirebaseConfig } = useAuth();
   const [authMode, setAuthMode] = useState("sign-in");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
@@ -65,6 +64,11 @@ export default function Login() {
       navigate(redirectTo, { replace: true });
     }
   }, [authLoading, isAuthenticated, navigate, redirectTo]);
+
+  React.useEffect(() => {
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+  }, [authMode]);
 
   // Validates the current auth form, then signs in or creates the Firebase account.
   const handleSubmit = async (e) => {
@@ -159,99 +163,61 @@ export default function Login() {
     }
   };
 
-  return (
-    <div className="relative h-dvh overflow-hidden bg-slate-950 font-sans text-white">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:36px_36px]" />
-      <div className="absolute inset-x-0 top-0 h-2 bg-[linear-gradient(90deg,#166534,#2563eb,#f59e0b)]" />
-      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(0deg,rgba(21,128,61,0.22),transparent)]" />
+  const handleGoogleContinue = () => {
+    setError("Google sign-in is not configured yet. Use your department email and password.");
+  };
 
-      <main className="relative flex h-dvh items-center px-4 py-5 sm:px-6 lg:px-8">
+  return (
+    <div className="relative h-dvh overflow-hidden bg-[#edf4f6] font-sans text-slate-950">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(14,116,144,0.10),transparent_24rem),radial-gradient(circle_at_90%_80%,rgba(22,163,74,0.08),transparent_22rem)]" />
+
+      <main className="relative flex h-dvh items-center px-5 py-5 sm:px-8 lg:px-10">
         <Motion.section
           initial={{ opacity: 0, scale: 0.98, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="mx-auto grid h-[calc(100dvh-2.5rem)] w-full max-w-6xl overflow-hidden rounded-2xl border border-white/10 bg-white/[0.08] shadow-2xl shadow-black/30 backdrop-blur-xl lg:grid-cols-[1fr_25rem]"
+          className="login-shell-panel mx-auto grid h-[calc(100dvh-2.5rem)] w-full max-w-7xl overflow-hidden rounded-[1.75rem] bg-white shadow-2xl shadow-slate-900/15 lg:grid-cols-[1.05fr_0.95fr]"
         >
-          <section className="relative hidden min-h-0 overflow-hidden lg:flex lg:flex-col">
-            <div className="absolute right-0 top-0 h-full w-2/5 bg-[linear-gradient(135deg,rgba(22,101,52,0.26),rgba(37,99,235,0.18),rgba(245,158,11,0.12))]" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(45,212,191,0.13),transparent_28rem)]" />
-            <div className="absolute right-8 top-8 z-10 flex items-center gap-2 rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-emerald-100">
-              <ShieldCheck size={16} />
-              <span className="text-[10px] font-black uppercase tracking-widest">Secure Portal</span>
-            </div>
-            <div className="relative flex min-h-0 flex-1 flex-col justify-between p-6 xl:p-8">
-              <header className="flex shrink-0 items-center gap-4">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white p-2 shadow-xl shadow-black/20">
-                    <img src={logo} className="h-full w-full object-contain" alt="TGMCI Logo" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-black uppercase tracking-wide text-white">TGMCI</p>
-                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Medical Records</p>
-                  </div>
-                </div>
-              </header>
-
-              <div className="flex min-h-0 flex-1 items-center py-5">
-                <div className="max-w-2xl">
-                  <p className="mb-3 inline-flex items-center gap-2 rounded-lg border border-blue-300/25 bg-blue-300/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-100">
-                    <Building2 size={15} />
-                    Records Workspace
-                  </p>
-                  <h1 className="text-4xl font-black uppercase leading-[0.93] tracking-tight text-white xl:text-5xl">
-                    Records command center.
-                  </h1>
-                  <p className="mt-4 max-w-lg text-sm font-semibold leading-relaxed text-slate-300 xl:text-base">
-                    One focused entry point for patient registry, chart circulation, viewing, and reporting.
-                  </p>
-                  <div className="mt-5 grid max-w-xl grid-cols-3 gap-2">
-                    {[
-                      { label: "Patient Registry", value: "Organized", icon: UserRound },
-                      { label: "Chart Flow", value: "Visible", icon: ClipboardCheck },
-                      { label: "Access Layer", value: "Protected", icon: LockKeyhole },
-                    ].map((item, index) => (
-                      <Motion.div
-                        key={item.label}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.12 + index * 0.05 }}
-                        className="rounded-lg border border-white/10 bg-white/[0.07] p-3"
-                      >
-                        <item.icon size={17} className="mb-3 text-emerald-200" />
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">{item.label}</p>
-                        <p className="mt-1 text-xs font-black uppercase text-white">{item.value}</p>
-                      </Motion.div>
-                    ))}
-                  </div>
+          <section className="relative hidden min-h-0 overflow-hidden lg:block">
+            <img
+              src={hospitalImage}
+              alt="Tagum Global Medical Center"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(14,116,144,0.08)_38%,rgba(14,116,144,0.78)_100%)]" />
+            <div className="absolute inset-x-0 bottom-0 p-8 text-white xl:p-12">
+              <div className="mb-5 flex items-center gap-4">
+                <img src={logo} className="h-20 w-32 object-contain drop-shadow-[0_12px_20px_rgba(15,23,42,0.35)]" alt="TGMCI Logo" />
+                <div>
+                  <p className="text-3xl font-black uppercase leading-none tracking-tight">TGMCI Records</p>
+                  <p className="mt-2 text-xs font-black uppercase tracking-[0.26em] text-cyan-50">Medical Records System</p>
                 </div>
               </div>
-
-              <footer className="flex shrink-0 flex-col gap-3 border-t border-white/10 pt-4 text-[10px] font-black uppercase tracking-widest text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                <span>Medical Records Management System</span>
-                <span>Audit Trail / Session Control / Firebase Auth</span>
-              </footer>
+              <p className="max-w-lg text-sm font-semibold uppercase leading-relaxed tracking-wide text-cyan-50">
+                Secure access for patient registry, chart circulation, document requests, and hospital report workflows.
+              </p>
             </div>
           </section>
 
-          <aside className="login-auth-area relative flex min-h-0 items-center justify-center border-white/10 p-4 sm:p-5 lg:border-l">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(14,116,144,0.12),transparent_24rem)]" />
-            <div className="login-auth-panel mx-auto flex max-h-full w-full max-w-md flex-col rounded-xl border border-slate-200 bg-white p-4 text-slate-950 shadow-2xl shadow-slate-950/20 sm:p-5 lg:max-w-none">
-              <div className="mb-3 flex items-center gap-3 lg:hidden">
-                <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-                  <img src={logo} className="h-full w-full object-contain" alt="TGMCI Logo" />
-                </div>
-                <div>
-                  <p className="text-sm font-black uppercase text-slate-950">TGMCI</p>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Medical Records</p>
-                </div>
+          <aside className="login-form-side login-auth-area relative flex min-h-0 items-center justify-center overflow-hidden p-6 sm:p-10">
+            <div className={`login-auth-panel mx-auto flex max-h-full w-full max-w-[25.5rem] flex-col bg-white px-1 text-slate-950 ${isCreateAccount ? "overflow-y-auto" : "overflow-hidden"}`}>
+              <div className={`${isCreateAccount ? "mb-3" : "mb-6"} flex justify-center transition-all duration-300`}>
+                <Motion.img
+                  src={logo}
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                  className={`${isCreateAccount ? "h-20 w-40" : "h-32 w-52"} object-contain transition-all duration-300`}
+                  alt="TGMCI Logo"
+                />
               </div>
 
-              <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-1">
+              <div className={`${isCreateAccount ? "mb-3" : "mb-6"} login-mode-toggle rounded-full bg-slate-100 p-1 transition-all duration-300`}>
                 <div className="relative grid grid-cols-2 gap-1">
                   <Motion.div
                     layout
                     transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                    className={`absolute inset-y-0 w-1/2 rounded-md bg-slate-950 ${
+                    className={`absolute inset-y-0 w-1/2 rounded-full bg-[#4b99bd] shadow-sm ${
                       isCreateAccount ? "left-1/2" : "left-0"
                     }`}
                   />
@@ -266,7 +232,7 @@ export default function Login() {
                         setAuthMode(mode.id);
                         setError("");
                       }}
-                      className={`relative z-10 rounded-md px-4 py-3 text-xs font-black uppercase transition-colors ${
+                      className={`relative z-10 rounded-full px-4 py-3 text-xs font-black uppercase transition-colors ${
                         authMode === mode.id ? "text-white" : "text-slate-500 hover:text-slate-900"
                       }`}
                     >
@@ -276,24 +242,15 @@ export default function Login() {
                 </div>
               </div>
 
-              <div className="mb-4 flex items-start justify-between gap-4">
+              <div className={`${isCreateAccount ? "mb-3" : "mb-5"} text-center transition-all duration-300`}>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-                    {isCreateAccount ? "Staff Account Setup" : "Staff Access"}
-                  </p>
-                  <h2 className="mt-1 text-xl font-black uppercase tracking-tight text-slate-950 xl:text-2xl">
-                    {isCreateAccount ? "Create Staff Account" : "Department Sign In"}
+                  <h2 className={`${isCreateAccount ? "text-3xl" : "text-4xl"} font-black uppercase tracking-tight text-slate-950 transition-all duration-300`}>
+                    {isCreateAccount ? "Create Account" : "Login"}
                   </h2>
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {isCreateAccount ? "Register your staff account." : "Log in to your account."}
+                  </p>
                 </div>
-                <Motion.div
-                  key={authMode}
-                  initial={{ rotate: -8, scale: 0.9, opacity: 0 }}
-                  animate={{ rotate: 0, scale: 1, opacity: 1 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 20 }}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700"
-                >
-                  {isCreateAccount ? <UserRound size={24} /> : <ShieldCheck size={24} />}
-                </Motion.div>
               </div>
 
               <form onSubmit={handleSubmit} className="min-h-0">
@@ -304,7 +261,7 @@ export default function Login() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -14, scale: 0.98 }}
                     transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                    className="space-y-3"
+                    className={isCreateAccount ? "space-y-2.5" : "space-y-3.5"}
                   >
                     {isCreateAccount && (
                       <div className="relative">
@@ -313,7 +270,7 @@ export default function Login() {
                           type="text"
                           placeholder="Juan Dela Cruz"
                           aria-label="Full Name"
-                          className="login-field w-full rounded-lg py-2.5 pl-11 pr-4 font-bold"
+                          className="login-field w-full rounded-xl py-3 pl-11 pr-4 font-bold"
                           value={form.fullName}
                           onChange={(e) => updateForm("fullName", e.target.value)}
                         />
@@ -326,7 +283,7 @@ export default function Login() {
                         type="email"
                         placeholder="name@hospital.com"
                         aria-label="Department Email"
-                        className="login-field w-full rounded-lg py-2.5 pl-11 pr-4 font-bold"
+                        className="login-field w-full rounded-xl py-3 pl-11 pr-4 font-bold"
                         value={form.email}
                         onChange={(e) => updateForm("email", e.target.value)}
                         autoComplete="email"
@@ -339,13 +296,14 @@ export default function Login() {
                         type={showPassword ? "text" : "password"}
                         placeholder="Password"
                         aria-label="Password"
-                        className="login-field w-full rounded-lg py-2.5 pl-11 pr-12 font-bold"
+                        className="login-field w-full rounded-xl py-3 pl-11 pr-12 font-bold"
                         value={form.password}
                         onChange={(e) => updateForm("password", e.target.value)}
                         autoComplete={isCreateAccount ? "new-password" : "current-password"}
                       />
                       <button
                         type="button"
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => setShowPassword((value) => !value)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-950"
                         aria-label={showPassword ? "Hide password" : "Show password"}
@@ -358,14 +316,23 @@ export default function Login() {
                       <div className="relative">
                         <LockKeyhole size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
-                          type={showPassword ? "text" : "password"}
+                          type={showConfirmPassword ? "text" : "password"}
                           placeholder="Confirm password"
                           aria-label="Confirm Password"
-                          className="login-field w-full rounded-lg py-2.5 pl-11 pr-4 font-bold"
+                          className="login-field w-full rounded-xl py-3 pl-11 pr-12 font-bold"
                           value={form.confirmPassword}
                           onChange={(e) => updateForm("confirmPassword", e.target.value)}
                           autoComplete="new-password"
                         />
+                        <button
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => setShowConfirmPassword((value) => !value)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-950"
+                          aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                        >
+                          {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                        </button>
                       </div>
                     )}
 
@@ -394,7 +361,7 @@ export default function Login() {
                       whileHover={{ y: -1 }}
                       whileTap={{ scale: 0.98 }}
                       disabled={isSubmitting}
-                      className="mrs-primary-button flex w-full items-center justify-center gap-2 rounded-lg py-3.5 font-black uppercase transition-all disabled:cursor-not-allowed disabled:opacity-70"
+                      className="login-submit-button flex w-full items-center justify-center gap-2 rounded-xl py-3.5 font-black uppercase transition-all disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       {isSubmitting
                         ? isCreateAccount
@@ -402,13 +369,42 @@ export default function Login() {
                           : "Signing In..."
                         : isCreateAccount
                           ? "Create Account"
-                          : "Enter Department System"}
+                          : "Log In"}
                       <ArrowRight size={18} />
                     </Motion.button>
+
+                    <div className="flex items-center gap-3 py-1">
+                      <div className="h-px flex-1 bg-slate-200" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">or</span>
+                      <div className="h-px flex-1 bg-slate-200" />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleGoogleContinue}
+                      className="login-google-button flex w-full items-center justify-center gap-3 rounded-xl py-3 text-xs font-black uppercase text-slate-700 transition-all"
+                    >
+                      <span className="flex size-5 items-center justify-center rounded-full bg-white text-sm font-black text-blue-600">G</span>
+                      Continue with Google
+                    </button>
+
+                    <p className="text-center text-xs font-semibold text-slate-500">
+                      {isCreateAccount ? "Already have an account?" : "Don't have an account?"}{" "}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode(isCreateAccount ? "sign-in" : "create-account");
+                          setError("");
+                        }}
+                        className="font-black uppercase text-[#0e8aa2] hover:text-[#0f766e]"
+                      >
+                        {isCreateAccount ? "Sign In" : "Create"}
+                      </button>
+                    </p>
                   </Motion.div>
                 </AnimatePresence>
 
-                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className={`${isCreateAccount ? "mt-2" : "mt-4"} rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-300`}>
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-700">
                       <HeartPulse size={19} />

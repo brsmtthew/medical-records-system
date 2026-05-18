@@ -17,7 +17,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
   const { authLoading, isAuthenticated, isAccountDisabled, isAdmin, userRole } = useAuth();
 
   useEffect(() => {
-    // Locks the session after the fixed security timeout inside protected pages.
+    // Locks inactive protected routes using the workstation timeout from Settings.
     if (!isAuthenticated || !auth) return undefined;
 
     const settings = readSystemSettings();
@@ -26,7 +26,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
     const warningMs = Math.min(60 * 1000, timeoutMs / 2);
     const resetActivity = () => {
       lastActivityRef.current = Date.now();
-      setSessionWarning(false);
+      setSessionWarning((isVisible) => (isVisible ? false : isVisible));
     };
     // Checks inactivity on an interval so passive users are signed out.
     const checkActivity = async () => {
@@ -60,8 +60,14 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
   }, [isAuthenticated, navigate]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      cancelAutoLogout();
+      return undefined;
+    }
+
+    // Keeps legacy backend-token sessions from outliving their JWT expiry.
     scheduleAutoLogout(() => {
-      if (auth) signOut(auth).catch(console.error);
+      if (auth) signOut(auth).catch(() => {});
       navigate("/", {
         replace: true,
         state: {
@@ -71,7 +77,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
     });
 
     return () => cancelAutoLogout();
-  }, [navigate]);
+  }, [isAuthenticated, navigate]);
 
   if (authLoading) {
     return (

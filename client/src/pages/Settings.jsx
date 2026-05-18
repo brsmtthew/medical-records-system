@@ -129,18 +129,18 @@ function NotificationLogViewModal({ log, onClose }) {
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
       <div className="mrs-panel w-full max-w-2xl overflow-hidden rounded-2xl">
-        <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 p-4">
+        <div className="mrs-section-band flex items-start justify-between gap-3 border-b border-slate-100 p-4">
           <div>
-            <p className="text-lg font-black uppercase text-slate-800">Notification Details</p>
-            <p className="mt-1 text-xs font-semibold text-slate-500">Review the full action log entry.</p>
+            <p className="text-lg font-black uppercase leading-none text-slate-800">Notification Details</p>
+            <p className="mt-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">Review the full action log entry.</p>
           </div>
           <button type="button" onClick={onClose} className="mrs-soft-button rounded-xl p-2" aria-label="Close notification details">
             <X size={18} />
           </button>
         </div>
-        <div className="grid gap-3 p-4 sm:grid-cols-2">
+        <div className="grid gap-2.5 p-4 sm:grid-cols-2">
           {details.map((item) => (
-            <div key={item.label} className={`rounded-xl border border-slate-100 bg-white p-3 ${item.wide ? "sm:col-span-2" : ""}`}>
+            <div key={item.label} className={`mrs-card rounded-xl p-3 ${item.wide ? "sm:col-span-2" : ""}`}>
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
               <p className="mt-1 whitespace-pre-line break-words text-sm font-black text-slate-800">{item.value}</p>
             </div>
@@ -231,6 +231,19 @@ export default function Settings({ initialTab = "rules" }) {
     };
   }, [isAdmin]);
 
+  useEffect(() => {
+    const syncSettingsFromStorage = () => {
+      setSettings(readSystemSettings());
+    };
+
+    window.addEventListener("storage", syncSettingsFromStorage);
+    window.addEventListener("mrs-settings-updated", syncSettingsFromStorage);
+    return () => {
+      window.removeEventListener("storage", syncSettingsFromStorage);
+      window.removeEventListener("mrs-settings-updated", syncSettingsFromStorage);
+    };
+  }, []);
+
   // Clears centralized audit logs and resets the local navbar unread badge.
   const clearNotificationLogs = async () => {
     if (!isAdmin) {
@@ -279,16 +292,13 @@ export default function Settings({ initialTab = "rules" }) {
       const nextSettings = { ...current, [key]: value };
       if (key === "appearanceMode" || key === "lightComfortMode") {
         saveSystemSettings(nextSettings);
+        applySystemTheme(nextSettings);
         window.dispatchEvent(new CustomEvent("mrs-settings-updated"));
       }
       return nextSettings;
     });
     setSavedMessage("");
     setSuccessMessage("");
-    if (key === "appearanceMode" || key === "lightComfortMode") {
-      const nextSettings = { ...settings, [key]: value };
-      applySystemTheme(nextSettings);
-    }
   };
 
   // Restores all settings to the built-in defaults.
@@ -310,6 +320,7 @@ export default function Settings({ initialTab = "rules" }) {
     };
     setSettings(cleanedSettings);
     saveSystemSettings(cleanedSettings);
+    applySystemTheme(cleanedSettings);
     window.dispatchEvent(new CustomEvent("mrs-settings-updated"));
     setSavedMessage("Settings saved.");
   };
@@ -740,12 +751,15 @@ export default function Settings({ initialTab = "rules" }) {
 
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
                 {safeActiveTab === "rules" && (
-                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-                    <div className={`rounded-xl border-2 border-slate-100 bg-slate-50 p-3 ${isAdmin ? "" : "xl:col-span-3"}`}>
-                      <p className="text-sm font-black uppercase text-slate-700">Appearance</p>
-                      <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                        Choose the display mode for this workstation.
-                      </p>
+                  <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-3">
+                    <div className={`mrs-card overflow-hidden rounded-xl ${isAdmin ? "" : "xl:col-span-3"}`}>
+                      <div className="mrs-section-band border-b border-slate-100 px-3 py-2">
+                        <p className="text-sm font-black uppercase leading-none text-slate-700">Appearance</p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase text-slate-500">
+                          Choose the display mode for this workstation.
+                        </p>
+                      </div>
+                      <div className="p-3">
                       <div className="mt-3 grid grid-cols-2 gap-2">
                         {[
                           { id: "light", label: "Light", icon: Sun },
@@ -795,14 +809,17 @@ export default function Settings({ initialTab = "rules" }) {
                           ))}
                         </div>
                       </div>
+                      </div>
                     </div>
                     {isAdmin && (
-                    <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-3">
-                      <p className="text-sm font-black uppercase text-slate-700">Report Defaults</p>
-                      <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                        Set how the reports page opens and how Excel exports are named.
-                      </p>
-                      <div className="mt-3 space-y-3">
+                    <div className="mrs-card overflow-hidden rounded-xl">
+                      <div className="mrs-section-band border-b border-slate-100 px-3 py-2">
+                        <p className="text-sm font-black uppercase leading-none text-slate-700">Report Defaults</p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase text-slate-500">
+                          Set report opening state and export names.
+                        </p>
+                      </div>
+                      <div className="space-y-3 p-3">
                         <Field label="Default Report Filter">
                           <select
                             value={settings.defaultReportFilter}
@@ -826,13 +843,15 @@ export default function Settings({ initialTab = "rules" }) {
                     </div>
                     )}
                     {isAdmin && (
-                    <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-3">
-                      <p className="text-sm font-black uppercase text-slate-700">Security Defaults</p>
-                      <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                        Protect open workstations by locking inactive sessions.
-                      </p>
-                      <div className="mt-3 grid grid-cols-1 gap-2">
-                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                    <div className="mrs-card overflow-hidden rounded-xl">
+                      <div className="mrs-section-band border-b border-slate-100 px-3 py-2">
+                        <p className="text-sm font-black uppercase leading-none text-slate-700">Security Defaults</p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase text-slate-500">
+                          Lock inactive workstations.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 p-3">
+                        <div className="mrs-card rounded-xl p-3">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                             Auto Lock After Inactivity
                           </p>
@@ -852,15 +871,18 @@ export default function Settings({ initialTab = "rules" }) {
                     </div>
                     )}
                     {isAdmin && (
-                      <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-3 xl:col-span-3">
-                        <p className="text-sm font-black uppercase text-slate-700">Workspace Summary</p>
-                        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <div className="mrs-card overflow-hidden rounded-xl xl:col-span-3">
+                        <div className="mrs-section-band border-b border-slate-100 px-3 py-2">
+                          <p className="text-sm font-black uppercase leading-none text-slate-700">Workspace Summary</p>
+                          <p className="mt-1 text-[10px] font-semibold uppercase text-slate-500">Current editable list totals</p>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-3">
                           {[
                             { label: "Borrowing Departments", value: departments.length || fallbackDepartments.length },
                             { label: "Admission Departments", value: admissionLocations.length || fallbackAdmissionLocations.length },
                             { label: "Outpatient Departments", value: outpatientDepartments.length || fallbackOutpatientDepartments.length },
                           ].map((item) => (
-                            <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-2.5">
+                            <div key={item.label} className="mrs-mini-stat mrs-card rounded-xl p-2.5 pl-3 text-green-700">
                               <p className="text-[10px] font-black uppercase text-slate-400">{item.label}</p>
                               <p className="mt-0.5 text-lg font-black text-slate-800">{item.value}</p>
                             </div>
@@ -872,13 +894,13 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "departmentEditor" && (
-                  <div className="mb-4 grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div className="mrs-filter-strip mb-3 grid shrink-0 grid-cols-1 gap-1.5 rounded-xl border border-slate-200 p-1.5 sm:grid-cols-3">
                     {departmentEditorSections.map((section) => (
                       <button
                         key={section.id}
                         type="button"
                         onClick={() => setDepartmentEditorTab(section.id)}
-                        className={`rounded-xl px-4 py-3 text-xs font-black uppercase transition-colors ${
+                        className={`rounded-lg px-4 py-2 text-[10px] font-black uppercase transition-colors ${
                           departmentEditorTab === section.id
                             ? "bg-green-700 text-white"
                             : "mrs-soft-button"
@@ -891,33 +913,33 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "departmentEditor" && departmentEditorTab === "departments" && (
-                  <div className="flex min-h-0 flex-1 flex-col gap-3">
-                    <div className="flex flex-col gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-h-0 flex-1 flex-col gap-2">
+                    <div className="mrs-card flex flex-col gap-3 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-sm font-black text-slate-700 uppercase">Borrowing Departments</p>
-                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                        <p className="text-sm font-black uppercase text-slate-700">Borrowing Departments</p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase text-slate-500">
                           Used in Chart Tracking when a chart is borrowed by a hospital department.
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setPendingDepartmentEntry("departments")}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-xs font-black uppercase text-white"
+                        className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
                       >
                         <Plus size={16} />
                         Add
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-100">
-                      <div className="grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 bg-slate-50 px-3 py-2">
+                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200">
+                      <div className="mrs-section-band grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 px-3 py-2">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Department Name</p>
                         <p className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</p>
                       </div>
                       {departments.map((department) => (
                         <div
                           key={department.id}
-                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2 last:border-b-0"
+                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2.5 last:border-b-0"
                         >
                           {editingDepartment?.id === department.id ? (
                             <form onSubmit={handleUpdateDepartment} className="col-span-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -960,7 +982,7 @@ export default function Settings({ initialTab = "rules" }) {
                       ))}
 
                       {departments.length === 0 && (
-                        <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
+                        <div className="mrs-card rounded-xl p-4">
                           <p className="text-sm font-black text-slate-700">No Firebase departments yet.</p>
                           <p className="text-xs font-semibold text-slate-500 mt-1">
                             Chart Tracking will temporarily use: {fallbackDepartments.join(", ")}.
@@ -972,33 +994,33 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "departmentEditor" && departmentEditorTab === "admissions" && (
-                  <div className="flex min-h-0 flex-1 flex-col gap-3">
-                    <div className="flex flex-col gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-h-0 flex-1 flex-col gap-2">
+                    <div className="mrs-card flex flex-col gap-3 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-sm font-black text-slate-700 uppercase">Patient Admission Locations</p>
-                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                        <p className="text-sm font-black uppercase text-slate-700">Patient Admission Locations</p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase text-slate-500">
                           Used only by inpatient registration. Defaults are Nurse Station, Emergency, NICU, and MICU.
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setPendingDepartmentEntry("admissions")}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-xs font-black uppercase text-white"
+                        className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
                       >
                         <Plus size={16} />
                         Add
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-100">
-                      <div className="grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 bg-slate-50 px-3 py-2">
+                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200">
+                      <div className="mrs-section-band grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 px-3 py-2">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Admission Location</p>
                         <p className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</p>
                       </div>
                       {admissionLocations.map((location) => (
                         <div
                           key={location.id}
-                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2 last:border-b-0"
+                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2.5 last:border-b-0"
                         >
                           {editingAdmissionLocation?.id === location.id ? (
                             <form onSubmit={handleUpdateAdmissionLocation} className="col-span-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -1041,7 +1063,7 @@ export default function Settings({ initialTab = "rules" }) {
                       ))}
 
                       {admissionLocations.length === 0 && (
-                        <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
+                        <div className="mrs-card rounded-xl p-4">
                           <p className="text-sm font-black text-slate-700">No Firebase admission locations yet.</p>
                           <p className="text-xs font-semibold text-slate-500 mt-1">
                             Patient Registry will temporarily use: {fallbackAdmissionLocations.join(", ")}.
@@ -1053,33 +1075,33 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "departmentEditor" && departmentEditorTab === "outpatients" && (
-                  <div className="flex min-h-0 flex-1 flex-col gap-3">
-                    <div className="flex flex-col gap-3 rounded-xl border-2 border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-h-0 flex-1 flex-col gap-2">
+                    <div className="mrs-card flex flex-col gap-3 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-sm font-black text-slate-700 uppercase">Outpatient Departments</p>
-                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                        <p className="text-sm font-black uppercase text-slate-700">Outpatient Departments</p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase text-slate-500">
                           Used only by outpatient registration. Defaults are RDU, OR, ONCO, and ENDOSCOPY.
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setPendingDepartmentEntry("outpatients")}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-xs font-black uppercase text-white"
+                        className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
                       >
                         <Plus size={16} />
                         Add
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-100">
-                      <div className="grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 bg-slate-50 px-3 py-2">
+                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200">
+                      <div className="mrs-section-band grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 px-3 py-2">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Outpatient Department</p>
                         <p className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</p>
                       </div>
                       {outpatientDepartments.map((department) => (
                         <div
                           key={department.id}
-                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2 last:border-b-0"
+                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2.5 last:border-b-0"
                         >
                           {editingOutpatientDepartment?.id === department.id ? (
                             <form onSubmit={handleUpdateOutpatientDepartment} className="col-span-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -1122,7 +1144,7 @@ export default function Settings({ initialTab = "rules" }) {
                       ))}
 
                       {outpatientDepartments.length === 0 && (
-                        <div className="rounded-xl border-2 border-slate-100 bg-slate-50 p-4">
+                        <div className="mrs-card rounded-xl p-4">
                           <p className="text-sm font-black text-slate-700">No Firebase outpatient departments yet.</p>
                           <p className="text-xs font-semibold text-slate-500 mt-1">
                             Patient Registry will temporarily use: {fallbackOutpatientDepartments.join(", ")}.
@@ -1342,47 +1364,54 @@ export default function Settings({ initialTab = "rules" }) {
                 )}
 
                 {safeActiveTab === "about" && (
-                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.1fr_1fr]">
-                    <div className="rounded-xl border border-green-100 bg-green-50 p-3">
-                      <p className="text-sm font-black uppercase text-green-800">Medical Records System</p>
-                      <p className="mt-1 text-xs font-semibold leading-relaxed text-green-700">
-                        A local hospital records workspace for patient registry, chart circulation, document requests, print reports, staff access, and audit history.
-                      </p>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-[1.08fr_0.92fr]">
+                    <div className="mrs-card overflow-hidden rounded-xl">
+                      <div className="border-b border-green-100 bg-green-50 px-3 py-2">
+                        <p className="text-sm font-black uppercase leading-none text-green-800">Medical Records System</p>
+                        <p className="mt-1.5 text-[10px] font-semibold uppercase leading-relaxed text-green-700">
+                          Local records workspace for registry, chart circulation, document requests, reports, staff access, and audit history.
+                        </p>
+                      </div>
+                      <div className="grid gap-2 p-3 sm:grid-cols-3">
                         {[
                           { label: "App Version", value: "1.0.0" },
                           { label: "Client", value: "React 19 / Vite 8" },
                           { label: "Database", value: "Firebase Firestore" },
                         ].map((item) => (
-                          <div key={item.label} className="rounded-xl border border-green-100 bg-white p-2.5">
+                          <div key={item.label} className="mrs-mini-stat mrs-card rounded-xl p-2.5 pl-3 text-green-700">
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
                             <p className="mt-1 text-sm font-black uppercase text-slate-800">{item.value}</p>
                           </div>
                         ))}
                       </div>
                     </div>
-                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-xl bg-white p-2 text-blue-700 shadow-sm">
+                    <div className="mrs-card overflow-hidden rounded-xl">
+                      <div className="border-b border-blue-100 bg-blue-50 p-3">
+                        <div className="flex items-start gap-3">
+                        <div className="rounded-xl border border-blue-200 bg-white p-2 text-blue-700 shadow-sm">
                           <Code2 size={20} />
                         </div>
                         <div>
                           <p className="text-sm font-black uppercase text-blue-800">Developer</p>
                           <p className="mt-1 text-lg font-black uppercase text-slate-900">Boris</p>
-                          <p className="mt-1 text-xs font-semibold leading-relaxed text-blue-700">
+                          <p className="mt-1 text-[10px] font-semibold uppercase leading-relaxed text-blue-700">
                             Designed and developed for the TGMCI Medical Records workflow.
                           </p>
                         </div>
+                        </div>
                       </div>
-                      <div className="mt-3 space-y-1.5 text-xs font-semibold leading-relaxed text-blue-700">
+                      <div className="space-y-1.5 p-3 text-xs font-semibold leading-relaxed text-blue-700">
                         <p>Frontend: React, Tailwind CSS, Recharts, Framer Motion.</p>
                         <p>Backend: Express API utilities and Firebase-backed client services.</p>
                         <p>Security: role-aware routes, account status checks, sanitized record payloads, and Firestore rules.</p>
                       </div>
                     </div>
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 xl:col-span-2">
-                      <p className="text-sm font-black uppercase text-slate-800">System Modules</p>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="mrs-card overflow-hidden rounded-xl xl:col-span-2">
+                      <div className="mrs-section-band border-b border-slate-100 px-3 py-2">
+                        <p className="text-sm font-black uppercase leading-none text-slate-800">System Modules</p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase text-slate-500">Active workspace areas</p>
+                      </div>
+                      <div className="grid gap-1.5 p-3 sm:grid-cols-2 xl:grid-cols-4">
                         {[
                           "Patient Registry",
                           "Chart Circulation",
@@ -1393,8 +1422,8 @@ export default function Settings({ initialTab = "rules" }) {
                           "Print Reports",
                           "User Access",
                         ].map((module) => (
-                          <div key={module} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                            <p className="text-[10px] font-black uppercase text-slate-700">{module}</p>
+                          <div key={module} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <p className="truncate text-[10px] font-black uppercase text-slate-700">{module}</p>
                           </div>
                         ))}
                       </div>
@@ -1405,21 +1434,22 @@ export default function Settings({ initialTab = "rules" }) {
             </div>
 
             {isAdmin && (
-              <div className="flex shrink-0 flex-wrap gap-1.5 pb-1">
+              <div className="mrs-filter-strip grid shrink-0 grid-cols-2 gap-1.5 rounded-xl border border-slate-200 p-1.5 sm:grid-cols-4">
                 {[
-                  { label: "Borrowing Departments", value: departments.length || fallbackDepartments.length, icon: Building2 },
-                  { label: "Admission Departments", value: admissionLocations.length || fallbackAdmissionLocations.length, icon: Building2 },
-                  { label: "Outpatient Departments", value: outpatientDepartments.length || fallbackOutpatientDepartments.length, icon: Building2 },
-                  { label: "Report Filter", value: settings.defaultReportFilter, icon: SettingsIcon },
+                  { label: "Borrowing", subLabel: "Departments", value: departments.length || fallbackDepartments.length, icon: Building2, tone: "text-green-700", iconClass: "border-green-200 bg-green-50 text-green-700" },
+                  { label: "Admission", subLabel: "Departments", value: admissionLocations.length || fallbackAdmissionLocations.length, icon: Building2, tone: "text-cyan-700", iconClass: "border-cyan-200 bg-cyan-50 text-cyan-700" },
+                  { label: "Outpatient", subLabel: "Departments", value: outpatientDepartments.length || fallbackOutpatientDepartments.length, icon: Building2, tone: "text-blue-700", iconClass: "border-blue-200 bg-blue-50 text-blue-700" },
+                  { label: "Report", subLabel: "Filter", value: settings.defaultReportFilter, icon: SettingsIcon, tone: "text-amber-700", iconClass: "border-amber-200 bg-white text-amber-700" },
                 ].map((item) => (
-                  <div key={item.label} className="mrs-dashboard-stat mrs-card rounded-xl p-2">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-xl border border-green-100 bg-green-50 p-2 text-green-700">
-                        <item.icon size={19} />
+                  <div key={`${item.label}-${item.subLabel}`} className={`mrs-mini-stat mrs-card rounded-lg p-2 pl-3 ${item.tone}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[9px] font-black uppercase tracking-widest text-slate-500">{item.label}</p>
+                        <p className="truncate text-[9px] font-black uppercase tracking-widest text-slate-400">{item.subLabel}</p>
+                        <p className="mt-1 text-base font-black leading-none text-slate-900">{item.value}</p>
                       </div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase text-slate-400">{item.label}</p>
-                        <p className="font-black text-slate-800">{item.value}</p>
+                      <div className={`shrink-0 rounded-lg border p-1.5 ${item.iconClass}`}>
+                        <item.icon size={16} />
                       </div>
                     </div>
                   </div>

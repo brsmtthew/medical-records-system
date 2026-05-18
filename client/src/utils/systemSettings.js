@@ -42,7 +42,11 @@ export function saveSystemSettings(settings) {
     [key]: settings[key] ?? defaultSystemSettings[key],
   }), {});
 
-  localStorage.setItem(settingsStorageKey, JSON.stringify(cleanedSettings));
+  try {
+    localStorage.setItem(settingsStorageKey, JSON.stringify(cleanedSettings));
+  } catch {
+    // Restricted browser profiles can block localStorage; keep the UI usable with in-memory defaults.
+  }
 }
 
 // Applies workstation theme classes consistently across app startup, navbar, and settings.

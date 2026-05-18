@@ -17,7 +17,13 @@ export function getAccessToken() {
 
 export function getSessionUser() {
   const value = sessionStorage.getItem(userKey);
-  return value ? JSON.parse(value) : null;
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    clearSession();
+    return null;
+  }
 }
 
 export function clearSession() {

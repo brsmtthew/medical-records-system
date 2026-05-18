@@ -482,47 +482,33 @@ export default function Patients() {
   return (
     <DashboardLayout>
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="mb-2 flex shrink-0 flex-col justify-between gap-2 px-1 sm:flex-row sm:items-center">
+      <div className="mb-2 grid shrink-0 grid-cols-1 gap-2 px-1 xl:grid-cols-[minmax(18rem,auto)_minmax(0,1fr)] xl:items-end">
         <div>
           <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
             Patient <span className="text-green-700">Registry</span>
           </h1>
           <p className="mt-0.5 text-xs font-medium text-slate-500">Hospital records and management.</p>
         </div>
-        {canManagePatients && (
-          <button
-            type="button"
-            onClick={() => {
-              setFormError("");
-              setIsAddPatientOpen(true);
-            }}
-            className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
-          >
-            <UserPlus size={16} />
-            Add Patient
-          </button>
-        )}
-      </div>
-
-      <div className="mb-2 flex shrink-0 flex-wrap gap-1.5">
-        {stats.map((item) => (
-          <div
-            key={item.label}
-            className="mrs-dashboard-stat mrs-surface rounded-xl p-2"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                  {item.label}
-                </p>
-                <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
-              </div>
-              <div className={`rounded-lg p-1.5 ${item.color}`}>
-                <item.icon size={15} />
+        <div className="grid min-w-0 grid-cols-3 gap-1.5 xl:justify-self-end xl:w-[min(42rem,100%)]">
+          {stats.map((item) => (
+            <div
+              key={item.label}
+              className="mrs-dashboard-stat mrs-dashboard-stat-fill mrs-surface rounded-xl p-2"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                    {item.label}
+                  </p>
+                  <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
+                </div>
+                <div className={`rounded-lg p-1.5 ${item.color}`}>
+                  <item.icon size={15} />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -534,7 +520,20 @@ export default function Patients() {
                 Showing {filteredPatients.length} of {patients.length} records
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              {canManagePatients && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormError("");
+                    setIsAddPatientOpen(true);
+                  }}
+                  className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase"
+                >
+                  <UserPlus size={14} />
+                  Add Patient
+                </button>
+              )}
               {[
                 { id: "all", label: "All" },
                 { id: "inpatient", label: "Inpatient" },

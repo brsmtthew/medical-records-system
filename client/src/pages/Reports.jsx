@@ -176,7 +176,7 @@ export default function Reports() {
   return (
     <DashboardLayout>
       <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
-        <div className="flex shrink-0 flex-col justify-between gap-2 xl:flex-row xl:items-center">
+        <div className="grid shrink-0 grid-cols-1 gap-2 xl:grid-cols-[minmax(18rem,auto)_minmax(0,1fr)] xl:items-end">
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tight">
               Chart <span className="text-green-700">Reports</span>
@@ -185,42 +185,40 @@ export default function Reports() {
               Audit chart movement, borrowed records, and return history.
             </p>
           </div>
-
-        </div>
-
-        <div className="flex shrink-0 flex-wrap gap-1.5">
-          {stats.map((item) => (
-            <div
-              key={item.label}
-              className="mrs-dashboard-stat mrs-surface rounded-xl p-2"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                    {item.label}
-                  </p>
-                  <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
-                </div>
-                <div
-                  className={`rounded-lg p-1.5 ${
-                    item.tone === "red"
-                      ? "bg-red-100 text-red-700"
-                      : item.tone === "blue"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-green-100 text-green-700"
-                  }`}
-                >
-                  <item.icon size={15} />
+          <div className="grid min-w-0 grid-cols-3 gap-1.5 xl:justify-self-end xl:w-[min(56rem,100%)]">
+            {stats.map((item) => (
+              <div
+                key={item.label}
+                className="mrs-dashboard-stat mrs-dashboard-stat-fill mrs-surface rounded-xl p-2"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      {item.label}
+                    </p>
+                    <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
+                  </div>
+                  <div
+                    className={`rounded-lg p-1.5 ${
+                      item.tone === "red"
+                        ? "bg-red-100 text-red-700"
+                        : item.tone === "blue"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-green-100 text-green-700"
+                    }`}
+                  >
+                    <item.icon size={15} />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
           <div className="mrs-panel flex h-full min-h-0 flex-col overflow-hidden rounded-xl">
-            <div className="p-3 border-b border-slate-100 bg-slate-50 space-y-3 shrink-0">
-              <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
+            <div className="space-y-2 border-b border-slate-100 bg-slate-50 p-2 shrink-0">
+              <div className="grid gap-2 lg:grid-cols-[1fr_auto_auto_auto]">
                 <label className="block">
                   <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">Search</span>
                   <div className="relative">
@@ -235,7 +233,7 @@ export default function Reports() {
                         setCurrentPage(1);
                       }}
                       placeholder="Search patient, case number, borrower, returner, or department"
-                      className="mrs-field w-full rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold"
+                      className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
                     />
                   </div>
                 </label>
@@ -249,7 +247,7 @@ export default function Reports() {
                       setStartDate(event.target.value);
                       setCurrentPage(1);
                     }}
-                    className="mrs-field w-full rounded-xl py-2.5 px-3 text-sm font-bold"
+                    className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-bold"
                   />
                 </label>
                 <label className="block">
@@ -261,21 +259,21 @@ export default function Reports() {
                       setEndDate(event.target.value);
                       setCurrentPage(1);
                     }}
-                    className="mrs-field w-full rounded-xl py-2.5 px-3 text-sm font-bold"
+                    className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-bold"
                   />
                 </label>
                 <button
                   onClick={resetFilters}
-                  className="mrs-soft-button mt-4 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
+                  className="mrs-soft-button mt-4 rounded-lg px-3 py-2 text-[10px] font-black uppercase"
                 >
                   Reset
                 </button>
               </div>
 
-              <div className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-wrap items-end gap-1.5">
                 <div>
                   <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">Action</span>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {["all", "borrowed", "returned", "canceled"].map((filter) => (
                       <button
                         key={filter}
@@ -283,10 +281,10 @@ export default function Reports() {
                           setActionFilter(filter);
                           setCurrentPage(1);
                         }}
-                        className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase border-2 transition-colors ${
+                        className={`rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase transition-colors ${
                           actionFilter === filter
-                            ? "bg-green-700 text-white border-green-700"
-                            : "bg-white text-slate-500 border-slate-200 hover:border-green-200 hover:text-green-700"
+                            ? "border-green-700 bg-green-700 text-white"
+                            : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:text-green-700"
                         }`}
                       >
                         {filter}

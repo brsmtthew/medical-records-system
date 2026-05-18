@@ -63,7 +63,7 @@ export default function DashboardLayout({ children }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            className="flex h-full min-h-0 flex-col overflow-hidden p-3 md:p-4 2xl:p-5"
+            className="flex h-full min-h-0 flex-col overflow-hidden p-2.5 sm:p-3 md:p-4 2xl:p-5"
           >
             <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
           </Motion.div>

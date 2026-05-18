@@ -400,7 +400,7 @@ export default function TrackingReports() {
   return (
     <DashboardLayout>
       <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
-        <div className="no-print flex shrink-0 flex-col justify-between gap-3 xl:flex-row xl:items-center">
+        <div className="no-print grid shrink-0 grid-cols-1 gap-2 xl:grid-cols-[minmax(18rem,auto)_minmax(0,1fr)] xl:items-end">
           <div>
             <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
               Medical <span className="text-green-700">Reports</span>
@@ -409,50 +409,49 @@ export default function TrackingReports() {
               Preview medical document, laboratory result, and civil document reports.
             </p>
           </div>
-        </div>
-
-        <div className="no-print flex shrink-0 flex-wrap gap-1.5">
-          {trackingReportConfigs.map((config) => (
-            <button
-              key={config.collection}
-              type="button"
-              onClick={() => {
-                setActiveCollection(config.collection);
-                setSearchTerm("");
-                setStatusFilter("all");
-                setStartDate("");
-                setEndDate("");
-                setSelectedType(config.typeOptions?.[0]?.value || "");
-              }}
-              className={`rounded-xl border p-2.5 text-left transition-colors ${
-                activeConfig.collection === config.collection
-                  ? "border-green-300 bg-green-50"
-                  : "mrs-surface"
-              }`}
-            >
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{config.pluralLabel}</p>
-              <p className="mt-0.5 text-lg font-black text-slate-800">{(rowsByCollection[config.collection] || []).length}</p>
-            </button>
-          ))}
+          <div className="grid min-w-0 grid-cols-3 gap-1.5 xl:justify-self-end xl:w-[min(42rem,100%)]">
+            {trackingReportConfigs.map((config) => (
+              <button
+                key={config.collection}
+                type="button"
+                onClick={() => {
+                  setActiveCollection(config.collection);
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                  setStartDate("");
+                  setEndDate("");
+                  setSelectedType(config.typeOptions?.[0]?.value || "");
+                }}
+                className={`mrs-dashboard-stat-fill rounded-xl border p-2 text-left transition-colors ${
+                  activeConfig.collection === config.collection
+                    ? "border-green-300 bg-green-50"
+                    : "mrs-surface"
+                }`}
+              >
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{config.pluralLabel}</p>
+                <p className="mt-0.5 text-base font-black leading-none text-slate-800">{(rowsByCollection[config.collection] || []).length}</p>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="mrs-panel mrs-print-area flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl">
-          <div className="mrs-report-header shrink-0 border-b border-slate-100 bg-white p-5">
-            <p className="text-[10px] font-black uppercase tracking-widest text-green-700">TGMCI Medical Records</p>
-            <div className="mt-2 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
-              <div>
+          <div className="mrs-report-header grid shrink-0 gap-3 border-b border-slate-100 bg-white p-3 xl:grid-cols-[minmax(18rem,auto)_minmax(0,1fr)] xl:items-end">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-green-700">TGMCI Medical Records</p>
+              <div className="mt-2">
                 <h2 className="text-xl font-black uppercase text-slate-900">{activeConfig.pluralLabel} Report</h2>
                 <p className="text-xs font-semibold text-slate-500">
                   Generated {new Date().toLocaleString()}
                 </p>
               </div>
-              <p className="text-xs font-black uppercase text-slate-500">
+              <p className="mt-1 text-xs font-black uppercase text-slate-500">
                 Showing {displayedRows.length} of {rows.length} rows
               </p>
             </div>
-            <div className="mt-4 flex flex-wrap gap-1.5">
+            <div className="grid min-w-0 grid-cols-3 gap-1.5 xl:justify-self-end xl:w-[min(42rem,100%)]">
               {activeStats.map((item) => (
-                <div key={item.label} className="mrs-dashboard-stat rounded-xl border border-slate-200 bg-slate-50 p-2">
+                <div key={item.label} className="mrs-dashboard-stat mrs-dashboard-stat-fill mrs-surface rounded-xl p-2">
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
                   <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
                 </div>
@@ -460,7 +459,7 @@ export default function TrackingReports() {
             </div>
           </div>
 
-          <div className="no-print shrink-0 space-y-3 border-b border-slate-100 bg-slate-50 p-3">
+          <div className="no-print mrs-filter-strip shrink-0 space-y-2 border-b border-slate-100 p-2">
             <div className="grid gap-2 lg:grid-cols-[1fr_auto_auto_auto_auto]">
               <FilterField label="Search">
                 <div className="relative">
@@ -469,7 +468,7 @@ export default function TrackingReports() {
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
                     placeholder={activeConfig.searchPlaceholder}
-                    className="mrs-field w-full rounded-xl py-2.5 pl-9 pr-3 text-sm font-bold"
+                    className="mrs-field w-full rounded-lg py-1.5 pl-9 pr-3 text-xs font-bold"
                   />
                 </div>
               </FilterField>
@@ -478,7 +477,7 @@ export default function TrackingReports() {
                   type="date"
                   value={startDate}
                   onChange={(event) => setStartDate(event.target.value)}
-                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                  className="mrs-field w-full rounded-lg px-3 py-1.5 text-xs font-black uppercase"
                 />
               </FilterField>
               <FilterField label="End Date">
@@ -486,14 +485,14 @@ export default function TrackingReports() {
                   type="date"
                   value={endDate}
                   onChange={(event) => setEndDate(event.target.value)}
-                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                  className="mrs-field w-full rounded-lg px-3 py-1.5 text-xs font-black uppercase"
                 />
               </FilterField>
               <FilterField label="Status">
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value)}
-                  className="mrs-field w-full rounded-xl px-3 py-2.5 text-xs font-black uppercase"
+                  className="mrs-field w-full rounded-lg px-3 py-1.5 text-xs font-black uppercase"
                 >
                   <option value="all">All Status</option>
                   {reportStatusOptions(activeConfig).map((option) => (
@@ -504,20 +503,20 @@ export default function TrackingReports() {
               <button
                 type="button"
                 onClick={resetFilters}
-                className="mrs-soft-button mt-4 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
+                className="mrs-soft-button mt-4 inline-flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase"
               >
                 <RotateCcw size={15} />
                 Reset
               </button>
             </div>
             {activeConfig.typeOptions && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {activeConfig.typeOptions.map((type) => (
                   <button
                     key={type.value}
                     type="button"
                     onClick={() => setSelectedType(type.value)}
-                    className={`rounded-xl border px-3 py-2 text-[10px] font-black uppercase transition-colors ${
+                    className={`rounded-lg border px-2.5 py-1.5 text-[9px] font-black uppercase transition-colors ${
                       selectedType === type.value
                         ? "border-green-700 bg-green-700 text-white"
                         : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:text-green-700"
@@ -540,14 +539,14 @@ export default function TrackingReports() {
               return (
                 <div key={type.value} className={activeConfig.typeOptions ? "border-b border-slate-100 last:border-b-0" : ""}>
                   {activeConfig.typeOptions && (
-                    <div className="sticky left-0 z-10 border-b border-slate-100 bg-white px-4 py-3">
+                    <div className="mrs-section-band sticky left-0 z-10 border-b border-slate-100 px-4 py-2">
                       <p className="text-sm font-black uppercase text-slate-800">{type.label} {activeConfig.typeHeadingSuffix || "Records"}</p>
                       <p className="text-xs font-bold text-slate-400">{tableRows.length} record(s)</p>
                     </div>
                   )}
                   <table className="w-full min-w-[980px] table-fixed text-left">
-                    <thead className="sticky top-0 z-10 bg-white">
-                      <tr className="border-b border-slate-100">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="mrs-section-band border-b border-slate-100">
                         {activeColumns.map((column) => (
                           <th key={column.label} className={`${column.width || "w-[14%]"} whitespace-normal p-3 align-top text-[9px] font-black uppercase leading-tight tracking-widest text-slate-400 xl:p-4 xl:text-[10px]`}>
                             {column.label}
@@ -593,10 +592,10 @@ export default function TrackingReports() {
 
                       {tableRows.length === 0 && (
                         <tr>
-                          <td colSpan={activeColumns.length + (isAdmin ? 1 : 0)} className="p-10 text-center">
-                            <FileText size={38} className="mx-auto mb-3 text-slate-300" />
+                          <td colSpan={activeColumns.length + (isAdmin ? 1 : 0)} className="p-8 text-center">
+                            <FileText size={34} className="mx-auto mb-2 text-slate-300" />
                             <p className="font-black uppercase text-slate-700">No Report Rows</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-400">
+                            <p className="mt-1 text-xs font-semibold text-slate-400">
                               Add records or adjust report filters.
                             </p>
                           </td>
@@ -608,7 +607,7 @@ export default function TrackingReports() {
               );
             })}
           </div>
-          <div className="shrink-0 border-t border-slate-100 bg-slate-50 p-3 text-xs font-bold text-slate-500">
+          <div className="mrs-filter-strip shrink-0 border-t border-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
             Showing {displayedRows.length} of {rows.length} report rows.
           </div>
         </div>

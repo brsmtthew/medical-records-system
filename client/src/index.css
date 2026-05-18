@@ -66,13 +66,30 @@
   .login-auth-panel {
     background: #ffffff;
     color: #0f172a;
+    scrollbar-width: none;
+  }
+
+  .login-auth-panel::-webkit-scrollbar {
+    display: none;
+  }
+
+  .login-shell-panel,
+  .login-auth-panel {
+    font-family: "Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "kern";
+  }
+
+  .login-shell-panel,
+  .login-form-side {
+    background: #ffffff !important;
   }
 
   .login-field {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #c9d6e2;
     background: #ffffff;
     color: #0f172a;
-    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035);
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease, transform 150ms ease;
   }
 
   .login-field::placeholder {
@@ -82,8 +99,54 @@
   .login-field:focus {
     border-color: #0e7490;
     background: #ffffff;
-    box-shadow: 0 0 0 4px rgba(14, 116, 144, 0.13);
+    box-shadow:
+      0 0 0 4px rgba(14, 116, 144, 0.12),
+      0 12px 22px rgba(15, 23, 42, 0.055);
     outline: none;
+  }
+
+  .login-field:hover {
+    border-color: #9fb7ca;
+  }
+
+  .login-mode-toggle {
+    box-shadow:
+      inset 0 0 0 1px rgba(15, 23, 42, 0.12),
+      0 10px 24px rgba(15, 23, 42, 0.04);
+  }
+
+  .login-auth-panel h2 {
+    letter-spacing: -0.045em;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+
+  .login-auth-panel input,
+  .login-auth-panel button {
+    letter-spacing: -0.01em;
+  }
+
+  .login-submit-button {
+    background: linear-gradient(135deg, #0f766e, #0e99ad);
+    color: #ffffff;
+    box-shadow: 0 14px 26px rgba(14, 116, 144, 0.20);
+  }
+
+  .login-submit-button:hover {
+    background: linear-gradient(135deg, #0d9488, #0284c7);
+    box-shadow: 0 16px 28px rgba(14, 116, 144, 0.24);
+  }
+
+  .login-google-button {
+    border: 1px solid #d6e1eb;
+    background: #ffffff;
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.045);
+  }
+
+  .login-google-button:hover {
+    border-color: #b7c9d9;
+    background: #f8fafc;
+    box-shadow: 0 14px 26px rgba(15, 23, 42, 0.07);
+    transform: translateY(-1px);
   }
 
   .mrs-soft-button {
@@ -127,6 +190,10 @@
     background-color: rgb(248 250 252);
   }
 
+  .mrs-table-row > td {
+    border-bottom: 1px solid rgba(203, 213, 225, 0.72);
+  }
+
   .mrs-table-row-selected,
   .mrs-table-row-selected:hover,
   .mrs-table-row-selected > td,
@@ -151,6 +218,31 @@
     transform: translateY(-1px);
   }
 
+  .mrs-filter-strip {
+    background:
+      linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(226, 232, 240, 0.72));
+  }
+
+  .mrs-section-band {
+    background:
+      linear-gradient(90deg, rgba(15, 23, 42, 0.045), rgba(15, 23, 42, 0.015));
+  }
+
+  .mrs-mini-stat {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mrs-mini-stat::before {
+    background: currentColor;
+    border-radius: 999px;
+    content: "";
+    inset: 0 auto 0 0;
+    opacity: 0.68;
+    position: absolute;
+    width: 0.22rem;
+  }
+
   button:not(:disabled):active {
     transform: translateY(0) scale(0.98);
   }
@@ -167,12 +259,18 @@
     box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
   }
 
+  .mrs-topbar-tray,
   .mrs-topbar-chip,
   .mrs-topbar-action,
   .mrs-profile-button {
     background: rgba(255, 255, 255, 0.82);
     border-color: rgba(203, 213, 225, 0.82);
     box-shadow: 0 8px 18px rgba(15, 23, 42, 0.045);
+  }
+
+  .mrs-topbar-tray {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(248, 250, 252, 0.62));
   }
 
   .mrs-topbar-chip {
@@ -275,28 +373,49 @@
   }
 
   .fixed.inset-0 .mrs-panel {
-    border-color: rgba(203, 213, 225, 0.86);
+    border-color: rgba(148, 163, 184, 0.72);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 0.98));
-    box-shadow: 0 28px 70px rgba(2, 6, 23, 0.28);
+      radial-gradient(circle at top left, rgba(34, 197, 94, 0.10), transparent 16rem),
+      linear-gradient(180deg, rgba(248, 250, 252, 0.99), rgba(226, 232, 240, 0.98));
+    box-shadow:
+      0 28px 70px rgba(2, 6, 23, 0.36),
+      inset 0 1px 0 rgba(255, 255, 255, 0.74);
   }
 
   .fixed.inset-0 .mrs-panel :is(h2, h3) {
     letter-spacing: 0.01em;
   }
 
-  .fixed.inset-0 .mrs-panel :is(input, select, textarea) {
-    min-height: 2.65rem;
+  .fixed.inset-0 .mrs-panel :is(input, select, textarea, .mrs-field) {
+    min-height: 2.85rem;
   }
 
   .fixed.inset-0 .mrs-panel .mrs-field {
-    border-color: rgb(203 213 225);
+    border-color: rgb(148 163 184);
     background: rgb(255 255 255);
+    color: rgb(15 23 42);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 8px 20px rgba(15, 23, 42, 0.06);
+  }
+
+  .fixed.inset-0 .mrs-panel .mrs-field::placeholder {
+    color: rgb(100 116 139);
+    opacity: 1;
   }
 
   .fixed.inset-0 .mrs-panel .mrs-field:focus {
-    border-color: rgb(14 116 144);
-    box-shadow: 0 0 0 4px rgba(14, 116, 144, 0.12);
+    border-color: rgb(14 165 233);
+    box-shadow:
+      0 0 0 3px rgba(14, 165, 233, 0.22),
+      0 10px 22px rgba(14, 116, 144, 0.12);
+  }
+
+  .fixed.inset-0 .mrs-panel .mrs-field:disabled {
+    border-color: rgb(203 213 225);
+    background: rgb(226 232 240);
+    color: rgb(71 85 105);
+    opacity: 1;
   }
 
   .mrs-panel :is(table) {
@@ -377,6 +496,10 @@
     width: min(11.5rem, 100%);
   }
 
+  .mrs-dashboard-stat-fill {
+    width: 100%;
+  }
+
   .mrs-settings-menu {
     height: fit-content;
   }
@@ -406,9 +529,27 @@
   html:not(.dark) .mrs-surface,
   html:not(.dark) .mrs-panel,
   html:not(.dark) .mrs-card {
-    border-color: rgb(190 205 220);
-    background-color: rgba(248, 250, 252, 0.96);
+    border-color: rgb(125 146 169);
+    background-color: rgba(255, 255, 255, 0.98);
     color: rgb(15 23 42);
+  }
+
+  html:not(.dark) .mrs-surface :is(.text-slate-400, .text-gray-400),
+  html:not(.dark) .mrs-panel :is(.text-slate-400, .text-gray-400),
+  html:not(.dark) .mrs-card :is(.text-slate-400, .text-gray-400) {
+    color: rgb(71 85 105);
+  }
+
+  html:not(.dark) .mrs-surface :is(.text-slate-500, .text-gray-500),
+  html:not(.dark) .mrs-panel :is(.text-slate-500, .text-gray-500),
+  html:not(.dark) .mrs-card :is(.text-slate-500, .text-gray-500) {
+    color: rgb(51 65 85);
+  }
+
+  html:not(.dark) .mrs-surface :is(.border-slate-100, .border-slate-200),
+  html:not(.dark) .mrs-panel :is(.border-slate-100, .border-slate-200),
+  html:not(.dark) .mrs-card :is(.border-slate-100, .border-slate-200) {
+    border-color: rgb(148 163 184);
   }
 
   html:not(.dark) .mrs-sidebar {
@@ -472,7 +613,7 @@
   }
 
   html:not(.dark) .bg-slate-50 {
-    background-color: rgb(241 246 251);
+    background-color: rgb(236 243 250);
   }
 
   .mrs-nav-list {
@@ -516,13 +657,13 @@
     border-style: solid;
     border-width: 1px;
     display: inline-flex;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 900;
     justify-content: center;
     letter-spacing: 0.025em;
     line-height: 1;
-    min-height: 1.625rem;
-    padding: 0.25rem 0.75rem;
+    min-height: 1.45rem;
+    padding: 0.2rem 0.65rem;
     text-transform: uppercase;
     white-space: nowrap;
   }
@@ -633,7 +774,7 @@
 
   @media (max-width: 1366px), (max-height: 820px) {
     html {
-      font-size: 13px;
+      font-size: 12px;
     }
 
     .mrs-deploy-fit main {
@@ -645,7 +786,7 @@
     }
 
     .mrs-deploy-fit .mrs-navbar {
-      min-height: 4.35rem;
+      min-height: 3.75rem;
     }
 
     .mrs-deploy-fit .mrs-surface,
@@ -706,6 +847,39 @@
     .mrs-deploy-fit textarea,
     .mrs-deploy-fit button {
       min-height: 0;
+    }
+
+    .mrs-deploy-fit .mrs-panel thead th {
+      padding: 0.48rem 0.62rem;
+    }
+
+    .mrs-deploy-fit .mrs-panel tbody td {
+      padding: 0.48rem 0.62rem;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-stat {
+      width: min(10.25rem, 100%);
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-stat-fill {
+      width: 100%;
+    }
+
+    .mrs-deploy-fit .mrs-sidebar {
+      padding-top: 0.7rem;
+      padding-bottom: 0.7rem;
+    }
+
+    .mrs-deploy-fit .mrs-sidebar-link {
+      border-radius: 0.75rem;
+    }
+
+    .mrs-deploy-fit .rounded-2xl {
+      border-radius: 0.875rem;
+    }
+
+    .mrs-deploy-fit .rounded-xl {
+      border-radius: 0.7rem;
     }
   }
 
@@ -801,12 +975,18 @@
     box-shadow: 0 12px 30px rgba(2, 6, 23, 0.34);
   }
 
+  html.dark .mrs-topbar-tray,
   html.dark .mrs-topbar-chip,
   html.dark .mrs-topbar-action,
   html.dark .mrs-profile-button {
     background: rgba(15, 23, 42, 0.72);
     border-color: rgba(71, 85, 105, 0.9);
     color: rgb(203 213 225);
+  }
+
+  html.dark .mrs-topbar-tray {
+    background:
+      linear-gradient(135deg, rgba(15, 23, 42, 0.72), rgba(30, 41, 59, 0.58));
   }
 
   html.dark .mrs-topbar-action:hover,
@@ -848,10 +1028,39 @@
   }
 
   html.dark .fixed.inset-0 .mrs-panel {
-    border-color: rgba(71, 85, 105, 0.9);
+    border-color: rgba(125, 211, 252, 0.26);
     background:
-      linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
-    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.46);
+      radial-gradient(circle at top left, rgba(14, 165, 233, 0.14), transparent 17rem),
+      linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.99));
+    box-shadow:
+      0 28px 70px rgba(0, 0, 0, 0.56),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  html.dark .fixed.inset-0 .mrs-panel .mrs-field,
+  html.dark .fixed.inset-0 .mrs-panel input,
+  html.dark .fixed.inset-0 .mrs-panel select,
+  html.dark .fixed.inset-0 .mrs-panel textarea {
+    border-color: rgb(148 163 184);
+    background: rgb(248 250 252);
+    color: rgb(15 23 42);
+  }
+
+  html.dark .fixed.inset-0 .mrs-panel .mrs-field::placeholder,
+  html.dark .fixed.inset-0 .mrs-panel input::placeholder,
+  html.dark .fixed.inset-0 .mrs-panel textarea::placeholder {
+    color: rgb(100 116 139);
+    opacity: 1;
+  }
+
+  html.dark .fixed.inset-0 .mrs-panel .mrs-field:disabled,
+  html.dark .fixed.inset-0 .mrs-panel input:disabled,
+  html.dark .fixed.inset-0 .mrs-panel select:disabled,
+  html.dark .fixed.inset-0 .mrs-panel textarea:disabled {
+    border-color: rgb(100 116 139);
+    background: rgb(203 213 225);
+    color: rgb(71 85 105);
+    opacity: 1;
   }
 
   html.dark .mrs-panel thead th {
@@ -1143,6 +1352,11 @@
     background: transparent !important;
   }
 
+  html.dark .login-shell-panel,
+  html.dark .login-form-side {
+    background: #ffffff !important;
+  }
+
   html.dark .login-auth-panel,
   html.dark .login-auth-panel.bg-white {
     border-color: #cbd5e1 !important;
@@ -1229,6 +1443,20 @@
   html.dark .mrs-table-row:hover,
   html.dark .mrs-table-row:hover > td {
     background-color: rgb(30 41 59);
+  }
+
+  html.dark .mrs-table-row > td {
+    border-bottom-color: rgba(51, 65, 85, 0.9);
+  }
+
+  html.dark .mrs-filter-strip {
+    background:
+      linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.82));
+  }
+
+  html.dark .mrs-section-band {
+    background:
+      linear-gradient(90deg, rgba(51, 65, 85, 0.62), rgba(30, 41, 59, 0.36));
   }
 
   html.dark .mrs-table-row-selected,
