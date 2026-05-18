@@ -3,6 +3,7 @@ import {
   ArrowUpDown,
   Search,
   ShieldCheck,
+  Trash2,
   UserCheck,
   UserCog,
   Users as UsersIcon,
@@ -12,7 +13,7 @@ import {
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
 import UserAccessConfirmModal from "../modals/users/UserAccessConfirmModal";
-import { subscribeToUsers, updateUserAccess } from "../services/userService";
+import { deleteUserProfile, subscribeToUsers, updateUserAccess } from "../services/userService";
 import { useAuth } from "../context/useAuth";
 
 function getInitials(name = "") {
@@ -84,6 +85,17 @@ export default function Users() {
     setPendingAccessAction({ type: "activate", user });
   };
 
+  const handleDeleteUser = (user) => {
+    const userId = user.uid || user.id;
+    if (userId === currentUser?.uid) {
+      setAccessError("You cannot delete your own signed-in account.");
+      return;
+    }
+
+    setAccessError("");
+    setPendingAccessAction({ type: "delete", user });
+  };
+
   const confirmAccessAction = async () => {
     if (!pendingAccessAction) return;
 
@@ -92,7 +104,9 @@ export default function Users() {
     const userName = user.fullName || user.email || "User";
 
     try {
-      if (type === "block") {
+      if (type === "delete") {
+        await deleteUserProfile(userId);
+      } else if (type === "block") {
         await updateUserAccess(userId, {
           accountStatus: "disabled",
           restrictionReason: reason,
@@ -105,7 +119,7 @@ export default function Users() {
       }
 
       setAccessError("");
-      setAccessMessage(`${userName} was ${type === "block" ? "blocked" : "activated"}.`);
+      setAccessMessage(`${userName} was ${type === "delete" ? "deleted" : type === "block" ? "blocked" : "activated"}.`);
       setPendingAccessAction(null);
     } catch (error) {
       setAccessError(error.message || `Unable to ${type} user.`);
@@ -157,13 +171,13 @@ export default function Users() {
               Manage admin and staff access from a dedicated admin workspace.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:min-w-[28rem]">
+          <div className="flex flex-wrap gap-1.5">
             {[
               { label: "Total", value: users.length, icon: UsersIcon },
               { label: "Admins", value: adminUsers, icon: UserCog },
               { label: "Blocked", value: blockedUsers, icon: UserX },
             ].map((item) => (
-              <div key={item.label} className="mrs-card rounded-xl p-3">
+              <div key={item.label} className="mrs-dashboard-stat mrs-card rounded-xl p-2">
                 <div className="flex items-center gap-2">
                   <div className="rounded-xl border border-green-100 bg-green-50 p-2 text-green-700">
                     <item.icon size={17} />
@@ -178,53 +192,8 @@ export default function Users() {
           </div>
         </div>
 
-        <div className="grid shrink-0 gap-2 xl:grid-cols-3">
-          <div className="rounded-xl border border-green-100 bg-green-50 p-3 xl:col-span-2">
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-white p-2 text-green-700">
-                <ShieldCheck size={21} />
-              </div>
-              <div>
-                <p className="text-sm font-black uppercase text-slate-800">Secure Admin Creation</p>
-                <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600">
-                  Public account creation stays limited to staff. Admin access should be granted only by an existing admin.
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
-            <p className="text-sm font-black uppercase text-blue-800">Staff Restrictions</p>
-            <p className="mt-1 text-xs font-semibold leading-relaxed text-blue-700">
-              Staff cannot manage users, clear admin logs, or edit protected system controls.
-            </p>
-          </div>
-        </div>
-
-        <div className="mrs-nav-list shrink-0 overflow-x-auto pb-1">
-          {userNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = userFilter === item.id;
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setUserFilter(item.id)}
-                className={`mrs-nav-pill shrink-0 gap-2 px-3 py-2 text-sm ${
-                  isActive ? "mrs-nav-pill-active" : ""
-                }`}
-              >
-                <Icon size={16} />
-                <span>{item.label}</span>
-                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-600">
-                  {item.value}
-                </span>
-              </button>
-            );
-          })}
-        </div>
         <div className="mrs-panel shrink-0 rounded-xl p-3">
-          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_12rem_12rem]">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -234,6 +203,18 @@ export default function Users() {
                 className="mrs-field w-full rounded-lg py-2.5 pl-9 pr-3 text-sm font-bold"
               />
             </div>
+            <select
+              value={userFilter}
+              onChange={(event) => setUserFilter(event.target.value)}
+              className="mrs-field rounded-lg px-3 py-2.5 text-xs font-black uppercase"
+              aria-label="Filter users"
+            >
+              {userNavItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label} ({item.value})
+                </option>
+              ))}
+            </select>
             <label className="flex items-center gap-2">
               <ArrowUpDown size={16} className="text-slate-400" />
               <select
@@ -253,10 +234,10 @@ export default function Users() {
 
         <div className="mrs-panel min-h-0 flex-1 overflow-hidden rounded-xl">
           <div className="min-h-0 h-full overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[960px] table-fixed text-left">
+            <table className="w-full min-w-[1040px] table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-slate-100 bg-white">
-                  <th className="w-[27%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="w-[25%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     User
                   </th>
                   <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -265,10 +246,10 @@ export default function Users() {
                   <th className="w-[13%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Status
                   </th>
-                  <th className="w-[28%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Restriction Reason
+                  <th className="w-[24%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Block Reason
                   </th>
-                  <th className="w-[18%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="w-[24%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Actions
                   </th>
                 </tr>
@@ -318,11 +299,7 @@ export default function Users() {
                         </select>
                       </td>
                       <td className="p-3">
-                        <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${
-                          isDisabled
-                            ? "border-red-200 bg-red-50 text-red-700"
-                            : "border-green-200 bg-green-50 text-green-700"
-                        }`}>
+                        <span className={`mrs-status-badge ${isDisabled ? "mrs-status-danger" : "mrs-status-success"}`}>
                           {isDisabled ? "Blocked" : "Active"}
                         </span>
                       </td>
@@ -339,7 +316,7 @@ export default function Users() {
                         />
                       </td>
                       <td className="p-3">
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-2">
                           {isDisabled ? (
                             <button
                               type="button"
@@ -361,6 +338,17 @@ export default function Users() {
                               Block
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={isSelf}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                            aria-label={`Delete ${user.email || user.fullName || "user"}`}
+                            title="Delete user"
+                          >
+                            <Trash2 size={16} />
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>

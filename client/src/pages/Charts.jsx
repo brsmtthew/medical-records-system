@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
+import PatientCaseCell from "../components/PatientCaseCell";
 import ChartHistoryModal from "../modals/chart/ChartHistoryModal";
 import ChartTransactionConfirmModal from "../modals/chart/ChartTransactionConfirmModal";
 import { motion as Motion, AnimatePresence } from "framer-motion";
@@ -59,6 +60,10 @@ function searchable(value) {
 
 // Picks the oldest available timestamp for record-type calculations.
 function chartCreatedValue(chart) {
+  if (chart.admissionDate) {
+    const admissionTime = new Date(chart.admissionDate).getTime();
+    if (!Number.isNaN(admissionTime)) return admissionTime;
+  }
   if (chart.createdAt?.toMillis) return chart.createdAt.toMillis();
   if (chart.createdAt?.seconds) return chart.createdAt.seconds * 1000;
   if (chart.borrowedAt) return new Date(chart.borrowedAt).getTime();
@@ -67,9 +72,6 @@ function chartCreatedValue(chart) {
 
 // Determines whether the chart is the first record for the patient or a readmission.
 function determineChartRecordType(chart, charts) {
-  if (chart.recordType === "old") return "old";
-  if (chart.recordType === "new") return "new";
-
   const patientName = normalizePatientName(chart.patientName);
   const relatedCharts = charts
     .filter((item) => normalizePatientName(item.patientName) === patientName)
@@ -79,6 +81,12 @@ function determineChartRecordType(chart, charts) {
       return a.caseNumber.localeCompare(b.caseNumber);
     });
 
+  if (relatedCharts.some((item) => item.admissionDate)) {
+    return relatedCharts.findIndex((item) => item.caseNumber === chart.caseNumber) > 0 ? "old" : "new";
+  }
+
+  if (chart.recordType === "old") return "old";
+  if (chart.recordType === "new") return "new";
   return relatedCharts.findIndex((item) => item.caseNumber === chart.caseNumber) > 0 ? "old" : "new";
 }
 
@@ -95,9 +103,9 @@ function daysBorrowed(date) {
 }
 
 const fieldClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100";
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none transition placeholder:text-slate-300 focus:border-green-500 focus:ring-4 focus:ring-green-100";
 const softButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-black uppercase text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700";
+  "inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase text-slate-600 transition-colors hover:border-green-200 hover:bg-green-50 hover:text-green-700";
 
 export default function Charts() {
   const [charts, setCharts] = useState([]);
@@ -408,11 +416,11 @@ export default function Charts() {
 
   return (
     <DashboardLayout>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="mb-2 flex shrink-0 flex-col justify-between gap-2 xl:flex-row xl:items-center">
+      <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
+      <div className="flex shrink-0 flex-col justify-between gap-2 xl:flex-row xl:items-center">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tight">
-            Chart <span className="text-green-700">Tracking</span>
+            Chart <span className="text-green-700">Circulation</span>
           </h1>
           <p className="text-xs font-medium text-slate-500">
             Physical record circulation, borrower accountability, and return monitoring.
@@ -421,29 +429,29 @@ export default function Charts() {
 
       </div>
 
-      <div className="mb-2 grid shrink-0 grid-cols-3 gap-2">
+      <div className="flex shrink-0 flex-wrap gap-1.5">
         {stats.map((item) => (
-          <div key={item.label} className="mrs-surface rounded-xl p-3">
-            <div className="flex items-start justify-between gap-3">
+          <div key={item.label} className="mrs-dashboard-stat mrs-surface rounded-xl border border-slate-200 p-2">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
-                <p className="mt-0.5 text-xl font-black text-slate-800">{item.value}</p>
+                <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
               </div>
-              <div className={`rounded-lg p-2 ${item.color}`}>
-                <item.icon size={18} />
+              <div className={`rounded-lg p-1.5 ${item.color}`}>
+                <item.icon size={15} />
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="mrs-panel mb-2 shrink-0 rounded-xl p-3">
+      <div className="mrs-panel shrink-0 rounded-xl p-3">
         <div className="mb-2 flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-green-50 text-green-700">
             <Table2 size={21} />
           </div>
           <div>
-            <h2 className="font-black uppercase text-slate-800">Select Transaction</h2>
+            <h2 className="font-black uppercase text-slate-800">Transaction Management</h2>
             <p className="text-xs font-bold text-slate-400">
               Choose a mode, then scan a barcode or click a chart row to fill the case number.
             </p>
@@ -484,7 +492,7 @@ export default function Charts() {
         <Motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mrs-panel mb-2 shrink-0 rounded-xl p-3"
+          className="mrs-panel shrink-0 rounded-xl p-3"
         >
         <div className="flex flex-col gap-2 lg:flex-row lg:items-end">
             <div className="space-y-1 flex-1">
@@ -580,53 +588,55 @@ export default function Charts() {
         </Motion.div>
       )}
 
-      {activeTransaction && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="mb-2 shrink-0 space-y-2">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <p className="text-xs font-bold uppercase text-slate-400">
-                Click a patient row to use its case number for {activeTransaction.label.toLowerCase()}.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {["all", "available", "borrowed"].map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => setStatusFilter(filter)}
-                    className={`px-4 py-2 rounded-xl text-[11px] font-black uppercase border transition-colors ${
-                      statusFilter === filter
-                        ? "border-green-700 bg-green-700 text-white"
-                        : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:bg-green-50 hover:text-green-700"
-                    }`}
-                  >
-                    {filter}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search size={18} className="text-slate-400 group-focus-within:text-black transition-colors" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search patient, case, borrower, department"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm font-bold outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100 placeholder:text-slate-300"
-              />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="mrs-panel shrink-0 space-y-3 rounded-xl p-3">
+          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+            <p className="text-xs font-bold uppercase text-slate-400">
+              {activeTransaction
+                ? `Click a patient row to use its case number for ${activeTransaction.label.toLowerCase()}.`
+                : "Choose borrow or return above, then click a chart row or search by patient/case."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {["all", "available", "borrowed"].map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setStatusFilter(filter)}
+                  className={`rounded-xl border px-4 py-2 text-[11px] font-black uppercase transition-colors ${
+                    statusFilter === filter
+                      ? "border-green-700 bg-green-700 text-white"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:bg-green-50 hover:text-green-700"
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="mrs-panel min-h-0 flex-1 overflow-hidden rounded-xl">
+          <div className="group relative">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+              <Search size={18} className="text-slate-400 transition-colors group-focus-within:text-green-700" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search patient, case, borrower, department"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={fieldClass.replace("px-3", "pl-10 pr-4")}
+            />
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="mrs-panel mt-3 min-h-0 flex-1 overflow-hidden rounded-xl">
             <div className="h-full overflow-x-auto overflow-y-auto">
             <table className="w-full min-w-[780px] table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="w-[30%] p-3 text-[10px] font-black uppercase text-slate-400">Chart Info</th>
-                  <th className="w-[27%] p-3 text-[10px] font-black uppercase text-slate-400">Borrower</th>
-                  <th className="w-[28%] p-3 text-[10px] font-black uppercase text-slate-400">Current Status</th>
-                  <th className="w-[15%] p-3 text-right text-[10px] font-black uppercase text-slate-400">Log</th>
+                  <th className="w-[30%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
+                  <th className="w-[27%] p-3 text-[10px] font-black uppercase text-slate-400">Holder / Dept.</th>
+                  <th className="w-[28%] p-3 text-[10px] font-black uppercase text-slate-400">Chart Status</th>
+                  <th className="w-[15%] p-3 text-right text-[10px] font-black uppercase text-slate-400">History</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -657,9 +667,8 @@ export default function Charts() {
                         }`}
                       >
                         <td className="p-3">
-                          <div className="font-black text-slate-800 uppercase leading-tight mb-1 break-words">{chart.patientName}</div>
+                          <PatientCaseCell patientName={chart.patientName} caseNumber={chart.caseNumber} />
                           <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <code className="text-xs font-mono text-green-900 font-black tracking-wide">{chart.caseNumber}</code>
                             <span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase ${
                               recordType === "old"
                                 ? "bg-amber-50 text-amber-700 border-amber-200"
@@ -670,15 +679,15 @@ export default function Charts() {
                           </div>
                         </td>
                         <td className="p-3">
-                          <div className="text-sm font-black text-slate-700">{chart.borrower || "Records Room"}</div>
+                          <div className="text-xs font-black uppercase text-slate-700">{chart.borrower || "Records Room"}</div>
                           <div className="text-[10px] font-bold uppercase text-slate-400">{chart.department || "Available"}</div>
                         </td>
                         <td className="p-3">
                           <div className="flex flex-col gap-1 items-start">
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border-2 ${
+                            <span className={`mrs-status-badge ${
                               chart.status === "available"
-                                ? "bg-green-50 text-green-700 border-green-200"
-                                : "bg-blue-50 text-blue-700 border-blue-200"
+                                ? "mrs-status-success"
+                                : "mrs-status-info"
                             }`}>
                               {chart.status}
                             </span>
@@ -695,7 +704,7 @@ export default function Charts() {
                               event.stopPropagation();
                               setSelectedHistory(chart);
                             }}
-                            className="p-2 border-2 border-transparent hover:border-black rounded-xl transition-all inline-flex items-center gap-2 text-slate-400 hover:text-black font-bold text-xs"
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs font-bold text-slate-500 transition-colors hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700"
                           >
                             <History size={18} /> View History
                           </button>
@@ -723,7 +732,7 @@ export default function Charts() {
             </div>
           </div>
         </div>
-      )}
+      </div>
       </div>
 
       <FloatingToast toast={notice} onClose={() => setNotice(null)} />

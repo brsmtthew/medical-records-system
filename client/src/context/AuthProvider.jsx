@@ -1,12 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { AuthContext } from "./useAuth";
 import { auth, db, invalidFirebaseConfig, missingFirebaseConfig } from "../firebaseClient";
 import { syncActiveUserProfile } from "../services/recordsService";
 
 function normalizeRole(role) {
   return role === "admin" ? "admin" : "staff";
+}
+
+function isUnavailableAccount(status) {
+  return ["deleted", "missing"].includes(status);
 }
 
 export function AuthProvider({ children }) {
@@ -54,17 +58,12 @@ export function AuthProvider({ children }) {
           };
 
           if (!snapshot.exists()) {
-            setDoc(
-              userRef,
-              {
-                ...fallbackProfile,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              },
-              { merge: true },
-            ).catch(console.error);
-            setUserProfile(fallbackProfile);
-            syncActiveUserProfile(fallbackProfile);
+            const missingProfile = {
+              ...fallbackProfile,
+              accountStatus: "missing",
+            };
+            setUserProfile(missingProfile);
+            syncActiveUserProfile(missingProfile);
           } else {
             const profile = {
               ...fallbackProfile,
@@ -105,7 +104,7 @@ export function AuthProvider({ children }) {
       userRole: normalizeRole(userProfile?.role),
       isAdmin: normalizeRole(userProfile?.role) === "admin",
       isStaff: normalizeRole(userProfile?.role) === "staff",
-      isAccountDisabled: userProfile?.accountStatus === "disabled",
+      isAccountDisabled: userProfile?.accountStatus === "disabled" || isUnavailableAccount(userProfile?.accountStatus),
       authLoading,
       isAuthenticated: Boolean(currentUser),
       missingFirebaseConfig,

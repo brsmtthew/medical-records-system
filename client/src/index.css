@@ -90,23 +90,28 @@
     border: 1px solid rgb(203 213 225);
     background: rgb(255 255 255);
     color: rgb(51 65 85);
-    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
   }
 
   .mrs-soft-button:hover {
     border-color: rgb(191 219 254);
     background: rgb(239 246 255);
     color: rgb(29 78 216);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.08);
+    transform: translateY(-1px);
   }
 
   .mrs-primary-button {
     background: linear-gradient(135deg, #0f766e, #0e7490);
     color: white;
     box-shadow: 0 10px 20px rgba(14, 116, 144, 0.18);
+    transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
   }
 
   .mrs-primary-button:hover {
     background: linear-gradient(135deg, #0d9488, #0284c7);
+    box-shadow: 0 14px 24px rgba(14, 116, 144, 0.24);
+    transform: translateY(-1px);
   }
 
   .mrs-table-row {
@@ -137,10 +142,17 @@
     background: linear-gradient(135deg, #0284c7, #2563eb);
     color: white;
     box-shadow: 0 10px 20px rgba(37, 99, 235, 0.16);
+    transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
   }
 
   .mrs-blue-button:hover {
     background: rgb(29 78 216);
+    box-shadow: 0 14px 24px rgba(37, 99, 235, 0.22);
+    transform: translateY(-1px);
+  }
+
+  button:not(:disabled):active {
+    transform: translateY(0) scale(0.98);
   }
 
   .mrs-logo-frame {
@@ -148,16 +160,319 @@
   }
 
   .mrs-navbar {
-    border-color: #dbe5ef;
-    background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
+    border-color: rgba(203, 213, 225, 0.76);
+    background:
+      linear-gradient(90deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92)),
+      radial-gradient(circle at top left, rgba(34, 197, 94, 0.1), transparent 22rem);
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+  }
+
+  .mrs-topbar-chip,
+  .mrs-topbar-action,
+  .mrs-profile-button {
+    background: rgba(255, 255, 255, 0.82);
+    border-color: rgba(203, 213, 225, 0.82);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.045);
+  }
+
+  .mrs-topbar-chip {
+    border-radius: 0.875rem;
+    color: rgb(71 85 105);
+  }
+
+  .mrs-topbar-action:hover,
+  .mrs-profile-button:hover {
+    background: rgb(240 253 244);
+    border-color: rgb(134 239 172);
+    color: rgb(21 128 61);
+    transform: translateY(-1px);
   }
 
   .mrs-sidebar {
-    border-color: #dbe5ef;
+    border-color: rgba(148, 163, 184, 0.2);
     background:
-      linear-gradient(180deg, rgba(14, 165, 233, 0.08), transparent 18rem),
-      #ffffff;
+      radial-gradient(circle at 20% 0%, rgba(34, 197, 94, 0.18), transparent 14rem),
+      linear-gradient(180deg, #111c2f 0%, #17243a 46%, #10192a 100%);
+    box-shadow: 18px 0 40px rgba(2, 6, 23, 0.22);
+  }
+
+  .mrs-sidebar::before {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 11rem),
+      linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06));
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+  }
+
+  .mrs-sidebar > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .mrs-sidebar-icon-frame {
+    background: rgba(255, 255, 255, 0.09) !important;
+    border: 1px solid rgba(203, 213, 225, 0.18);
+    color: rgb(191 219 254);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .mrs-sidebar-section-header span {
+    background: linear-gradient(90deg, rgba(203, 213, 225, 0.62), rgba(203, 213, 225, 0.08));
+  }
+
+  .mrs-sidebar-section-header p {
+    color: rgb(191 219 254);
+  }
+
+  .mrs-sidebar-link {
+    background: transparent;
+    border-color: transparent;
+    color: rgb(174 190 213);
+  }
+
+  .mrs-sidebar-link:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(148, 163, 184, 0.2);
+    color: rgb(241 245 249);
+  }
+
+  .mrs-sidebar-link:hover .mrs-sidebar-icon-frame {
+    background: rgba(255, 255, 255, 0.13) !important;
+    border-color: rgba(191, 219, 254, 0.28);
+    color: rgb(219 234 254);
+  }
+
+  .mrs-sidebar-link-active {
+    background: linear-gradient(135deg, rgba(22, 163, 74, 0.22), rgba(13, 148, 136, 0.13));
+    border-color: rgba(34, 197, 94, 0.36);
+    color: rgb(134 239 172);
+    box-shadow:
+      inset 3px 0 0 rgb(34 197 94),
+      0 12px 22px rgba(2, 6, 23, 0.14);
+  }
+
+  .mrs-sidebar-link-active .mrs-sidebar-icon-frame {
+    background: rgba(34, 197, 94, 0.16) !important;
+    border-color: rgba(74, 222, 128, 0.35);
+    color: rgb(134 239 172);
+  }
+
+  .mrs-sidebar-footer {
+    border-color: rgba(148, 163, 184, 0.24);
+  }
+
+  .mrs-sidebar-toggle {
+    background: rgba(15, 23, 42, 0.36);
+    border-color: rgba(148, 163, 184, 0.26);
+  }
+
+  .mrs-sidebar-toggle:hover {
+    background: rgba(14, 116, 144, 0.2);
+    border-color: rgba(125, 211, 252, 0.34);
+    color: rgb(224 242 254);
+  }
+
+  .fixed.inset-0 .mrs-panel {
+    border-color: rgba(203, 213, 225, 0.86);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 0.98));
+    box-shadow: 0 28px 70px rgba(2, 6, 23, 0.28);
+  }
+
+  .fixed.inset-0 .mrs-panel :is(h2, h3) {
+    letter-spacing: 0.01em;
+  }
+
+  .fixed.inset-0 .mrs-panel :is(input, select, textarea) {
+    min-height: 2.65rem;
+  }
+
+  .fixed.inset-0 .mrs-panel .mrs-field {
+    border-color: rgb(203 213 225);
+    background: rgb(255 255 255);
+  }
+
+  .fixed.inset-0 .mrs-panel .mrs-field:focus {
+    border-color: rgb(14 116 144);
+    box-shadow: 0 0 0 4px rgba(14, 116, 144, 0.12);
+  }
+
+  .mrs-panel :is(table) {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mrs-panel :is(th, td) {
+    vertical-align: middle;
+  }
+
+  .mrs-panel thead th {
+    background: rgb(248 250 252);
+    border-bottom: 1px solid rgb(226 232 240);
+    color: rgb(71 85 105);
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    padding: 0.72rem 0.8rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .mrs-panel tbody td {
+    color: rgb(51 65 85);
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.35;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .mrs-panel tbody tr {
+    transition: background-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .mrs-panel tbody tr:hover > td {
+    background: rgb(248 250 252);
+  }
+
+  .mrs-panel tbody td:first-child,
+  .mrs-panel thead th:first-child {
+    padding-left: 1rem;
+  }
+
+  .mrs-panel tbody td:last-child,
+  .mrs-panel thead th:last-child {
+    padding-right: 1rem;
+  }
+
+  .mrs-panel td :is(.font-mono) {
+    letter-spacing: 0.01em;
+  }
+
+  .mrs-value-stack {
+    color: rgb(51 65 85);
+  }
+
+  .mrs-value-label {
+    display: block;
+    font-size: 0.62rem;
+    letter-spacing: 0.07em;
+    line-height: 1.1;
+    margin-bottom: 0.1rem;
+  }
+
+  .mrs-value-main {
+    color: rgb(15 23 42);
+    display: block;
+    font-weight: 900;
+    line-height: 1.25;
+    white-space: pre-line;
+  }
+
+  .mrs-dashboard-stat {
+    min-height: 0;
+    width: min(11.5rem, 100%);
+  }
+
+  .mrs-settings-menu {
+    height: fit-content;
+  }
+
+  .mrs-account-header {
+    background:
+      radial-gradient(circle at top left, rgba(34, 197, 94, 0.14), transparent 16rem),
+      linear-gradient(135deg, rgb(248 250 252), rgb(255 255 255));
+    border-bottom: 1px solid rgb(226 232 240);
+  }
+
+  html:not(.dark) body {
+    background: rgb(232 239 247);
+    color: rgb(15 23 42);
+  }
+
+  html:not(.dark) .mrs-shell {
+    background:
+      linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+      radial-gradient(circle at top left, rgba(37, 99, 235, 0.09), transparent 34rem),
+      radial-gradient(circle at bottom right, rgba(22, 163, 74, 0.07), transparent 30rem),
+      linear-gradient(135deg, rgb(239 246 252), rgb(226 235 244));
+    background-size: 38px 38px, 38px 38px, auto, auto, auto;
+  }
+
+  html:not(.dark) .mrs-surface,
+  html:not(.dark) .mrs-panel,
+  html:not(.dark) .mrs-card {
+    border-color: rgb(190 205 220);
+    background-color: rgba(248, 250, 252, 0.96);
+    color: rgb(15 23 42);
+  }
+
+  html:not(.dark) .mrs-sidebar {
+    border-color: rgb(190 205 220);
+    background:
+      radial-gradient(circle at 20% 0%, rgba(21, 128, 61, 0.12), transparent 13rem),
+      linear-gradient(180deg, rgb(245 249 252), rgb(232 240 248));
+    box-shadow: 14px 0 32px rgba(15, 23, 42, 0.1);
+    color: rgb(15 23 42);
+  }
+
+  html:not(.dark) .mrs-sidebar::before {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.5), transparent);
+  }
+
+  html:not(.dark) .mrs-sidebar-section-header p {
+    color: rgb(71 85 105);
+  }
+
+  html:not(.dark) .mrs-sidebar-link {
+    color: rgb(71 85 105);
+  }
+
+  html:not(.dark) .mrs-sidebar-link:hover {
+    background: rgba(255, 255, 255, 0.68);
+    border-color: rgb(190 205 220);
+    color: rgb(15 23 42);
+  }
+
+  html:not(.dark) .mrs-sidebar-link-active {
+    background: linear-gradient(135deg, rgb(220 252 231), rgb(236 253 245));
+    border-color: rgb(134 239 172);
+    color: rgb(21 128 61);
+    box-shadow: inset 3px 0 0 rgb(22 163 74), 0 10px 18px rgba(15, 23, 42, 0.08);
+  }
+
+  html:not(.dark) .mrs-sidebar-icon-frame {
+    background: rgba(255, 255, 255, 0.74) !important;
+    border-color: rgb(203 213 225);
+    color: rgb(51 65 85);
+  }
+
+  html:not(.dark) .mrs-sidebar-link-active .mrs-sidebar-icon-frame {
+    background: rgb(240 253 244) !important;
+    border-color: rgb(134 239 172);
+    color: rgb(22 101 52);
+  }
+
+  html:not(.dark) .mrs-sidebar-footer {
+    border-color: rgb(203 213 225);
+  }
+
+  html:not(.dark) .mrs-sidebar-toggle {
+    background: rgba(255, 255, 255, 0.74);
+    border-color: rgb(190 205 220);
+    color: rgb(71 85 105);
+  }
+
+  html:not(.dark) .bg-white {
+    background-color: rgb(255 255 255);
+  }
+
+  html:not(.dark) .bg-slate-50 {
+    background-color: rgb(241 246 251);
   }
 
   .mrs-nav-list {
@@ -195,6 +510,23 @@
     color: #020617;
   }
 
+  .mrs-status-badge {
+    align-items: center;
+    border-radius: 9999px;
+    border-style: solid;
+    border-width: 1px;
+    display: inline-flex;
+    font-size: 10px;
+    font-weight: 900;
+    justify-content: center;
+    letter-spacing: 0.025em;
+    line-height: 1;
+    min-height: 1.625rem;
+    padding: 0.25rem 0.75rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
   .mrs-status-available,
   .mrs-status-success {
     border-color: #bbf7d0;
@@ -202,21 +534,31 @@
     color: #15803d;
   }
 
-  .mrs-status-borrowed,
+  .mrs-status-borrowed {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+
   .mrs-status-danger {
     border-color: #fecaca;
     background: #fef2f2;
     color: #b91c1c;
   }
 
-  .mrs-status-inpatient,
+  .mrs-status-inpatient {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #15803d;
+  }
+
+  .mrs-status-outpatient,
   .mrs-status-info {
     border-color: #bfdbfe;
     background: #eff6ff;
     color: #1d4ed8;
   }
 
-  .mrs-status-outpatient,
   .mrs-status-neutral {
     border-color: #e2e8f0;
     background: #f8fafc;
@@ -227,6 +569,12 @@
     border-color: #fde68a;
     background: #fffbeb;
     color: #b45309;
+  }
+
+  .mrs-status-voided {
+    border-color: #ddd6fe;
+    background: #faf5ff;
+    color: #7c3aed;
   }
 }
 
@@ -446,14 +794,33 @@
   }
 
   html.dark .mrs-navbar {
-    border-color: rgb(51 65 85);
-    background: rgba(15, 23, 42, 0.88);
+    border-color: rgba(71, 85, 105, 0.8);
+    background:
+      linear-gradient(90deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9)),
+      radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 22rem);
     box-shadow: 0 12px 30px rgba(2, 6, 23, 0.34);
   }
 
+  html.dark .mrs-topbar-chip,
+  html.dark .mrs-topbar-action,
+  html.dark .mrs-profile-button {
+    background: rgba(15, 23, 42, 0.72);
+    border-color: rgba(71, 85, 105, 0.9);
+    color: rgb(203 213 225);
+  }
+
+  html.dark .mrs-topbar-action:hover,
+  html.dark .mrs-profile-button:hover {
+    background: rgba(22, 101, 52, 0.22);
+    border-color: rgba(74, 222, 128, 0.34);
+    color: rgb(134 239 172);
+  }
+
   html.dark .mrs-sidebar {
-    border-color: rgb(51 65 85);
-    background: linear-gradient(180deg, rgb(15 23 42), rgb(30 41 59), rgb(15 23 42));
+    border-color: rgba(148, 163, 184, 0.2);
+    background:
+      radial-gradient(circle at 20% 0%, rgba(34, 197, 94, 0.18), transparent 14rem),
+      linear-gradient(180deg, #111c2f 0%, #17243a 46%, #10192a 100%);
   }
 
   html.dark .mrs-nav-pill {
@@ -471,6 +838,89 @@
   html.dark .mrs-logo-frame {
     border-color: rgb(71 85 105);
     background-color: rgb(255 255 255) !important;
+  }
+
+  html.dark .mrs-sidebar-icon-frame {
+    background: rgba(255, 255, 255, 0.09) !important;
+    border-color: rgba(203, 213, 225, 0.18);
+    color: rgb(191 219 254);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  html.dark .fixed.inset-0 .mrs-panel {
+    border-color: rgba(71, 85, 105, 0.9);
+    background:
+      linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
+    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.46);
+  }
+
+  html.dark .mrs-panel thead th {
+    background: rgb(30 41 59);
+    border-bottom-color: rgb(51 65 85);
+    color: rgb(203 213 225);
+  }
+
+  html.dark .mrs-panel tbody td {
+    color: rgb(226 232 240);
+  }
+
+  html.dark .mrs-panel tbody tr:hover > td {
+    background: rgb(30 41 59);
+  }
+
+  html.dark .mrs-value-stack {
+    color: rgb(203 213 225);
+  }
+
+  html.dark .mrs-value-main {
+    color: rgb(241 245 249);
+  }
+
+  html.dark .mrs-account-header {
+    background:
+      radial-gradient(circle at top left, rgba(34, 197, 94, 0.16), transparent 16rem),
+      linear-gradient(135deg, rgb(30 41 59), rgb(15 23 42));
+    border-bottom-color: rgb(51 65 85);
+  }
+
+  html.dark .mrs-status-success,
+  html.dark .mrs-status-available,
+  html.dark .mrs-status-inpatient {
+    border-color: rgba(74, 222, 128, 0.28);
+    background: rgba(22, 101, 52, 0.22);
+    color: rgb(134 239 172);
+  }
+
+  html.dark .mrs-status-info,
+  html.dark .mrs-status-borrowed,
+  html.dark .mrs-status-outpatient {
+    border-color: rgba(96, 165, 250, 0.3);
+    background: rgba(30, 64, 175, 0.22);
+    color: rgb(147 197 253);
+  }
+
+  html.dark .mrs-status-warning {
+    border-color: rgba(251, 191, 36, 0.3);
+    background: rgba(146, 64, 14, 0.24);
+    color: rgb(252 211 77);
+  }
+
+  html.dark .mrs-status-danger {
+    border-color: rgba(248, 113, 113, 0.3);
+    background: rgba(127, 29, 29, 0.24);
+    color: rgb(252 165 165);
+  }
+
+  html.dark .mrs-status-voided {
+    border-color: rgba(167, 139, 250, 0.34);
+    background: rgba(91, 33, 182, 0.24);
+    color: rgb(196 181 253);
+  }
+
+  html.dark .mrs-status-neutral {
+    border-color: rgb(51 65 85);
+    background: rgb(30 41 59);
+    color: rgb(203 213 225);
   }
 
   html.dark.soft-light body {
@@ -499,13 +949,17 @@
 
   html.dark.soft-light .mrs-navbar {
     border-color: rgb(71 85 105);
-    background: rgba(30, 41, 59, 0.88);
+    background:
+      linear-gradient(90deg, rgba(30, 41, 59, 0.92), rgba(39, 52, 72, 0.9)),
+      radial-gradient(circle at top left, rgba(20, 184, 166, 0.11), transparent 22rem);
     box-shadow: 0 12px 26px rgba(2, 6, 23, 0.24);
   }
 
   html.dark.soft-light .mrs-sidebar {
-    border-color: rgb(71 85 105);
-    background: linear-gradient(180deg, rgb(22 31 47), rgb(37 49 69), rgb(22 31 47));
+    border-color: rgba(148, 163, 184, 0.22);
+    background:
+      radial-gradient(circle at 20% 0%, rgba(20, 184, 166, 0.16), transparent 14rem),
+      linear-gradient(180deg, rgb(22 31 47), rgb(37 49 69), rgb(22 31 47));
   }
 
   html.dark.soft-light .bg-slate-50,
@@ -589,6 +1043,14 @@
   html.dark .text-blue-600,
   html.dark .text-blue-500 {
     color: rgb(147 197 253);
+  }
+
+  html.dark .text-violet-900,
+  html.dark .text-violet-800,
+  html.dark .text-violet-700,
+  html.dark .text-violet-600,
+  html.dark .text-violet-500 {
+    color: rgb(196 181 253);
   }
 
   html.dark .text-red-700,

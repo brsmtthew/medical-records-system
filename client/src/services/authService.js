@@ -8,7 +8,7 @@ import {
   signOut,
   updateProfile,
 } from "firebase/auth";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "../firebaseClient";
 import { apiRequest } from "./apiClient";
@@ -86,8 +86,22 @@ export async function signInWithEmail({ email, password, remember }) {
   }
 
   if (db) {
+    const userRef = doc(db, "users", userCredential.user.uid);
+    const userSnapshot = await getDoc(userRef);
+    const userProfile = userSnapshot.exists() ? userSnapshot.data() : null;
+
+    if (!userProfile) {
+      await signOut(auth);
+      throw new Error("This account has been removed. Contact an administrator.");
+    }
+
+    if (["deleted", "disabled"].includes(userProfile.accountStatus)) {
+      await signOut(auth);
+      throw new Error("This account is not active. Contact an administrator.");
+    }
+
     await setDoc(
-      doc(db, "users", userCredential.user.uid),
+      userRef,
       {
         uid: userCredential.user.uid,
         email,

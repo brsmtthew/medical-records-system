@@ -2,7 +2,7 @@ import { motion as Motion, AnimatePresence } from "framer-motion";
 import { FileText, RotateCcw } from "lucide-react";
 
 const modalCardClass =
-  "relative max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-950/20";
+  "mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto rounded-2xl p-4";
 
 export default function ChartTransactionConfirmModal({
   isSaving,

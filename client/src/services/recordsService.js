@@ -43,6 +43,13 @@ export const duplicateCaseNumberMessage = "A patient with this case number alrea
 export const duplicatePatientStayMessage = "This inpatient record overlaps a previous inpatient admission period.";
 export const patientBeforeFirstRecordMessage = "Readmission date cannot be earlier than this patient's first hospital record.";
 
+const patientSnapshotCollections = [
+  "chartLogs",
+  "medicalDocumentRequests",
+  "labResultRequests",
+  "vitalCertificateRequests",
+];
+
 let activeUserProfile = null;
 
 // AuthProvider keeps this profile live; CRUD calls reuse it so each write does not
@@ -146,6 +153,9 @@ function sanitizeChartPayload(chart) {
     patientName: { maxLength: 160, uppercase: true },
     patientDepartment: { maxLength: 120, uppercase: true },
     recordType: { maxLength: 30 },
+    patientType: { maxLength: 30 },
+    admissionDate: { maxLength: 20 },
+    dischargeDate: { maxLength: 20 },
     status: { maxLength: 30 },
     borrower: { maxLength: 160 },
     department: { maxLength: 120, uppercase: true },
@@ -258,6 +268,45 @@ async function patientAdmissionBeforeFirstRecordExists(database, patient, ignore
     patient,
     ignoredCaseNumber,
   );
+}
+
+async function commitBatchedUpdates(database, updates) {
+  for (let index = 0; index < updates.length; index += 450) {
+    const batch = writeBatch(database);
+    updates.slice(index, index + 450).forEach(({ ref, payload }) => {
+      batch.update(ref, payload);
+    });
+    await batch.commit();
+  }
+}
+
+async function syncPatientSnapshotRows(database, previousCaseNumber, safePatient) {
+  const nextCaseNumber = safePatient.caseNumber;
+  const nextPatientName = safePatient.name;
+  const snapshots = await Promise.all(
+    patientSnapshotCollections.map((collectionName) => (
+      getDocs(query(collection(database, collectionName), where("caseNumber", "==", previousCaseNumber)))
+    )),
+  );
+  const updates = [];
+
+  snapshots.forEach((snapshot) => {
+    snapshot.docs.forEach((rowSnapshot) => {
+      const row = rowSnapshot.data();
+      if (row.caseNumber === nextCaseNumber && row.patientName === nextPatientName) return;
+
+      updates.push({
+        ref: rowSnapshot.ref,
+        payload: {
+          caseNumber: nextCaseNumber,
+          patientName: nextPatientName,
+          updatedAt: serverTimestamp(),
+        },
+      });
+    });
+  });
+
+  await commitBatchedUpdates(database, updates);
 }
 
 // Checks Firestore for an existing inpatient stay that overlaps the candidate row.
@@ -485,6 +534,18 @@ export async function updateUserAccess(userId, updates) {
   });
 }
 
+// Removes a user profile from the admin user list. The matching Firebase Auth
+// account can no longer enter because sign-in now requires an existing profile.
+export async function deleteUserProfile(userId) {
+  const database = requireDb();
+  const { user } = await requireActiveRole({ adminOnly: true });
+  if (user.uid === userId) {
+    throw new Error("You cannot delete your own signed-in account.");
+  }
+
+  await deleteDoc(doc(database, "users", userId));
+}
+
 // Creates a patient and its matching available chart document.
 export async function createPatient(patient) {
   const database = requireDb();
@@ -522,6 +583,9 @@ export async function createPatient(patient) {
     patientName: safePatient.name,
     patientDepartment: safePatient.department || "",
     recordType: safePatient.recordType || "new",
+    patientType: safePatient.type || "outpatient",
+    admissionDate: safePatient.admissionDate || "",
+    dischargeDate: safePatient.dischargeDate || "",
     status: "available",
     borrower: "",
     department: "",
@@ -588,6 +652,9 @@ export async function updatePatient(previousCaseNumber, patient) {
       patientName: safePatient.name,
       patientDepartment: safePatient.department || "",
       recordType: safePatient.recordType || "new",
+      patientType: safePatient.type || "outpatient",
+      admissionDate: safePatient.admissionDate || "",
+      dischargeDate: safePatient.dischargeDate || "",
       status: previousChart.status || "available",
       borrower: previousChart.borrower || "",
       department: previousChart.department || "",
@@ -613,6 +680,8 @@ export async function updatePatient(previousCaseNumber, patient) {
         caseNumber: safePatient.caseNumber,
       });
     }
+
+    await syncPatientSnapshotRows(database, previousCaseNumber, safePatient);
 
     const markRenameBatch = writeBatch(database);
     markRenameBatch.update(doc(database, "patients", previousCaseNumber), {
@@ -651,9 +720,13 @@ export async function updatePatient(previousCaseNumber, patient) {
     patientName: safePatient.name,
     patientDepartment: safePatient.department || "",
     recordType: safePatient.recordType || "new",
+    patientType: safePatient.type || "outpatient",
+    admissionDate: safePatient.admissionDate || "",
+    dischargeDate: safePatient.dischargeDate || "",
     updatedAt: now,
   });
   await batch.commit();
+  await syncPatientSnapshotRows(database, safePatient.caseNumber, safePatient);
 }
 
 // Deletes a patient and cancels active borrow logs tied to its chart.

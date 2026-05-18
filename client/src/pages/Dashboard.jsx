@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
+import PatientCaseCell from "../components/PatientCaseCell";
 import { motion as Motion } from "framer-motion";
 import {
   Bar,
@@ -35,6 +36,29 @@ const periodOptions = [
   { id: "monthly", label: "Monthly" },
   { id: "yearly", label: "Yearly" },
 ];
+
+const chartTooltipStyle = {
+  backgroundColor: "rgba(15, 23, 42, 0.96)",
+  border: "1px solid rgba(96, 165, 250, 0.28)",
+  borderRadius: "14px",
+  boxShadow: "0 16px 32px rgba(2, 6, 23, 0.34)",
+  color: "#e2e8f0",
+  fontWeight: "bold",
+};
+
+const chartTooltipLabelStyle = {
+  color: "#f8fafc",
+  fontWeight: 900,
+  textTransform: "uppercase",
+};
+
+const chartTooltipItemStyle = {
+  fontWeight: 900,
+};
+
+const chartCursorStyle = {
+  fill: "rgba(148, 163, 184, 0.12)",
+};
 
 // Builds the yyyy-mm-dd value expected by native date inputs.
 function toDateInputValue(date) {
@@ -187,22 +211,22 @@ function StatCard({ item, index }) {
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06 }}
-      className="mrs-surface rounded-xl p-3"
+      className="mrs-dashboard-stat mrs-surface rounded-xl p-2"
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+          <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest">
             {item.label}
           </p>
-          <h2 className="mt-0.5 text-xl font-bold text-slate-900">{item.value}</h2>
+          <h2 className="mt-0.5 text-base font-black leading-none text-slate-900">{item.value}</h2>
           {item.trend && (
-            <p className={`text-[10px] font-black uppercase mt-1 ${item.trendColor}`}>
+            <p className={`mt-1 text-[9px] font-black uppercase leading-tight ${item.trendColor}`}>
               {item.trend}
             </p>
           )}
         </div>
-        <div className={`rounded-lg p-2 ${item.color}`}>
-          <item.icon size={18} />
+        <div className={`rounded-lg p-1.5 ${item.color}`}>
+          <item.icon size={15} />
         </div>
       </div>
     </Motion.div>
@@ -326,7 +350,7 @@ export default function Dashboard() {
       ? event.log.returnedBy || event.log.borrowedBy || "N/A"
       : event.log.borrowedBy || "N/A",
     time: event.date ? formatDisplayDate(event.date) : "",
-    tone: event.type === "borrowed" ? "red" : "green",
+    tone: event.type === "borrowed" ? "blue" : "green",
   }));
   const periodLabel = selectedPeriod === "today"
     ? formatDateInputLabel(selectedDate)
@@ -364,9 +388,9 @@ export default function Dashboard() {
       label: "Borrowed Charts",
       value: allBorrowedCharts,
       icon: Archive,
-      color: "bg-red-50 text-red-700",
+      color: "bg-blue-50 text-blue-700",
       trend: "Active circulation",
-      trendColor: "text-red-600",
+      trendColor: "text-blue-700",
     },
     {
       label: "Recent Activity",
@@ -387,14 +411,14 @@ export default function Dashboard() {
         className="mb-2 flex shrink-0 flex-col justify-between gap-2 xl:flex-row xl:items-center"
       >
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-            Records <span className="text-cyan-700">Dashboard</span>
+          <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
+            Records <span className="text-green-700">Dashboard</span>
           </h1>
           <p className="text-xs font-medium text-slate-500">
             Chart movement, patient mix, and active circulation records.
           </p>
         </div>
-        <div className="mrs-surface flex flex-col gap-2 rounded-xl p-1.5 sm:flex-row">
+        <div className="mrs-surface flex flex-col gap-2 rounded-xl p-1.5 sm:flex-row xl:mt-5">
           <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
             {periodOptions.map((period) => (
               <button
@@ -444,7 +468,7 @@ export default function Dashboard() {
         </div>
       </Motion.div>
 
-      <div className="mb-2 grid shrink-0 grid-cols-2 gap-2 xl:grid-cols-4">
+      <div className="mb-2 flex shrink-0 flex-wrap gap-1.5">
         {stats.map((item, index) => (
           <StatCard key={item.label} item={item} index={index} />
         ))}
@@ -483,7 +507,12 @@ export default function Dashboard() {
                 tickLine={false}
                 tick={{ fill: "#64748b", fontSize: 12 }}
               />
-              <Tooltip contentStyle={{ borderRadius: "14px", border: "1px solid #e2e8f0", fontWeight: "bold", boxShadow: "0 16px 32px rgba(15,23,42,.10)" }} cursor={{ fill: "#f8fafc" }} />
+              <Tooltip
+                contentStyle={chartTooltipStyle}
+                cursor={chartCursorStyle}
+                itemStyle={chartTooltipItemStyle}
+                labelStyle={chartTooltipLabelStyle}
+              />
               <Bar dataKey="borrowed" name="Borrowed" fill="#3b82f6" radius={[8, 8, 0, 0]} />
               <Bar dataKey="returned" name="Returned" fill="#15803d" radius={[8, 8, 0, 0]} />
             </BarChart>
@@ -558,9 +587,9 @@ export default function Dashboard() {
             {recentActivity.map((item) => (
               <div key={`${item.action}-${item.chart}`} className="flex items-center justify-between gap-3 px-3 py-2">
                 <div>
-                  <p className="font-black text-slate-800 text-sm">{item.patientName}</p>
-                  <p className="text-[10px] font-bold uppercase text-slate-400">
-                    {item.chart} - {item.person} - {item.time}
+                  <PatientCaseCell patientName={item.patientName} caseNumber={item.chart} />
+                  <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">
+                    {item.person} - {item.time}
                   </p>
                 </div>
                 <span
@@ -597,20 +626,30 @@ export default function Dashboard() {
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <ClipboardCheck size={19} className="text-amber-700" />
-              <h3 className="font-black uppercase text-slate-800">Activity STATUS</h3>
+              <h3 className="font-black uppercase text-slate-800">Activity Status</h3>
             </div>
             <span className="text-[10px] font-black uppercase text-slate-400">{periodLabel}</span>
           </div>
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 bg-slate-50 p-2.5 sm:grid-cols-3">
-            {alerts.map((item) => (
-              <div key={item.label} className="flex h-full flex-col justify-between rounded-xl bg-white p-3">
-                <div>
-                  <p className="font-black text-slate-800 text-xs leading-tight">{item.label}</p>
-                  <p className="mt-1 text-[11px] font-semibold text-slate-500">{item.detail}</p>
+            {alerts.map((item, index) => {
+              const tones = [
+                "border-blue-200 bg-blue-50 text-blue-700",
+                "border-green-200 bg-green-50 text-green-700",
+                "border-cyan-200 bg-cyan-50 text-cyan-700",
+              ];
+
+              return (
+                <div key={item.label} className="flex h-full flex-col justify-between rounded-xl border border-slate-200 bg-white p-3">
+                  <div>
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black uppercase ${tones[index]}`}>
+                      {item.label}
+                    </span>
+                    <p className="mt-2 text-[11px] font-semibold leading-snug text-slate-500">{item.detail}</p>
+                  </div>
+                  <span className="mt-2 text-2xl font-black leading-none text-slate-800">{item.value}</span>
                 </div>
-                <span className="mt-2 text-2xl font-black leading-none text-slate-800">{item.value}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Motion.div>
       </div>

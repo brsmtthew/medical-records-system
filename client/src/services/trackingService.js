@@ -77,9 +77,53 @@ function sanitizeTrackingPayload(payload) {
     releasedAt: { maxLength: 40 },
     receivedBy: { maxLength: 160 },
     receiverRelationship: { maxLength: 80 },
+    reviewRelationship: { maxLength: 80 },
     remarks: { maxLength: 500 },
     releasedBy: { maxLength: 160 },
     reviewedBy: { maxLength: 160 },
+  });
+}
+
+function rowTypeList(row) {
+  if (Array.isArray(row.typeList) && row.typeList.length) return row.typeList;
+  return row.documentType ? [row.documentType] : [];
+}
+
+async function splitTypedTrackingRow(database, collectionName, id, type, updates) {
+  if (!["medicalDocumentRequests", "vitalCertificateRequests"].includes(collectionName) || !type) {
+    await updateDoc(doc(database, collectionName, id), updates);
+    return;
+  }
+
+  const rowRef = doc(database, collectionName, id);
+  const rowSnapshot = await getDoc(rowRef);
+  const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
+  const currentTypes = rowTypeList(currentRow);
+
+  if (currentTypes.length <= 1 || !currentTypes.includes(type)) {
+    await updateDoc(rowRef, {
+      ...updates,
+      typeList: currentTypes.length ? currentTypes : [type],
+      documentType: collectionName === "medicalDocumentRequests" ? type : currentRow.documentType || "",
+    });
+    return;
+  }
+
+  const nextTypeList = currentTypes.filter((item) => item !== type);
+  await updateDoc(rowRef, {
+    typeList: nextTypeList,
+    documentType: collectionName === "medicalDocumentRequests" ? nextTypeList[0] || "" : currentRow.documentType || "",
+    updatedAt: serverTimestamp(),
+  });
+
+  await addDoc(collection(database, collectionName), {
+    ...currentRow,
+    ...updates,
+    typeList: [type],
+    documentType: collectionName === "medicalDocumentRequests" ? type : currentRow.documentType || "",
+    splitFromId: id,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 }
 
@@ -193,7 +237,7 @@ export async function deleteTrackingRowType(collectionName, id, type) {
   const rowRef = doc(database, collectionName, id);
   const rowSnapshot = await getDoc(rowRef);
   const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
-  const typeList = Array.isArray(currentRow.typeList) ? currentRow.typeList : [];
+  const typeList = rowTypeList(currentRow);
   const nextTypeList = typeList.filter((item) => item !== type);
 
   if (nextTypeList.length === 0) {
@@ -203,6 +247,7 @@ export async function deleteTrackingRowType(collectionName, id, type) {
 
   await updateDoc(rowRef, {
     typeList: nextTypeList,
+    documentType: collectionName === "medicalDocumentRequests" ? nextTypeList[0] || "" : currentRow.documentType || "",
     updatedAt: serverTimestamp(),
   });
 }
@@ -213,14 +258,17 @@ export async function markTrackingRowReviewed(collectionName, id, payload = {}) 
   const reviewedAt = new Date().toISOString();
   const reviewPayload = sanitizeTrackingPayload(payload);
   const reviewedBy = reviewPayload.reviewedBy || profile.fullName || user.displayName || user.email || "Unknown User";
+  const reviewRelationship = reviewPayload.reviewRelationship || "";
 
-  await updateDoc(doc(database, collectionName, id), {
+  await splitTypedTrackingRow(database, collectionName, id, payload.type, {
     reviewStatus: "reviewed",
     reviewedAt,
     reviewedBy,
+    reviewRelationship,
     reviewHistory: arrayUnion({
       reviewedAt,
       reviewedBy,
+      reviewRelationship,
       userId: user.uid,
     }),
     updatedAt: serverTimestamp(),
@@ -269,7 +317,5 @@ export async function releaseTrackingRow(collectionName, id, payload) {
     releasedUpdates.paymentStatus = releasePayload.paymentStatus || "paid";
   }
 
-  await updateDoc(rowRef, {
-    ...releasedUpdates,
-  });
+  await splitTypedTrackingRow(database, collectionName, id, payload.type, releasedUpdates);
 }

@@ -61,7 +61,7 @@ service cloud.firestore {
           && request.resource.data.role in ["admin", "staff"]
           && request.resource.data.accountStatus == resource.data.accountStatus
         );
-      allow delete: if false;
+      allow delete: if isAdmin() && request.auth.uid != userId;
     }
 
     match /patients/{caseNumber} {

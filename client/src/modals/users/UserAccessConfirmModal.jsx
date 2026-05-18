@@ -1,4 +1,4 @@
-import { UserCheck, UserX } from "lucide-react";
+import { Trash2, UserCheck, UserX } from "lucide-react";
 
 export default function UserAccessConfirmModal({
   action,
@@ -10,9 +10,11 @@ export default function UserAccessConfirmModal({
   if (!action) return null;
 
   const isBlockAction = action.type === "block";
+  const isDeleteAction = action.type === "delete";
   const successButtonClass = successColor === "green"
     ? "bg-green-600 shadow-green-500/20"
     : "bg-green-700 shadow-green-700/20";
+  const targetName = action.user.fullName || action.user.email || "this user";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
@@ -22,19 +24,23 @@ export default function UserAccessConfirmModal({
       />
       <div className="mrs-panel relative w-full max-w-md rounded-2xl p-6">
         <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${
-          isBlockAction
+          isDeleteAction
+            ? "bg-red-50 text-red-600"
+            : isBlockAction
             ? "bg-red-50 text-red-600"
             : "bg-green-50 text-green-700"
         }`}>
-          {isBlockAction ? <UserX size={26} /> : <UserCheck size={26} />}
+          {isDeleteAction ? <Trash2 size={26} /> : isBlockAction ? <UserX size={26} /> : <UserCheck size={26} />}
         </div>
         <h2 className="text-xl font-black uppercase text-slate-800">
-          {isBlockAction ? "Block Staff Account?" : "Activate Staff Account?"}
+          {isDeleteAction ? "Delete User Account?" : isBlockAction ? "Block Staff Account?" : "Activate Staff Account?"}
         </h2>
         <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-500">
-          {isBlockAction
-            ? `This will stop ${action.user.fullName || action.user.email || "this user"} from accessing the system.`
-            : `This will restore access for ${action.user.fullName || action.user.email || "this user"}.`}
+          {isDeleteAction
+            ? `This will remove ${targetName} from the user list and stop future access with this profile.`
+            : isBlockAction
+              ? `This will stop ${targetName} from accessing the system.`
+              : `This will restore access for ${targetName}.`}
         </p>
         {isBlockAction && (
           <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3">
@@ -54,7 +60,7 @@ export default function UserAccessConfirmModal({
             type="button"
             onClick={onConfirm}
             className={`rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg ${
-              isBlockAction ? "bg-red-600 shadow-red-500/20" : successButtonClass
+              isBlockAction || isDeleteAction ? "bg-red-600 shadow-red-500/20" : successButtonClass
             }`}
           >
             {confirmLabel}

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import FloatingToast from "../components/FloatingToast";
+import PatientCaseCell from "../components/PatientCaseCell";
 import ReportDeleteModal from "../modals/reports/ReportDeleteModal";
 import {
   CalendarDays,
@@ -187,21 +188,21 @@ export default function Reports() {
 
         </div>
 
-        <div className="grid shrink-0 grid-cols-3 gap-2">
+        <div className="flex shrink-0 flex-wrap gap-1.5">
           {stats.map((item) => (
             <div
               key={item.label}
-              className="mrs-surface rounded-xl p-3"
+              className="mrs-dashboard-stat mrs-surface rounded-xl p-2"
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
                     {item.label}
                   </p>
-                  <p className="mt-0.5 text-xl font-black text-slate-800">{item.value}</p>
+                  <p className="mt-0.5 text-base font-black leading-none text-slate-800">{item.value}</p>
                 </div>
                 <div
-                  className={`rounded-lg p-2 ${
+                  className={`rounded-lg p-1.5 ${
                     item.tone === "red"
                       ? "bg-red-100 text-red-700"
                       : item.tone === "blue"
@@ -209,15 +210,15 @@ export default function Reports() {
                         : "bg-green-100 text-green-700"
                   }`}
                 >
-                  <item.icon size={18} />
+                  <item.icon size={15} />
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-2 overflow-hidden xl:grid-cols-3">
-          <div className="mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-2">
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="mrs-panel flex h-full min-h-0 flex-col overflow-hidden rounded-xl">
             <div className="p-3 border-b border-slate-100 bg-slate-50 space-y-3 shrink-0">
               <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
                 <label className="block">
@@ -265,7 +266,7 @@ export default function Reports() {
                 </label>
                 <button
                   onClick={resetFilters}
-                  className="mt-4 px-4 py-2.5 rounded-xl border-2 border-slate-200 text-xs font-black uppercase text-slate-500 hover:border-black hover:text-black transition-colors"
+                  className="mrs-soft-button mt-4 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
                 >
                   Reset
                 </button>
@@ -296,23 +297,23 @@ export default function Reports() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-              <table className="w-full table-fixed text-left">
+            <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+              <table className="w-full min-w-[900px] table-fixed text-left">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-slate-100 bg-white">
-                    <th className="w-[19%] break-words p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Patient
+                    <th className="w-[19%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Patient / Case
                     </th>
-                    <th className="w-[22%] break-words p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      People
+                    <th className="w-[22%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Borrow / Return
                     </th>
-                    <th className="w-[12%] break-words p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="w-[12%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Status
                     </th>
-                    <th className="w-[24%] break-words p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Timeline
+                    <th className="w-[24%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Movement Dates
                     </th>
-                    <th className="w-[14%] break-words p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="w-[14%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Remarks
                     </th>
                     {canManageReports && (
@@ -326,15 +327,15 @@ export default function Reports() {
                   {paginatedLogs.map((log) => (
                     <tr key={log.id} className="mrs-table-row">
                       <td className="p-3">
-                        <p className="font-black text-slate-800 break-words">{highlightSearch(log.patientName)}</p>
-                        <p className="text-[10px] font-bold uppercase text-green-700">
-                          {highlightSearch(log.caseNumber)}
-                        </p>
+                        <PatientCaseCell
+                          patientName={highlightSearch(log.patientName)}
+                          caseNumber={highlightSearch(log.caseNumber)}
+                        />
                       </td>
                       <td className="p-3">
-                        <p className="text-sm font-black text-slate-700">Borrowed: {highlightSearch(log.borrowedBy || "N/A")}</p>
+                        <p className="text-xs font-black uppercase text-blue-700">Borrowed: {highlightSearch(log.borrowedBy || "N/A")}</p>
                         {log.action === "returned" && (
-                          <p className="text-sm font-black text-slate-700">
+                          <p className="text-xs font-black uppercase text-green-700">
                             Returned: {highlightSearch(log.returnedBy || log.borrowedBy || "N/A")}
                           </p>
                         )}
@@ -344,33 +345,33 @@ export default function Reports() {
                       </td>
                       <td className="p-3">
                         <span
-                          className={`inline-flex px-3 py-1 rounded-full border-2 text-[10px] font-black uppercase ${
+                          className={`mrs-status-badge ${
                             log.action === "borrowed"
-                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              ? "mrs-status-info"
                               : log.action === "canceled"
-                                ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-green-50 text-green-700 border-green-200"
+                                ? "mrs-status-warning"
+                              : "mrs-status-success"
                           }`}
                         >
                           {log.action === "borrowed" ? "borrowed" : log.action === "canceled" ? "canceled" : "returned"}
                         </span>
                       </td>
                       <td className="p-3">
-                        <p className="text-sm font-bold text-slate-700">
+                        <p className="text-[10px] font-black uppercase leading-tight text-blue-700">
                           Borrowed: {formatDateTime(log.borrowedAt || log.timestamp)}
                         </p>
                         {log.action === "returned" && (
-                          <p className="text-sm font-bold text-slate-700">
+                          <p className="text-[10px] font-black uppercase leading-tight text-green-700">
                             Returned: {formatDateTime(log.returnedAt)}
                           </p>
                         )}
                         {log.action === "canceled" && (
-                          <p className="text-sm font-bold text-amber-700">
+                          <p className="text-[10px] font-black uppercase leading-tight text-amber-700">
                             Canceled: {formatDateTime(log.canceledAt || log.updatedAt)}
                           </p>
                         )}
                       </td>
-                      <td className="p-3 text-sm font-semibold text-slate-500 break-words">
+                      <td className="p-3 text-[11px] font-semibold leading-snug text-slate-500 break-words">
                         {highlightSearch(log.remarks)}
                       </td>
                       {canManageReports && (
@@ -433,50 +434,6 @@ export default function Reports() {
             </div>
           </div>
 
-          <div className="mrs-panel flex h-full min-h-0 flex-col overflow-hidden rounded-xl">
-            <div className="p-4 border-b border-blue-100 bg-blue-50">
-              <div className="flex items-center gap-2 text-blue-700">
-                <FileText size={20} />
-                <h2 className="font-black uppercase">Borrowed Charts</h2>
-              </div>
-              <p className="text-xs font-semibold text-blue-600 mt-1">
-                Charts currently out of the records room.
-              </p>
-            </div>
-
-            <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
-              {activeBorrowed.map((chart) => (
-                <div key={chart.id} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-black text-slate-800 truncate">{chart.patientName}</p>
-                      <p className="text-[10px] font-bold uppercase text-slate-400">
-                        {chart.caseNumber}
-                      </p>
-                    </div>
-                    <span className="shrink-0 px-2 py-1 rounded-lg bg-blue-100 text-blue-700 text-[10px] font-black border border-blue-200 uppercase">
-                      Borrowed
-                    </span>
-                  </div>
-                  <p className="text-xs font-bold text-slate-600 mt-3">
-                    Borrowed by {chart.borrowedBy || "N/A"}
-                  </p>
-                  <p className="text-[10px] font-bold uppercase text-slate-400">
-                    {chart.department || "N/A"}
-                  </p>
-                </div>
-              ))}
-
-              {activeBorrowed.length === 0 && (
-                <div className="p-8 text-center">
-                  <p className="font-black text-slate-700 uppercase">No borrowed charts</p>
-                  <p className="text-xs text-slate-400 font-semibold mt-1">
-                    All charts are currently returned.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
