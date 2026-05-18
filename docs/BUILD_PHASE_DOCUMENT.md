@@ -3,8 +3,8 @@
 ## Medical Records System
 
 **System Name:** TGMCI Medical Records System  
-**Version:** 1.0.0  
-**Release Name:** Medical-Records-System_V1.0_FULL  
+**Version:** 2.0.0  
+**Release Name:** Medical-Records-System_V2.0_FULL  
 **Document Type:** Build Phase Documentation  
 **Prepared For:** Medical Records System Development and Deployment  
 **Prepared On:** May 10, 2026  

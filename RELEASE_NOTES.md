@@ -1,6 +1,6 @@
-# Medical-Records-System_V1.0_FULL Release Notes
+# Medical-Records-System_V2.0_FULL Release Notes
 
-## Version 1.0.0
+## Version 2.0.0
 
 This release finalizes the TGMCI Medical Records System for GitHub handoff.
 

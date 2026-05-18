@@ -1,11 +1,11 @@
-# Medical-Records-System_V1.0_FULL
+# Medical-Records-System_V2.0_FULL
 
 TGMCI Medical Records System is a secured records workspace for patient registry, chart circulation, local chart viewing, reporting, user access control, settings, and audit monitoring.
 
 ## Version
 
-- Release: `1.0.0`
-- Release name: `Medical-Records-System_V1.0_FULL`
+- Release: `2.0.0`
+- Release name: `Medical-Records-System_V2.0_FULL`
 - Frontend: React + Vite + Tailwind CSS + Framer Motion
 - Data/Auth: Firebase Authentication + Firestore
 - Server scaffold: Node.js + Express security/API foundation
@@ -131,7 +131,7 @@ npm run dev:server
 - Run `npm run build`.
 - Run `npm run test:functional`.
 - Review `git status --short`.
-- Commit with a release message such as `Release Medical-Records-System_V1.0_FULL`.
+- Commit with a release message such as `Release Medical-Records-System_V2.0_FULL`.
 
 ## Privacy Notice
 
