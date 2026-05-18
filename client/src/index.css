@@ -717,6 +717,34 @@
     background: #faf5ff;
     color: #7c3aed;
   }
+
+  .mrs-status-text-borrowed {
+    color: #1d4ed8;
+  }
+
+  .mrs-status-text-success {
+    color: #15803d;
+  }
+
+  .mrs-status-text-warning {
+    color: #b45309;
+  }
+
+  .mrs-status-text-danger {
+    color: #b91c1c;
+  }
+
+  .mrs-status-text-reviewed {
+    color: #0e7490;
+  }
+
+  .mrs-status-text-voided {
+    color: #7c3aed;
+  }
+
+  .mrs-status-text-neutral {
+    color: #475569;
+  }
 }
 
 @layer utilities {
@@ -1129,6 +1157,34 @@
   html.dark .mrs-status-neutral {
     border-color: rgb(51 65 85);
     background: rgb(30 41 59);
+    color: rgb(203 213 225);
+  }
+
+  html.dark .mrs-status-text-borrowed {
+    color: rgb(147 197 253);
+  }
+
+  html.dark .mrs-status-text-success {
+    color: rgb(134 239 172);
+  }
+
+  html.dark .mrs-status-text-warning {
+    color: rgb(252 211 77);
+  }
+
+  html.dark .mrs-status-text-danger {
+    color: rgb(252 165 165);
+  }
+
+  html.dark .mrs-status-text-reviewed {
+    color: rgb(103 232 249);
+  }
+
+  html.dark .mrs-status-text-voided {
+    color: rgb(196 181 253);
+  }
+
+  html.dark .mrs-status-text-neutral {
     color: rgb(203 213 225);
   }
 

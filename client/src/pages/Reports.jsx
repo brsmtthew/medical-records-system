@@ -18,6 +18,7 @@ import { formatDisplayDate } from "../utils/dateFormatting";
 import { useAuth } from "../context/useAuth";
 import { readSystemSettings } from "../utils/systemSettings";
 import { recordTimeValue } from "../utils/recordSorting";
+import { statusBadgeClass, statusTextClass } from "../utils/trackingConfigs";
 
 const rowsPerPage = 25;
 
@@ -331,9 +332,11 @@ export default function Reports() {
                         />
                       </td>
                       <td className="p-3">
-                        <p className="text-xs font-black uppercase text-blue-700">Borrowed: {highlightSearch(log.borrowedBy || "N/A")}</p>
+                        <p className={`text-xs font-black uppercase ${statusTextClass("borrowed")}`}>
+                          Borrowed: {highlightSearch(log.borrowedBy || "N/A")}
+                        </p>
                         {log.action === "returned" && (
-                          <p className="text-xs font-black uppercase text-green-700">
+                          <p className={`text-xs font-black uppercase ${statusTextClass("returned")}`}>
                             Returned: {highlightSearch(log.returnedBy || log.borrowedBy || "N/A")}
                           </p>
                         )}
@@ -343,28 +346,22 @@ export default function Reports() {
                       </td>
                       <td className="p-3">
                         <span
-                          className={`mrs-status-badge ${
-                            log.action === "borrowed"
-                              ? "mrs-status-info"
-                              : log.action === "canceled"
-                                ? "mrs-status-warning"
-                              : "mrs-status-success"
-                          }`}
+                          className={`mrs-status-badge ${statusBadgeClass(log.action === "borrowed" ? "borrowed" : log.action === "canceled" ? "canceled" : "returned")}`}
                         >
                           {log.action === "borrowed" ? "borrowed" : log.action === "canceled" ? "canceled" : "returned"}
                         </span>
                       </td>
                       <td className="p-3">
-                        <p className="text-[10px] font-black uppercase leading-tight text-blue-700">
+                        <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("borrowed")}`}>
                           Borrowed: {formatDateTime(log.borrowedAt || log.timestamp)}
                         </p>
                         {log.action === "returned" && (
-                          <p className="text-[10px] font-black uppercase leading-tight text-green-700">
+                          <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("returned")}`}>
                             Returned: {formatDateTime(log.returnedAt)}
                           </p>
                         )}
                         {log.action === "canceled" && (
-                          <p className="text-[10px] font-black uppercase leading-tight text-amber-700">
+                          <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("canceled")}`}>
                             Canceled: {formatDateTime(log.canceledAt || log.updatedAt)}
                           </p>
                         )}

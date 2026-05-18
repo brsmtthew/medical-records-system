@@ -194,16 +194,32 @@ function rowTimelineStatus(row, column) {
     || column.statusFallback;
 }
 
+function statusFromValueLabel(label, fallback = "") {
+  const normalized = String(label || "").trim().toLowerCase();
+  const labelStatuses = {
+    borrowed: "borrowed",
+    canceled: "canceled",
+    death: "canceled",
+    paid: "paid",
+    released: "released",
+    returned: "returned",
+    reviewed: "reviewed",
+    unpaid: "unpaid",
+    voided: "voided",
+  };
+
+  return labelStatuses[normalized] || fallback || "neutral";
+}
+
 function renderMultilineValue(value, tone) {
   const lines = String(value || "N/A").split("\n").filter(Boolean);
-  const toneClass = tone ? statusTextClass(tone) : "";
 
   return (
     <div className="mrs-value-stack space-y-1 text-[10px] font-bold uppercase leading-tight xl:text-[11px]">
       {lines.map((line, index) => {
         const [label, ...rest] = line.split(":");
         const hasLabel = rest.length > 0;
-        const colorClass = toneClass || (index === 0 ? "text-blue-700" : "text-green-700");
+        const colorClass = statusTextClass(hasLabel ? statusFromValueLabel(label, tone) : tone || "neutral");
 
         return (
           <p key={`${line}-${index}`} className="whitespace-normal break-words text-slate-700">

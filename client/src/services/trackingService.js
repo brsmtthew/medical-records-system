@@ -84,6 +84,27 @@ function sanitizeTrackingPayload(payload) {
   });
 }
 
+function normalizeVitalCertificateDates(payload) {
+  const typeList = Array.isArray(payload.typeList) ? payload.typeList : [];
+  const hasBirthType = typeList.includes("birth");
+  const hasDeathType = typeList.some((type) => ["death", "fetalDeath"].includes(type));
+
+  if (!typeList.length || (hasBirthType && hasDeathType)) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    ...(hasBirthType ? { dateOfDeath: "" } : {}),
+    ...(hasDeathType ? { birthday: "" } : {}),
+  };
+}
+
+function normalizeTrackingPayload(collectionName, payload) {
+  if (collectionName !== "vitalCertificateRequests") return payload;
+  return normalizeVitalCertificateDates(payload);
+}
+
 function rowTypeList(row) {
   if (Array.isArray(row.typeList) && row.typeList.length) return row.typeList;
   return row.documentType ? [row.documentType] : [];
@@ -101,9 +122,13 @@ async function splitTypedTrackingRow(database, collectionName, id, type, updates
   const currentTypes = rowTypeList(currentRow);
 
   if (currentTypes.length <= 1 || !currentTypes.includes(type)) {
-    await updateDoc(rowRef, {
+    const nextUpdates = normalizeTrackingPayload(collectionName, {
       ...updates,
       typeList: currentTypes.length ? currentTypes : [type],
+    });
+
+    await updateDoc(rowRef, {
+      ...nextUpdates,
       documentType: collectionName === "medicalDocumentRequests" ? type : currentRow.documentType || "",
     });
     return;
@@ -116,10 +141,14 @@ async function splitTypedTrackingRow(database, collectionName, id, type, updates
     updatedAt: serverTimestamp(),
   });
 
-  await addDoc(collection(database, collectionName), {
+  const splitPayload = normalizeTrackingPayload(collectionName, {
     ...currentRow,
     ...updates,
     typeList: [type],
+  });
+
+  await addDoc(collection(database, collectionName), {
+    ...splitPayload,
     documentType: collectionName === "medicalDocumentRequests" ? type : currentRow.documentType || "",
     splitFromId: id,
     createdAt: serverTimestamp(),
@@ -162,11 +191,12 @@ export function subscribeToTrackingRows(collectionName, onRows, onError) {
 export async function addTrackingRow(collectionName, payload) {
   const database = requireTrackingDb(collectionName);
   const { user, profile } = await requireActiveTrackingRole();
+  const normalizedPayload = normalizeTrackingPayload(collectionName, payload);
   await addDoc(collection(database, collectionName), {
-    ...sanitizeTrackingPayload(payload),
-    typeList: Array.isArray(payload.typeList) ? payload.typeList.slice(0, 3) : [],
-    copyCount: Math.max(0, Number(payload.copyCount) || 0),
-    totalAmount: Math.max(0, Number(payload.totalAmount) || 0),
+    ...sanitizeTrackingPayload(normalizedPayload),
+    typeList: Array.isArray(normalizedPayload.typeList) ? normalizedPayload.typeList.slice(0, 3) : [],
+    copyCount: Math.max(0, Number(normalizedPayload.copyCount) || 0),
+    totalAmount: Math.max(0, Number(normalizedPayload.totalAmount) || 0),
     createdBy: user.uid,
     createdByName: profile.fullName || user.displayName || user.email || "Unknown User",
     createdAt: serverTimestamp(),
@@ -177,11 +207,12 @@ export async function addTrackingRow(collectionName, payload) {
 export async function updateTrackingRow(collectionName, id, payload) {
   const database = requireTrackingDb(collectionName);
   await requireActiveTrackingRole();
+  const normalizedPayload = normalizeTrackingPayload(collectionName, payload);
   await updateDoc(doc(database, collectionName, id), {
-    ...sanitizeTrackingPayload(payload),
-    typeList: Array.isArray(payload.typeList) ? payload.typeList.slice(0, 3) : [],
-    copyCount: Math.max(0, Number(payload.copyCount) || 0),
-    totalAmount: Math.max(0, Number(payload.totalAmount) || 0),
+    ...sanitizeTrackingPayload(normalizedPayload),
+    typeList: Array.isArray(normalizedPayload.typeList) ? normalizedPayload.typeList.slice(0, 3) : [],
+    copyCount: Math.max(0, Number(normalizedPayload.copyCount) || 0),
+    totalAmount: Math.max(0, Number(normalizedPayload.totalAmount) || 0),
     updatedAt: serverTimestamp(),
   });
 }

@@ -296,7 +296,7 @@ export default function Login() {
                         type={showPassword ? "text" : "password"}
                         placeholder="Password"
                         aria-label="Password"
-                        className="login-field w-full rounded-xl py-3 pl-11 pr-12 font-bold"
+                        className="login-field h-12 w-full rounded-xl py-3 pl-11 pr-12 font-bold"
                         value={form.password}
                         onChange={(e) => updateForm("password", e.target.value)}
                         autoComplete={isCreateAccount ? "new-password" : "current-password"}
@@ -305,10 +305,10 @@ export default function Login() {
                         type="button"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => setShowPassword((value) => !value)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-950"
+                        className="absolute inset-y-0 right-3 my-auto flex size-8 items-center justify-center rounded-md p-0 leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-950"
                         aria-label={showPassword ? "Hide password" : "Show password"}
                       >
-                        {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                        {showPassword ? <EyeOff className="block size-[17px]" /> : <Eye className="block size-[17px]" />}
                       </button>
                     </div>
 
@@ -319,7 +319,7 @@ export default function Login() {
                           type={showConfirmPassword ? "text" : "password"}
                           placeholder="Confirm password"
                           aria-label="Confirm Password"
-                          className="login-field w-full rounded-xl py-3 pl-11 pr-12 font-bold"
+                          className="login-field h-12 w-full rounded-xl py-3 pl-11 pr-12 font-bold"
                           value={form.confirmPassword}
                           onChange={(e) => updateForm("confirmPassword", e.target.value)}
                           autoComplete="new-password"
@@ -328,10 +328,10 @@ export default function Login() {
                           type="button"
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={() => setShowConfirmPassword((value) => !value)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-950"
+                          className="absolute inset-y-0 right-3 my-auto flex size-8 items-center justify-center rounded-md p-0 leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-950"
                           aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
                         >
-                          {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                          {showConfirmPassword ? <EyeOff className="block size-[17px]" /> : <Eye className="block size-[17px]" />}
                         </button>
                       </div>
                     )}

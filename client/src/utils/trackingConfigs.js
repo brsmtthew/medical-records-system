@@ -77,26 +77,26 @@ export function optionLabel(options, value) {
 
 export function statusTextClass(status) {
   const classes = {
-    active: "text-green-700",
-    borrowed: "text-blue-700",
-    canceled: "text-amber-700",
-    forRelease: "text-blue-700",
-    forReview: "text-blue-700",
-    paid: "text-green-700",
-    released: "text-green-700",
-    returned: "text-green-700",
-    reviewed: "text-cyan-700",
-    unpaid: "text-red-700",
-    voided: "text-violet-700",
+    active: "mrs-status-text-success",
+    borrowed: "mrs-status-text-borrowed",
+    canceled: "mrs-status-text-warning",
+    forRelease: "mrs-status-text-borrowed",
+    forReview: "mrs-status-text-borrowed",
+    paid: "mrs-status-text-success",
+    released: "mrs-status-text-success",
+    returned: "mrs-status-text-success",
+    reviewed: "mrs-status-text-reviewed",
+    unpaid: "mrs-status-text-danger",
+    voided: "mrs-status-text-voided",
   };
 
-  return classes[status] || "text-slate-700";
+  return classes[status] || "mrs-status-text-neutral";
 }
 
 export function statusBadgeClass(status) {
   const classes = {
     active: "mrs-status-success",
-    borrowed: "mrs-status-info",
+    borrowed: "mrs-status-borrowed",
     canceled: "mrs-status-warning",
     forRelease: "mrs-status-info",
     forReview: "mrs-status-info",
@@ -115,17 +115,20 @@ export function peso(value) {
   return `PHP ${Number(value || 0).toFixed(2)}`;
 }
 
-export function getTrackingColumns(config) {
+export function getTrackingColumns(config, selectedType = "") {
   if (config.collection === "medicalDocumentRequests") {
     return config.columns.filter((column) => column.label !== "Document Type");
   }
 
   if (config.collection !== "vitalCertificateRequests") return config.columns;
 
-  return config.columns.filter((column) => {
-    if (column.label === "Certificate Type") return false;
-    return true;
-  });
+  return config.columns
+    .filter((column) => column.label !== "Certificate Type")
+    .map((column) => (
+      column.label === "Civil Dates"
+        ? { ...column, value: (row) => civilDateLabel(row, selectedType) }
+        : column
+    ));
 }
 
 function typeListLabel(row, options = certificateTypes) {
@@ -157,10 +160,15 @@ function labCopiesAmountLabel(row) {
   return `Copies: ${row.copyCount || 0}\nAmount: ${peso(row.totalAmount)}`;
 }
 
-function civilDateLabel(row) {
+function civilDateLabel(row, selectedType = "") {
+  const rowTypes = Array.isArray(row.typeList) ? row.typeList : [];
+  const types = selectedType ? [selectedType] : rowTypes;
+  const includesBirth = types.includes("birth") || (!types.length && row.birthday);
+  const includesDeath = types.some((type) => ["death", "fetalDeath"].includes(type))
+    || (!types.length && row.dateOfDeath);
   const lines = [];
-  if (row.birthday) lines.push(`Birthday: ${formatTrackingDateOnly(row.birthday)}`);
-  if (row.dateOfDeath) lines.push(`Death: ${formatTrackingDateOnly(row.dateOfDeath)}`);
+  if (includesBirth && row.birthday) lines.push(`Birthday: ${formatTrackingDateOnly(row.birthday)}`);
+  if (includesDeath && row.dateOfDeath) lines.push(`Death: ${formatTrackingDateOnly(row.dateOfDeath)}`);
   return lines.length ? lines.join("\n") : "N/A";
 }
 
