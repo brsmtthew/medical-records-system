@@ -1,0 +1,46 @@
+@layer utilities {
+  @media print {
+    body {
+      background: #ffffff !important;
+      color: #0f172a !important;
+    }
+
+    .no-print,
+    .mrs-sidebar,
+    .mrs-navbar {
+      display: none !important;
+    }
+
+    .mrs-print-area {
+      border: 0 !important;
+      box-shadow: none !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+    }
+
+    .mrs-print-area,
+    .mrs-print-area * {
+      background: #ffffff !important;
+      color: #0f172a !important;
+    }
+
+    .mrs-report-header {
+      page-break-after: avoid;
+    }
+
+    .mrs-print-area table {
+      border-collapse: collapse !important;
+      min-width: 0 !important;
+      width: 100% !important;
+    }
+
+    .mrs-print-area th,
+    .mrs-print-area td {
+      border: 1px solid #94a3b8 !important;
+      font-size: 10px !important;
+      padding: 6px !important;
+      vertical-align: top !important;
+    }
+  }
+}

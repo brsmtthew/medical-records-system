@@ -3,19 +3,19 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
 
-const Login = lazy(() => import("../pages/Login"));
-const Dashboard = lazy(() => import("../pages/Dashboard"));
-const Patients = lazy(() => import("../pages/Patients"));
-const Charts = lazy(() => import("../pages/Charts"));
-const Reports = lazy(() => import("../pages/Reports"));
-const Settings = lazy(() => import("../pages/Settings"));
-const ChartViewing = lazy(() => import("../pages/ChartViewing"));
-const Users = lazy(() => import("../pages/Users"));
-const MedicalDocuments = lazy(() => import("../pages/MedicalDocuments"));
-const LabResults = lazy(() => import("../pages/LabResults"));
-const VitalCertificates = lazy(() => import("../pages/VitalCertificates"));
-const TrackingReports = lazy(() => import("../pages/TrackingReports"));
-const PrintReports = lazy(() => import("../pages/PrintReports"));
+const Login = lazy(() => import("../features/auth/pages/Login"));
+const Dashboard = lazy(() => import("../features/dashboard/pages/Dashboard"));
+const Patients = lazy(() => import("../features/patients/pages/Patients"));
+const Charts = lazy(() => import("../features/charts/pages/Charts"));
+const Reports = lazy(() => import("../features/reports/pages/Reports"));
+const Settings = lazy(() => import("../features/settings/pages/Settings"));
+const ChartViewing = lazy(() => import("../features/charts/pages/ChartViewing"));
+const Users = lazy(() => import("../features/users/pages/Users"));
+const MedicalDocuments = lazy(() => import("../features/documents/pages/MedicalDocuments"));
+const LabResults = lazy(() => import("../features/documents/pages/LabResults"));
+const VitalCertificates = lazy(() => import("../features/documents/pages/VitalCertificates"));
+const TrackingReports = lazy(() => import("../features/tracking/pages/TrackingReports"));
+const PrintReports = lazy(() => import("../features/reports/pages/PrintReports"));
 
 function RouteLoader() {
   return (

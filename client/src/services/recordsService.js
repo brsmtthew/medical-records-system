@@ -12,9 +12,9 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { auth, db } from "../firebaseClient";
-import { sortNewestFirst } from "../utils/recordSorting";
-import { sanitizeRecordPayload, sanitizeText } from "../utils/security";
+import { auth, db } from "@/firebaseClient";
+import { sortNewestFirst } from "@shared/utils/recordSorting";
+import { sanitizeRecordPayload, sanitizeText } from "@shared/utils/security";
 
 export const recordsUnavailableMessage = "Firebase database is not configured.";
 export const fallbackDepartments = [

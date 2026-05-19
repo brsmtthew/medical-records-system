@@ -1,0 +1,96 @@
+@layer components {
+  .mrs-status-badge {
+    align-items: center;
+    border-radius: 9999px;
+    border-style: solid;
+    border-width: 1px;
+    display: inline-flex;
+    font-size: 9px;
+    font-weight: 900;
+    justify-content: center;
+    letter-spacing: 0.025em;
+    line-height: 1;
+    min-height: 1.45rem;
+    padding: 0.2rem 0.65rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .mrs-status-available,
+  .mrs-status-success {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #15803d;
+  }
+
+  .mrs-status-borrowed {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+
+  .mrs-status-danger {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+  }
+
+  .mrs-status-inpatient {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #15803d;
+  }
+
+  .mrs-status-outpatient,
+  .mrs-status-info {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+
+  .mrs-status-neutral {
+    border-color: #e2e8f0;
+    background: #f8fafc;
+    color: #475569;
+  }
+
+  .mrs-status-warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+    color: #b45309;
+  }
+
+  .mrs-status-voided {
+    border-color: #ddd6fe;
+    background: #faf5ff;
+    color: #7c3aed;
+  }
+
+  .mrs-status-text-borrowed {
+    color: #1d4ed8;
+  }
+
+  .mrs-status-text-success {
+    color: #15803d;
+  }
+
+  .mrs-status-text-warning {
+    color: #b45309;
+  }
+
+  .mrs-status-text-danger {
+    color: #b91c1c;
+  }
+
+  .mrs-status-text-reviewed {
+    color: #0e7490;
+  }
+
+  .mrs-status-text-voided {
+    color: #7c3aed;
+  }
+
+  .mrs-status-text-neutral {
+    color: #475569;
+  }
+}

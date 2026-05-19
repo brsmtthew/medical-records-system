@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import Sidebar from "../components/Sidebar";
-import Navbar from "../components/Navbar";
+import Sidebar from "./components/Sidebar";
+import Navbar from "./components/Navbar";
 
 export default function DashboardLayout({ children }) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);

@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
-import { useAuth } from "../context/useAuth";
-import { auth } from "../firebaseClient";
-import { cancelAutoLogout, scheduleAutoLogout } from "../services/sessionService";
-import { readSystemSettings } from "../utils/systemSettings";
+import { useAuth } from "@features/auth/context/useAuth";
+import { auth } from "@/firebaseClient";
+import { cancelAutoLogout, scheduleAutoLogout } from "@services/sessionService";
+import { readSystemSettings } from "@shared/utils/systemSettings";
 
 export default function ProtectedRoute({ children, requireAdmin = false, roles = [] }) {
   const location = useLocation();

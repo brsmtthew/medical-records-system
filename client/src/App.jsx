@@ -1,9 +1,9 @@
 import React, { useLayoutEffect } from "react";
 import { BrowserRouter as Router } from "react-router-dom";
 
-import { AuthProvider } from "./context/AuthProvider";
+import { AuthProvider } from "@features/auth/context/AuthProvider";
 import AppRoutes from "./routes/AppRoutes";
-import { applySystemTheme } from "./utils/systemSettings";
+import { applySystemTheme } from "@shared/utils/systemSettings";
 
 export default function App() {
   useLayoutEffect(() => {
