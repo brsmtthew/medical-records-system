@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpDown,
+  HeartPulse,
   Search,
   ShieldCheck,
+  Stethoscope,
   Trash2,
   UserCheck,
   UserCog,
+  UserPlus,
   Users as UsersIcon,
   UserX,
 } from "lucide-react";
@@ -13,8 +16,17 @@ import {
 import DashboardLayout from "../../../layouts/DashboardLayout";
 import FloatingToast from "@shared/components/FloatingToast";
 import UserAccessConfirmModal from "../modals/UserAccessConfirmModal";
-import { deleteUserProfile, subscribeToUsers, updateUserAccess } from "@features/users/services/userService";
+import UserCreateModal from "../modals/UserCreateModal";
+import { createManagedUserAccount, deleteUserProfile, subscribeToUsers, updateUserAccess } from "@features/users/services/userService";
 import { useAuth } from "@features/auth/context/useAuth";
+import {
+  defaultDoctorClinics,
+  defaultNurseDepartments,
+  normalizeUserRole,
+  roleLabel,
+  userRoles,
+} from "@shared/constants/userRoles";
+import { isStrongPassword, normalizeEmail, sanitizeText } from "@shared/utils/security";
 
 function getInitials(name = "") {
   return name
@@ -24,6 +36,17 @@ function getInitials(name = "") {
     .map((part) => part[0]?.toUpperCase())
     .join("") || "U";
 }
+
+const initialCreateForm = {
+  fullName: "",
+  email: "",
+  password: "",
+  role: userRoles.staff,
+  department: "Medical Records",
+  clinic: "",
+  specialty: "",
+  licenseNumber: "",
+};
 
 export default function Users() {
   const { currentUser } = useAuth();
@@ -35,6 +58,10 @@ export default function Users() {
   const [userFilter, setUserFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortMode, setSortMode] = useState("name");
+  const [createForm, setCreateForm] = useState(initialCreateForm);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createModalKey, setCreateModalKey] = useState(0);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
 
   useEffect(() => {
     const unsubscribeUsers = subscribeToUsers(
@@ -49,17 +76,99 @@ export default function Users() {
 
   const handleRoleChange = async (user, role) => {
     const userId = user.uid || user.id;
-    if (userId === currentUser?.uid && role !== "admin") {
+    const normalizedRole = normalizeUserRole(role);
+    if (userId === currentUser?.uid && normalizedRole !== userRoles.admin) {
       setAccessError("You cannot remove admin access from your own signed-in account.");
       return;
     }
 
     try {
-      await updateUserAccess(userId, { role });
+      await updateUserAccess(userId, { role: normalizedRole });
       setAccessError("");
-      setAccessMessage(`${user.fullName || user.email || "User"} role updated to ${role}.`);
+      setAccessMessage(`${user.fullName || user.email || "User"} role updated to ${roleLabel(normalizedRole)}.`);
     } catch (error) {
       setAccessError(error.message || "Unable to update user role.");
+    }
+  };
+
+  const updateCreateForm = (key, value) => {
+    setCreateForm((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "role") {
+        if (value === userRoles.nurse) {
+          next.department = next.department || defaultNurseDepartments[0];
+          next.clinic = "";
+          next.specialty = "";
+        } else if (value === userRoles.doctor) {
+          next.department = "";
+          next.clinic = next.clinic || defaultDoctorClinics[0];
+        } else {
+          next.department = next.department || "Medical Records";
+          next.clinic = "";
+          next.specialty = "";
+        }
+      }
+      return next;
+    });
+    setAccessError("");
+    setAccessMessage("");
+  };
+
+  const openCreateModal = () => {
+    setCreateForm(initialCreateForm);
+    setAccessError("");
+    setAccessMessage("");
+    setCreateModalKey((key) => key + 1);
+    setIsCreateModalOpen(true);
+    window.setTimeout(() => setCreateForm(initialCreateForm), 80);
+  };
+
+  const closeCreateModal = () => {
+    if (isCreatingUser) return;
+    setCreateForm(initialCreateForm);
+    setCreateModalKey((key) => key + 1);
+    setIsCreateModalOpen(false);
+  };
+
+  const handleCreateManagedUser = async (event) => {
+    event.preventDefault();
+    const fullName = sanitizeText(createForm.fullName, { maxLength: 120 });
+    const email = normalizeEmail(createForm.email);
+    const role = normalizeUserRole(createForm.role);
+
+    if (!fullName || !email || !createForm.password) {
+      setAccessError("Enter full name, email, and temporary password.");
+      return;
+    }
+    if (!isStrongPassword(createForm.password)) {
+      setAccessError("Temporary password must use at least 8 characters with uppercase, lowercase, and a number.");
+      return;
+    }
+    if (role === userRoles.nurse && !createForm.department.trim()) {
+      setAccessError("Assign a department for the nurse account.");
+      return;
+    }
+    if (role === userRoles.doctor && !createForm.clinic.trim()) {
+      setAccessError("Assign a clinic for the doctor account.");
+      return;
+    }
+
+    try {
+      setIsCreatingUser(true);
+      await createManagedUserAccount({
+        ...createForm,
+        fullName,
+        email,
+        role,
+      });
+      setCreateForm(initialCreateForm);
+      setIsCreateModalOpen(false);
+      setAccessError("");
+      setAccessMessage(`${roleLabel(role)} account created for ${fullName}.`);
+    } catch (error) {
+      setAccessError(error.message || "Unable to create this account.");
+    } finally {
+      setIsCreatingUser(false);
     }
   };
 
@@ -129,23 +238,28 @@ export default function Users() {
 
   const activeUsers = users.filter((user) => user.accountStatus !== "disabled").length;
   const blockedUsers = users.length - activeUsers;
-  const adminUsers = users.filter((user) => user.role === "admin").length;
-  const staffUsers = users.filter((user) => user.role !== "admin").length;
+  const adminUsers = users.filter((user) => normalizeUserRole(user.role) === userRoles.admin).length;
+  const staffUsers = users.filter((user) => normalizeUserRole(user.role) === userRoles.staff).length;
+  const nurseUsers = users.filter((user) => normalizeUserRole(user.role) === userRoles.nurse).length;
+  const doctorUsers = users.filter((user) => normalizeUserRole(user.role) === userRoles.doctor).length;
   const filteredUsers = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     return users.filter((user) => {
+      const role = normalizeUserRole(user.role);
       if (userFilter === "active") return user.accountStatus !== "disabled";
       if (userFilter === "blocked") return user.accountStatus === "disabled";
-      if (userFilter === "admins") return user.role === "admin";
-      if (userFilter === "staff") return user.role !== "admin";
+      if (userFilter === "admins") return role === userRoles.admin;
+      if (userFilter === "staff") return role === userRoles.staff;
+      if (userFilter === "nurses") return role === userRoles.nurse;
+      if (userFilter === "doctors") return role === userRoles.doctor;
       return true;
     }).filter((user) => {
       if (!query) return true;
-      return `${user.fullName || ""} ${user.displayName || ""} ${user.email || ""} ${user.department || ""}`
+      return `${user.fullName || ""} ${user.displayName || ""} ${user.email || ""} ${user.department || ""} ${user.clinic || ""} ${user.specialty || ""} ${user.licenseNumber || ""}`
         .toLowerCase()
         .includes(query);
     }).sort((first, second) => {
-      if (sortMode === "role") return String(first.role || "staff").localeCompare(String(second.role || "staff"));
+      if (sortMode === "role") return roleLabel(first.role).localeCompare(roleLabel(second.role));
       if (sortMode === "status") return String(first.accountStatus || "active").localeCompare(String(second.accountStatus || "active"));
       if (sortMode === "email") return String(first.email || "").localeCompare(String(second.email || ""));
       return String(first.fullName || first.displayName || first.email || "").localeCompare(String(second.fullName || second.displayName || second.email || ""));
@@ -157,6 +271,8 @@ export default function Users() {
     { id: "blocked", label: "Blocked", value: blockedUsers, icon: UserX, tone: "text-red-700", iconClass: "border-red-200 bg-red-50 text-red-700" },
     { id: "admins", label: "Admins", value: adminUsers, icon: ShieldCheck, tone: "text-amber-700", iconClass: "border-amber-200 bg-amber-50 text-amber-700" },
     { id: "staff", label: "Staff", value: staffUsers, icon: UserCog, tone: "text-cyan-700", iconClass: "border-cyan-200 bg-cyan-50 text-cyan-700" },
+    { id: "nurses", label: "Nurses", value: nurseUsers, icon: HeartPulse, tone: "text-emerald-700", iconClass: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+    { id: "doctors", label: "Doctors", value: doctorUsers, icon: Stethoscope, tone: "text-violet-700", iconClass: "border-violet-200 bg-violet-50 text-violet-700" },
   ];
 
   return (
@@ -164,14 +280,26 @@ export default function Users() {
       <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
         <div className="flex shrink-0 flex-col gap-2">
           <div>
-            <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
-              User <span className="text-green-700">Management</span>
-            </h1>
-            <p className="text-xs font-medium text-slate-500">
-              Manage admin and staff access from a dedicated admin workspace.
-            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
+                  User <span className="text-green-700">Management</span>
+                </h1>
+                <p className="text-xs font-medium text-slate-500">
+                  Create and manage Medical Records, nurse, and doctor access from a dedicated admin workspace.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase"
+              >
+                <UserPlus size={17} />
+                Create Account
+              </button>
+            </div>
           </div>
-          <div className="grid shrink-0 grid-cols-2 gap-1.5 sm:grid-cols-5">
+          <div className="grid shrink-0 grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-7">
             {userNavItems.map((item) => (
               <button
                 key={item.id}
@@ -237,22 +365,25 @@ export default function Users() {
 
         <div className="mrs-panel min-h-0 flex-1 overflow-hidden rounded-xl">
           <div className="min-h-0 h-full overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[1040px] table-fixed text-left">
+            <table className="w-full min-w-[1220px] table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="mrs-section-band border-b border-slate-100">
-                  <th className="w-[25%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="w-[22%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     User
                   </th>
-                  <th className="w-[14%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="w-[15%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Role
                   </th>
-                  <th className="w-[13%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Assignment
+                  </th>
+                  <th className="w-[11%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Status
                   </th>
-                  <th className="w-[24%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Block Reason
                   </th>
-                  <th className="w-[24%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="w-[16%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
                     Actions
                   </th>
                 </tr>
@@ -262,6 +393,10 @@ export default function Users() {
                   const userId = user.uid || user.id;
                   const isSelf = userId === currentUser?.uid;
                   const isDisabled = user.accountStatus === "disabled";
+                  const role = normalizeUserRole(user.role);
+                  const assignment = role === userRoles.doctor
+                    ? user.clinic || "No clinic assigned"
+                    : user.department || "No department assigned";
 
                   return (
                     <tr key={userId} className="mrs-table-row">
@@ -291,15 +426,31 @@ export default function Users() {
                       </td>
                       <td className="p-3">
                         <select
-                          value={user.role === "admin" ? "admin" : "staff"}
+                          value={role}
                           onChange={(event) => handleRoleChange(user, event.target.value)}
                           disabled={isSelf}
                           className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-black uppercase disabled:opacity-60"
                           aria-label={`Role for ${user.email || user.fullName || "user"}`}
                         >
-                          <option value="staff">Staff</option>
+                          <option value="staff">Medical Records Staff</option>
+                          <option value="nurse">Nurse</option>
+                          <option value="doctor">Doctor</option>
                           <option value="admin">Admin</option>
                         </select>
+                      </td>
+                      <td className="p-3">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          <p className="text-[10px] font-black uppercase text-slate-500">
+                            {role === userRoles.doctor ? "Clinic" : "Department"}
+                          </p>
+                          <p className="mt-1 break-words text-xs font-black uppercase text-slate-800">{assignment}</p>
+                          {user.specialty && (
+                            <p className="mt-1 break-words text-[10px] font-bold uppercase text-violet-700">{user.specialty}</p>
+                          )}
+                          {user.licenseNumber && (
+                            <p className="mt-1 break-words text-[10px] font-mono font-bold text-slate-500">{user.licenseNumber}</p>
+                          )}
+                        </div>
                       </td>
                       <td className="p-3">
                         <span className={`mrs-status-badge ${isDisabled ? "mrs-status-danger" : "mrs-status-success"}`}>
@@ -360,7 +511,7 @@ export default function Users() {
 
                 {filteredUsers.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="p-10 text-center">
+                    <td colSpan="6" className="p-10 text-center">
                       <ShieldCheck size={38} className="mx-auto mb-3 text-slate-300" />
                       <p className="font-black uppercase text-slate-700">
                         {users.length === 0 ? "No user profiles yet" : "No users match this view"}
@@ -384,6 +535,16 @@ export default function Users() {
         onCancel={() => setPendingAccessAction(null)}
         onConfirm={confirmAccessAction}
         successColor="darkGreen"
+      />
+
+      <UserCreateModal
+        form={createForm}
+        isCreating={isCreatingUser}
+        isOpen={isCreateModalOpen}
+        modalKey={createModalKey}
+        onClose={closeCreateModal}
+        onSubmit={handleCreateManagedUser}
+        updateForm={updateCreateForm}
       />
 
       <FloatingToast

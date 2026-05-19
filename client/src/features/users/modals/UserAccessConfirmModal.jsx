@@ -33,7 +33,7 @@ export default function UserAccessConfirmModal({
           {isDeleteAction ? <Trash2 size={26} /> : isBlockAction ? <UserX size={26} /> : <UserCheck size={26} />}
         </div>
         <h2 className="text-xl font-black uppercase text-slate-800">
-          {isDeleteAction ? "Delete User Account?" : isBlockAction ? "Block Staff Account?" : "Activate Staff Account?"}
+          {isDeleteAction ? "Delete User Account?" : isBlockAction ? "Block User Account?" : "Activate User Account?"}
         </h2>
         <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-500">
           {isDeleteAction

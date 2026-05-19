@@ -21,6 +21,7 @@ import {
 import logo from "@assets/TGMCI_LOGO.png";
 import fallbackLogo from "@assets/tgmci_logo.jpg";
 import { useAuth } from "@features/auth/context/useAuth";
+import { roleLabel } from "@shared/constants/userRoles";
 
 export default function Sidebar({
   isCollapsed = false,
@@ -31,11 +32,11 @@ export default function Sidebar({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isMedicalRecordsUser, userRole } = useAuth();
   const [logoSrc, setLogoSrc] = useState(logo);
   const [logoFailed, setLogoFailed] = useState(false);
   // Defines the app sections used by both desktop and mobile navigation.
-  const navSections = [
+  const recordsNavSections = [
     {
       label: "Workspace",
       items: [
@@ -74,6 +75,22 @@ export default function Sidebar({
       ],
     },
   ];
+  const clinicalNavSections = [
+    {
+      label: roleLabel(userRole),
+      items: [
+        { name: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+      ],
+    },
+    {
+      label: "Chart Requests",
+      items: [
+        { name: "Request Chart", icon: FileText, path: "/dashboard" },
+        { name: "My Requests", icon: ClipboardList, path: "/dashboard" },
+      ],
+    },
+  ];
+  const navSections = isMedicalRecordsUser ? recordsNavSections : clinicalNavSections;
 
   return (
     <div

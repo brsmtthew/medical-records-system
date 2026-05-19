@@ -4,10 +4,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { AuthContext } from "./useAuth";
 import { auth, db, invalidFirebaseConfig, missingFirebaseConfig } from "@/firebaseClient";
 import { syncActiveUserProfile } from "@services/recordsService";
-
-function normalizeRole(role) {
-  return role === "admin" ? "admin" : "staff";
-}
+import { isMedicalRecordsRole, normalizeUserRole, userRoles } from "@shared/constants/userRoles";
 
 function isUnavailableAccount(status) {
   return ["deleted", "missing"].includes(status);
@@ -55,6 +52,9 @@ export function AuthProvider({ children }) {
             role: "staff",
             accountStatus: "active",
             department: "Medical Records",
+            clinic: "",
+            specialty: "",
+            licenseNumber: "",
           };
 
           if (!snapshot.exists()) {
@@ -101,9 +101,12 @@ export function AuthProvider({ children }) {
     () => ({
       currentUser,
       userProfile,
-      userRole: normalizeRole(userProfile?.role),
-      isAdmin: normalizeRole(userProfile?.role) === "admin",
-      isStaff: normalizeRole(userProfile?.role) === "staff",
+      userRole: normalizeUserRole(userProfile?.role),
+      isAdmin: normalizeUserRole(userProfile?.role) === userRoles.admin,
+      isStaff: normalizeUserRole(userProfile?.role) === userRoles.staff,
+      isNurse: normalizeUserRole(userProfile?.role) === userRoles.nurse,
+      isDoctor: normalizeUserRole(userProfile?.role) === userRoles.doctor,
+      isMedicalRecordsUser: isMedicalRecordsRole(userProfile?.role),
       isAccountDisabled: userProfile?.accountStatus === "disabled" || isUnavailableAccount(userProfile?.accountStatus),
       authLoading,
       isAuthenticated: Boolean(currentUser),

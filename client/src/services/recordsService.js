@@ -15,6 +15,7 @@ import {
 import { auth, db } from "@/firebaseClient";
 import { sortNewestFirst } from "@shared/utils/recordSorting";
 import { sanitizeRecordPayload, sanitizeText } from "@shared/utils/security";
+import { allUserRoles, medicalRecordsRoles, normalizeUserRole, userRoles } from "@shared/constants/userRoles";
 
 export const recordsUnavailableMessage = "Firebase database is not configured.";
 export const fallbackDepartments = [
@@ -70,7 +71,7 @@ function requireDb() {
   return db;
 }
 
-async function requireActiveRole({ adminOnly = false } = {}) {
+async function requireActiveRole({ adminOnly = false, roles = medicalRecordsRoles } = {}) {
   const database = requireDb();
   const user = auth?.currentUser;
   if (!user) {
@@ -83,13 +84,16 @@ async function requireActiveRole({ adminOnly = false } = {}) {
     profile = profileSnapshot.exists() ? { uid: user.uid, ...profileSnapshot.data() } : {};
   }
   const isActive = profile.accountStatus !== "disabled";
-  const role = profile.role === "admin" ? "admin" : "staff";
+  const role = normalizeUserRole(profile.role);
 
   if (!isActive) {
     throw new Error("This account is disabled.");
   }
-  if (adminOnly && role !== "admin") {
+  if (adminOnly && role !== userRoles.admin) {
     throw new Error("Administrator access is required for this action.");
+  }
+  if (!adminOnly && roles.length > 0 && !roles.includes(role)) {
+    throw new Error("Medical Records access is required for this action.");
   }
 
   return { user, profile, role };
@@ -201,11 +205,16 @@ function sanitizeUserAccessPayload(updates) {
   const safeUpdates = sanitizeRecordPayload(updates, {
     role: { maxLength: 30 },
     accountStatus: { maxLength: 30 },
+    department: { maxLength: 120, uppercase: true },
+    clinic: { maxLength: 120 },
+    specialty: { maxLength: 120 },
+    licenseNumber: { maxLength: 80, uppercase: true },
+    position: { maxLength: 120 },
     restrictionReason: { maxLength: 300 },
   });
 
-  if (safeUpdates.role && !["admin", "staff"].includes(safeUpdates.role)) {
-    throw new Error("Role must be admin or staff.");
+  if (safeUpdates.role && !allUserRoles.includes(safeUpdates.role)) {
+    throw new Error("Role must be admin, staff, nurse, or doctor.");
   }
 
   return safeUpdates;
@@ -858,7 +867,7 @@ export async function deleteChartLog(id) {
 // Adds a centralized audit action for important CRUD and account events.
 export async function addAuditLog(log) {
   const database = requireDb();
-  await requireActiveRole();
+  await requireActiveRole({ roles: allUserRoles });
   await addDoc(collection(database, "auditLogs"), {
     ...sanitizeAuditLogPayload(log),
     createdAt: serverTimestamp(),

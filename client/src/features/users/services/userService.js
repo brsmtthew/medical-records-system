@@ -18,3 +18,5 @@ export {
   updateOutpatientDepartment,
   updateUserAccess,
 } from "@services/recordsService";
+
+export { createManagedUserAccount } from "@features/auth/services/authService";

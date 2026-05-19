@@ -31,6 +31,7 @@ export const invalidFirebaseConfig = requiredConfig.filter((key) => {
 // Initializes Firebase only when every required Vite env value is present.
 const app = missingFirebaseConfig.length === 0 && invalidFirebaseConfig.length === 0 ? initializeApp(firebaseConfig) : null;
 
+export { firebaseConfig };
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
 export default app;

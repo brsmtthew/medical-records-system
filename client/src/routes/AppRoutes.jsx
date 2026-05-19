@@ -4,7 +4,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 
 const Login = lazy(() => import("../features/auth/pages/Login"));
-const Dashboard = lazy(() => import("../features/dashboard/pages/Dashboard"));
+const Dashboard = lazy(() => import("../features/dashboard/pages/RoleDashboard"));
 const Patients = lazy(() => import("../features/patients/pages/Patients"));
 const Charts = lazy(() => import("../features/charts/pages/Charts"));
 const Reports = lazy(() => import("../features/reports/pages/Reports"));

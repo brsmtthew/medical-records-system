@@ -14,7 +14,6 @@ import logo from "@assets/TGMCI_LOGO.png";
 import FloatingToast from "@shared/components/FloatingToast";
 import { useAuth } from "@features/auth/context/useAuth";
 import {
-  createStaffAccount,
   hasAuthConfig,
   requestPasswordReset,
   signInWithEmail,
@@ -39,7 +38,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { authLoading, isAuthenticated, invalidFirebaseConfig = [], missingFirebaseConfig } = useAuth();
-  const [authMode, setAuthMode] = useState("sign-in");
+  const authMode = "sign-in";
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -110,16 +109,7 @@ export default function Login() {
       setIsSubmitting(true);
       setError("");
 
-      if (isCreateAccount) {
-        await createStaffAccount({
-          fullName,
-          email,
-          password: form.password,
-          remember: form.remember,
-        });
-      } else {
-        await signInWithEmail({ email, password: form.password, remember: form.remember });
-      }
+      await signInWithEmail({ email, password: form.password, remember: form.remember });
 
       navigate(redirectTo, { replace: true });
     } catch (err) {
@@ -212,34 +202,8 @@ export default function Login() {
                 />
               </div>
 
-              <div className={`${isCreateAccount ? "mb-3" : "mb-6"} login-mode-toggle rounded-full bg-slate-100 p-1 transition-all duration-300`}>
-                <div className="relative grid grid-cols-2 gap-1">
-                  <Motion.div
-                    layout
-                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                    className={`absolute inset-y-0 w-1/2 rounded-full bg-[#4b99bd] shadow-sm ${
-                      isCreateAccount ? "left-1/2" : "left-0"
-                    }`}
-                  />
-                  {[
-                    { id: "sign-in", label: "Sign In" },
-                    { id: "create-account", label: "Create" },
-                  ].map((mode) => (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      onClick={() => {
-                        setAuthMode(mode.id);
-                        setError("");
-                      }}
-                      className={`relative z-10 rounded-full px-4 py-3 text-xs font-black uppercase transition-colors ${
-                        authMode === mode.id ? "text-white" : "text-slate-500 hover:text-slate-900"
-                      }`}
-                    >
-                      {mode.label}
-                    </button>
-                  ))}
-                </div>
+              <div className="mb-6 rounded-full bg-[#4b99bd] px-4 py-3 text-center text-xs font-black uppercase text-white shadow-sm">
+                Sign In
               </div>
 
               <div className={`${isCreateAccount ? "mb-3" : "mb-5"} text-center transition-all duration-300`}>
@@ -389,17 +353,7 @@ export default function Login() {
                     </button>
 
                     <p className="text-center text-xs font-semibold text-slate-500">
-                      {isCreateAccount ? "Already have an account?" : "Don't have an account?"}{" "}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthMode(isCreateAccount ? "sign-in" : "create-account");
-                          setError("");
-                        }}
-                        className="font-black uppercase text-[#0e8aa2] hover:text-[#0f766e]"
-                      >
-                        {isCreateAccount ? "Sign In" : "Create"}
-                      </button>
+                      Need an account? Contact the system administrator.
                     </p>
                   </Motion.div>
                 </AnimatePresence>
