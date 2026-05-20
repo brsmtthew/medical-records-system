@@ -9,5 +9,6 @@ export {
   subscribeToAdmissionLocations,
   subscribeToOutpatientDepartments,
   subscribeToPatients,
+  subscribeToDoctors,
   updatePatient,
 } from "@services/recordsService";

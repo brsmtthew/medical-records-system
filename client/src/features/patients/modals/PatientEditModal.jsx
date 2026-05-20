@@ -1,6 +1,8 @@
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import { CalendarDays, Edit, Hash, MapPin, Save, UserRound, X } from "lucide-react";
 import StatusBadge from "@shared/components/StatusBadge";
+import DoctorSelect from "@shared/components/DoctorSelect";
+import { buildAttendingDoctorFields, findDoctorById } from "@shared/utils/doctors";
 
 const fieldClass =
   "mrs-field w-full rounded-xl px-3 py-3 text-sm font-bold";
@@ -26,6 +28,7 @@ function ReadOnlyCard({ label, value, tone = "text-slate-700" }) {
 export default function PatientEditModal({
   editDepartmentLabel,
   editDepartmentOptions,
+  doctors,
   isFirstAdmissionRecord,
   onClose,
   onSubmit,
@@ -133,6 +136,22 @@ export default function PatientEditModal({
                       ))}
                     </select>
                   </div>
+                </Field>
+
+                <Field className="sm:col-span-2" label="Attending Physician">
+                  <DoctorSelect
+                    doctors={doctors}
+                    label="Attending Physician"
+                    value={patient.attendingDoctorId || ""}
+                    onChange={(doctorId) => {
+                      setPatient({
+                        ...patient,
+                        ...buildAttendingDoctorFields(findDoctorById(doctors, doctorId)),
+                      });
+                      setEditError("");
+                    }}
+                    required
+                  />
                 </Field>
 
                 <Field label="Admission Date">

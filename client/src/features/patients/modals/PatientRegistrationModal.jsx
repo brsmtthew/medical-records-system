@@ -1,5 +1,7 @@
 import { motion as Motion } from "framer-motion";
 import { ArrowRight, UserPlus, X } from "lucide-react";
+import DoctorSelect from "@shared/components/DoctorSelect";
+import { buildAttendingDoctorFields, findDoctorById } from "@shared/utils/doctors";
 
 export default function PatientRegistrationModal({
   form,
@@ -8,6 +10,7 @@ export default function PatientRegistrationModal({
   normalizePatientName,
   onClose,
   onSubmit,
+  doctors,
   patientDepartmentLabel,
   patientDepartmentOptions,
   patients,
@@ -118,6 +121,25 @@ export default function PatientRegistrationModal({
                 <option key={department} value={department}>{department}</option>
               ))}
             </select>
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
+              Attending Physician
+            </label>
+            <DoctorSelect
+              doctors={doctors}
+              label="Attending Physician"
+              value={form.attendingDoctorId}
+              onChange={(doctorId) => {
+                setForm({
+                  ...form,
+                  ...buildAttendingDoctorFields(findDoctorById(doctors, doctorId)),
+                });
+                setFormError("");
+              }}
+              required
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-2">

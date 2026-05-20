@@ -3,6 +3,10 @@ export const bellNotificationStorageKey = "mrs-bell-notifications";
 export const unreadNotificationStorageKey = "mrs-navbar-unread-notifications";
 export const maxNotificationLogItems = 50;
 
+function scopedStorageKey(baseKey, userId = "") {
+  return userId ? `${baseKey}:${userId}` : baseKey;
+}
+
 // Normalizes toast and bell notification objects before saving or rendering them.
 export function normalizeNotification(notification) {
   return {
@@ -57,10 +61,10 @@ export function clearStoredNotifications() {
 }
 
 // Reads the navbar bell notification list from local storage.
-export function readStoredBellNotifications() {
+export function readStoredBellNotifications(userId = "") {
   try {
     if (typeof localStorage === "undefined") return [];
-    const storedNotifications = localStorage.getItem(bellNotificationStorageKey);
+    const storedNotifications = localStorage.getItem(scopedStorageKey(bellNotificationStorageKey, userId));
     const parsed = storedNotifications ? JSON.parse(storedNotifications) : [];
     return Array.isArray(parsed) ? parsed.map(normalizeNotification) : [];
   } catch {
@@ -69,11 +73,11 @@ export function readStoredBellNotifications() {
 }
 
 // Saves the navbar bell notification list with a fixed maximum length.
-export function writeStoredBellNotifications(notifications) {
+export function writeStoredBellNotifications(notifications, userId = "") {
   try {
     if (typeof localStorage === "undefined") return;
     localStorage.setItem(
-      bellNotificationStorageKey,
+      scopedStorageKey(bellNotificationStorageKey, userId),
       JSON.stringify(notifications.map(normalizeNotification).slice(0, maxNotificationLogItems)),
     );
   } catch {
@@ -82,30 +86,30 @@ export function writeStoredBellNotifications(notifications) {
 }
 
 // Removes the local navbar bell notification history.
-export function clearStoredBellNotifications() {
+export function clearStoredBellNotifications(userId = "") {
   try {
     if (typeof localStorage === "undefined") return;
-    localStorage.removeItem(bellNotificationStorageKey);
+    localStorage.removeItem(scopedStorageKey(bellNotificationStorageKey, userId));
   } catch {
     // localStorage can be unavailable in private or restricted browser contexts.
   }
 }
 
 // Reads the persisted unread notification badge count.
-export function readStoredUnreadNotifications() {
+export function readStoredUnreadNotifications(userId = "") {
   try {
     if (typeof localStorage === "undefined") return 0;
-    return Number(localStorage.getItem(unreadNotificationStorageKey)) || 0;
+    return Number(localStorage.getItem(scopedStorageKey(unreadNotificationStorageKey, userId))) || 0;
   } catch {
     return 0;
   }
 }
 
 // Saves a non-negative unread notification badge count.
-export function writeStoredUnreadNotifications(count) {
+export function writeStoredUnreadNotifications(count, userId = "") {
   try {
     if (typeof localStorage === "undefined") return;
-    localStorage.setItem(unreadNotificationStorageKey, String(Math.max(0, Number(count) || 0)));
+    localStorage.setItem(scopedStorageKey(unreadNotificationStorageKey, userId), String(Math.max(0, Number(count) || 0)));
   } catch {
     // localStorage can be unavailable in private or restricted browser contexts.
   }

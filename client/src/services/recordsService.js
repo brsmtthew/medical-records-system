@@ -46,6 +46,7 @@ export const patientBeforeFirstRecordMessage = "Readmission date cannot be earli
 
 const patientSnapshotCollections = [
   "chartLogs",
+  "chartRequests",
   "medicalDocumentRequests",
   "labResultRequests",
   "vitalCertificateRequests",
@@ -145,6 +146,9 @@ function sanitizePatientPayload(patient) {
     type: { maxLength: 30 },
     recordType: { maxLength: 30 },
     department: { maxLength: 120, uppercase: true },
+    attendingDoctorId: { maxLength: 120 },
+    attendingDoctorName: { maxLength: 160 },
+    attendingDoctorClinic: { maxLength: 120 },
     admissionDate: { maxLength: 20 },
     dischargeDate: { maxLength: 20 },
   });
@@ -156,6 +160,9 @@ function sanitizeChartPayload(chart) {
     caseNumber: { maxLength: 60, uppercase: true },
     patientName: { maxLength: 160, uppercase: true },
     patientDepartment: { maxLength: 120, uppercase: true },
+    attendingDoctorId: { maxLength: 120 },
+    attendingDoctorName: { maxLength: 160 },
+    attendingDoctorClinic: { maxLength: 120 },
     recordType: { maxLength: 30 },
     patientType: { maxLength: 30 },
     admissionDate: { maxLength: 20 },
@@ -218,6 +225,44 @@ function sanitizeUserAccessPayload(updates) {
   }
 
   return safeUpdates;
+}
+
+// Cleans targeted bell notifications exchanged between clinical users and Records staff.
+function sanitizeUserNotificationPayload(notification) {
+  return sanitizeRecordPayload(notification, {
+    type: { maxLength: 30 },
+    title: { maxLength: 120 },
+    message: { maxLength: 500 },
+    patientName: { maxLength: 160, uppercase: true },
+    caseNumber: { maxLength: 60, uppercase: true },
+    action: { maxLength: 120 },
+    sourceUserId: { maxLength: 120 },
+    sourceUserName: { maxLength: 160 },
+    targetUserId: { maxLength: 120 },
+    targetRole: { maxLength: 60 },
+  });
+}
+
+// Cleans online chart request rows from clinical users and Records staff.
+function sanitizeChartRequestPayload(request) {
+  return sanitizeRecordPayload(request, {
+    caseNumber: { maxLength: 60, uppercase: true },
+    patientName: { maxLength: 160, uppercase: true },
+    requestedBy: { maxLength: 160 },
+    requestedByEmail: { maxLength: 254 },
+    requestedByRole: { maxLength: 30 },
+    requestedByDepartment: { maxLength: 120, uppercase: true },
+    requestedByClinic: { maxLength: 120 },
+    purpose: { maxLength: 300 },
+    priority: { maxLength: 30 },
+    status: { maxLength: 30 },
+    preparedBy: { maxLength: 160 },
+    preparedAt: { maxLength: 40 },
+    readyAt: { maxLength: 40 },
+    completedAt: { maxLength: 40 },
+    canceledAt: { maxLength: 40 },
+    remarks: { maxLength: 500 },
+  });
 }
 
 // Converts date inputs into comparable timestamps.
@@ -378,6 +423,24 @@ export function subscribeToChartLogs(onRows, onError) {
   }, onError);
 }
 
+// Streams chart requests for clinical users and Medical Records staff.
+export function subscribeToChartRequests(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  const user = auth?.currentUser;
+  const role = normalizeUserRole(activeUserProfile?.role);
+  const requestQuery = user && !medicalRecordsRoles.includes(role)
+    ? query(collection(db, "chartRequests"), where("requestedById", "==", user.uid))
+    : collection(db, "chartRequests");
+
+  return onSnapshot(requestQuery, (snapshot) => {
+    onRows(sortNewestFirst(snapshotRows(snapshot)));
+  }, onError);
+}
+
 // Streams departments used by chart borrowing.
 export function subscribeToDepartments(onRows, onError) {
   if (!db) {
@@ -423,6 +486,18 @@ export function subscribeToUsers(onRows, onError) {
 
   return onSnapshot(collection(db, "users"), (snapshot) => {
     onRows(sortByUserName(snapshotRows(snapshot)));
+  }, onError);
+}
+
+// Streams active doctor profiles for attending-physician dropdowns.
+export function subscribeToDoctors(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  return onSnapshot(query(collection(db, "users"), where("role", "==", userRoles.doctor)), (snapshot) => {
+    onRows(sortByUserName(snapshotRows(snapshot).filter((row) => row.accountStatus !== "disabled")));
   }, onError);
 }
 
@@ -591,6 +666,9 @@ export async function createPatient(patient) {
     caseNumber: safePatient.caseNumber,
     patientName: safePatient.name,
     patientDepartment: safePatient.department || "",
+    attendingDoctorId: safePatient.attendingDoctorId || "",
+    attendingDoctorName: safePatient.attendingDoctorName || "",
+    attendingDoctorClinic: safePatient.attendingDoctorClinic || "",
     recordType: safePatient.recordType || "new",
     patientType: safePatient.type || "outpatient",
     admissionDate: safePatient.admissionDate || "",
@@ -660,6 +738,9 @@ export async function updatePatient(previousCaseNumber, patient) {
       renamePendingBy: user.uid,
       patientName: safePatient.name,
       patientDepartment: safePatient.department || "",
+      attendingDoctorId: safePatient.attendingDoctorId || "",
+      attendingDoctorName: safePatient.attendingDoctorName || "",
+      attendingDoctorClinic: safePatient.attendingDoctorClinic || "",
       recordType: safePatient.recordType || "new",
       patientType: safePatient.type || "outpatient",
       admissionDate: safePatient.admissionDate || "",
@@ -728,6 +809,9 @@ export async function updatePatient(previousCaseNumber, patient) {
   batch.update(doc(database, "charts", safePatient.caseNumber), {
     patientName: safePatient.name,
     patientDepartment: safePatient.department || "",
+    attendingDoctorId: safePatient.attendingDoctorId || "",
+    attendingDoctorName: safePatient.attendingDoctorName || "",
+    attendingDoctorClinic: safePatient.attendingDoctorClinic || "",
     recordType: safePatient.recordType || "new",
     patientType: safePatient.type || "outpatient",
     admissionDate: safePatient.admissionDate || "",
@@ -855,6 +939,149 @@ export async function updateChartLogIfExists(id, log) {
     updatedAt: serverTimestamp(),
   });
   return true;
+}
+
+// Streams bell notifications targeted to the signed-in user or Medical Records group.
+export function subscribeToUserNotifications(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  const user = auth?.currentUser;
+  if (!user) {
+    onRows([]);
+    return () => {};
+  }
+
+  const role = normalizeUserRole(activeUserProfile?.role);
+  const notificationQuery = medicalRecordsRoles.includes(role)
+    ? query(collection(db, "userNotifications"), where("targetRole", "==", "medicalRecords"))
+    : query(collection(db, "userNotifications"), where("targetUserId", "==", user.uid));
+
+  return onSnapshot(notificationQuery, (snapshot) => {
+    onRows(sortNewestFirst(snapshotRows(snapshot)));
+  }, onError);
+}
+
+async function addUserNotification(notification) {
+  const database = requireDb();
+  const user = auth?.currentUser;
+  if (!user) return;
+
+  await addDoc(collection(database, "userNotifications"), {
+    ...sanitizeUserNotificationPayload({
+      type: "info",
+      sourceUserId: user.uid,
+      ...notification,
+    }),
+    createdAt: serverTimestamp(),
+  });
+}
+
+function requesterDisplayName(name, role) {
+  const safeName = String(name || "").trim();
+  if (role === userRoles.doctor && safeName && !safeName.toUpperCase().startsWith("DR.")) {
+    return `DR. ${safeName}`;
+  }
+  return safeName;
+}
+
+// Adds a clinical online chart request for Medical Records preparation.
+export async function addChartRequest(request) {
+  const database = requireDb();
+  const { user, profile, role } = await requireActiveRole({ roles: allUserRoles });
+  const safeRequest = sanitizeChartRequestPayload(request);
+  const requestedBy = requesterDisplayName(
+    safeRequest.requestedBy || profile.fullName || profile.displayName || user.displayName || user.email || "",
+    role,
+  );
+  const requestRef = await addDoc(collection(database, "chartRequests"), {
+    ...safeRequest,
+    requestedById: user.uid,
+    requestedBy,
+    requestedByEmail: safeRequest.requestedByEmail || profile.email || user.email || "",
+    requestedByRole: role,
+    requestedByDepartment: safeRequest.requestedByDepartment || profile.department || "",
+    requestedByClinic: safeRequest.requestedByClinic || profile.clinic || "",
+    status: "pending",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await addUserNotification({
+    type: "info",
+    title: "New Chart Request",
+    message: `${requestedBy || "Clinical user"} requested chart ${safeRequest.caseNumber}.`,
+    patientName: safeRequest.patientName,
+    caseNumber: safeRequest.caseNumber,
+    action: "Chart Request Submitted",
+    sourceUserName: requestedBy,
+    targetRole: "medicalRecords",
+  });
+  return requestRef.id;
+}
+
+// Updates request preparation status from Medical Records or cancels a user's own pending request.
+export async function updateChartRequest(id, updates) {
+  const database = requireDb();
+  const { user, profile, role } = await requireActiveRole({ roles: allUserRoles });
+  const requestRef = doc(database, "chartRequests", id);
+  const requestSnapshot = await getDoc(requestRef);
+  if (!requestSnapshot.exists()) {
+    throw new Error("This chart request no longer exists.");
+  }
+
+  const currentRequest = requestSnapshot.data();
+  const isRecordsUser = medicalRecordsRoles.includes(role);
+  const safeUpdates = sanitizeChartRequestPayload(updates);
+  const nextStatus = safeUpdates.status || currentRequest.status;
+
+  if (!isRecordsUser) {
+    const canCancelOwnRequest =
+      currentRequest.requestedById === user.uid &&
+      currentRequest.status === "pending" &&
+      nextStatus === "canceled";
+
+    if (!canCancelOwnRequest) {
+      throw new Error("Only Medical Records can update chart request status.");
+    }
+  }
+
+  const staffStamp = isRecordsUser
+    ? {
+        preparedBy: safeUpdates.preparedBy || profile.fullName || profile.displayName || user.displayName || user.email || "",
+      }
+    : {};
+
+  await updateDoc(requestRef, {
+    ...safeUpdates,
+    ...staffStamp,
+    updatedAt: serverTimestamp(),
+  });
+
+  if (isRecordsUser && currentRequest.requestedById && currentRequest.requestedById !== user.uid) {
+    await addUserNotification({
+      type: nextStatus === "ready" || nextStatus === "completed" ? "success" : nextStatus === "canceled" ? "error" : "info",
+      title: "Chart Request Updated",
+      message: `${currentRequest.caseNumber} is now ${nextStatus}.`,
+      patientName: currentRequest.patientName || "",
+      caseNumber: currentRequest.caseNumber || "",
+      action: "Chart Request Status Updated",
+      sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
+      targetUserId: currentRequest.requestedById,
+    });
+  } else if (!isRecordsUser && nextStatus === "canceled") {
+    await addUserNotification({
+      type: "error",
+      title: "Chart Request Canceled",
+      message: `${currentRequest.caseNumber} was canceled by the requester.`,
+      patientName: currentRequest.patientName || "",
+      caseNumber: currentRequest.caseNumber || "",
+      action: "Chart Request Canceled",
+      sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
+      targetRole: "medicalRecords",
+    });
+  }
 }
 
 // Deletes a chart audit log by id.

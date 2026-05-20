@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
@@ -44,6 +44,8 @@ import {
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { applySystemTheme, readSystemSettings, saveSystemSettings } from "@shared/utils/systemSettings";
 import { isStrongPassword, normalizeEmail } from "@shared/utils/security";
+import { roleLabel } from "@shared/constants/userRoles";
+import { subscribeToUserNotifications } from "@features/charts/services/chartService";
 
 // Builds the compact initials fallback for accounts without an uploaded photo.
 function getInitials(name) {
@@ -77,17 +79,28 @@ function notificationIcon(type) {
   return Info;
 }
 
+function mergeNotifications(firstList, secondList) {
+  const rowsById = new Map();
+  [...firstList, ...secondList].map(normalizeNotification).forEach((notification) => {
+    rowsById.set(notification.id, notification);
+  });
+
+  return [...rowsById.values()]
+    .sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime())
+    .slice(0, maxNotificationLogItems);
+}
+
 export default function Navbar({ onMenuClick }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser } = useAuth();
+  const { currentUser, userProfile, userRole } = useAuth();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [showClearNotificationsConfirm, setShowClearNotificationsConfirm] = useState(false);
-  const [notifications, setNotifications] = useState(readStoredBellNotifications);
-  const [unreadNotifications, setUnreadNotifications] = useState(readStoredUnreadNotifications);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [accountProfile, setAccountProfile] = useState(null);
   const [accountForm, setAccountForm] = useState({
     fullName: "",
@@ -102,11 +115,11 @@ export default function Navbar({ onMenuClick }) {
   });
   const [accountMessage, setAccountMessage] = useState("");
   const [accountError, setAccountError] = useState("");
+  const [incomingNotificationToast, setIncomingNotificationToast] = useState(null);
   const [appearanceMode, setAppearanceMode] = useState(() => readSystemSettings().appearanceMode);
-  const isAdminAccount = accountProfile?.role === "admin";
-  const visibleNotifications = isAdminAccount
-    ? notifications
-    : notifications.filter((notification) => !notification.adminOnly);
+  const remoteNotificationIdsRef = useRef(new Set());
+  const hasLoadedRemoteNotificationsRef = useRef(false);
+  const visibleNotifications = notifications;
   const visibleUnreadNotifications = visibleNotifications.length
     ? Math.min(unreadNotifications, visibleNotifications.length)
     : 0;
@@ -132,12 +145,82 @@ export default function Navbar({ onMenuClick }) {
   }, [currentUser]);
 
   useEffect(() => {
-    writeStoredBellNotifications(notifications);
-  }, [notifications]);
+    if (!currentUser?.uid) return;
+    writeStoredBellNotifications(notifications, currentUser.uid);
+  }, [currentUser?.uid, notifications]);
 
   useEffect(() => {
-    writeStoredUnreadNotifications(unreadNotifications);
-  }, [unreadNotifications]);
+    if (!currentUser?.uid) return;
+    writeStoredUnreadNotifications(unreadNotifications, currentUser.uid);
+  }, [currentUser?.uid, unreadNotifications]);
+
+  useEffect(() => {
+    let isActive = true;
+    const userId = currentUser?.uid || "";
+
+    window.queueMicrotask(() => {
+      if (!isActive) return;
+      if (!userId) {
+        setNotifications([]);
+        setUnreadNotifications(0);
+        return;
+      }
+
+      setNotifications(readStoredBellNotifications(userId));
+      setUnreadNotifications(readStoredUnreadNotifications(userId));
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentUser?.uid]);
+
+  useEffect(() => {
+    if (!currentUser?.uid || !userProfile?.role) return undefined;
+
+    hasLoadedRemoteNotificationsRef.current = false;
+    remoteNotificationIdsRef.current = new Set();
+
+    return subscribeToUserNotifications(
+      (rows) => {
+        const remoteNotifications = rows.map((row) => normalizeNotification({
+          id: row.id,
+          type: row.type || "info",
+          title: row.title || "",
+          message: row.message || "",
+          createdAt: row.createdAt || new Date().toISOString(),
+          patientName: row.patientName || "",
+          caseNumber: row.caseNumber || "",
+          action: row.action || "",
+          userName: row.sourceUserName || "",
+          userId: row.sourceUserId || "",
+        }));
+        const nextIds = new Set(remoteNotifications.map((notification) => notification.id));
+
+        if (hasLoadedRemoteNotificationsRef.current) {
+          const newNotifications = remoteNotifications.filter((notification) => !remoteNotificationIdsRef.current.has(notification.id));
+          const newCount = newNotifications.length;
+          if (newCount > 0) {
+            setUnreadNotifications((current) => current + newCount);
+            const latestNotification = newNotifications[0];
+            setIncomingNotificationToast({
+              type: latestNotification.type || "info",
+              title: latestNotification.title || "New Notification",
+              message: latestNotification.message,
+              patientName: latestNotification.patientName,
+              caseNumber: latestNotification.caseNumber,
+            });
+          }
+        } else {
+          hasLoadedRemoteNotificationsRef.current = true;
+        }
+
+        remoteNotificationIdsRef.current = nextIds;
+        setNotifications((current) => mergeNotifications(remoteNotifications, current));
+      },
+      (error) => console.error("Unable to load targeted notifications:", error),
+    );
+  }, [currentUser?.uid, userProfile?.role]);
 
   useEffect(() => {
     // Keeps the navbar toggle in sync when settings are changed on another page.
@@ -158,7 +241,7 @@ export default function Navbar({ onMenuClick }) {
     const handleToast = (event) => {
       const notification = normalizeNotification(event.detail || {});
       if (!notification?.message) return;
-      if (notification.adminOnly && !isAdminAccount) return;
+      if (!currentUser?.uid || notification.userId !== currentUser.uid) return;
 
       setNotifications((current) => [notification, ...current].slice(0, maxNotificationLogItems));
       setUnreadNotifications((current) => current + 1);
@@ -174,7 +257,7 @@ export default function Navbar({ onMenuClick }) {
       window.removeEventListener("mrs-toast", handleToast);
       window.removeEventListener("mrs-notifications-cleared", handleNotificationsCleared);
     };
-  }, [isAdminAccount]);
+  }, [currentUser?.uid]);
 
   // Ends the Firebase session and sends the user back to the login page.
   const handleSignOut = async () => {
@@ -309,6 +392,7 @@ export default function Navbar({ onMenuClick }) {
 
   const displayName = accountProfile?.fullName || currentUser?.displayName || "Administrator";
   const displayEmail = currentUser?.email || "Medical Records";
+  const accountRoleLabel = roleLabel(accountProfile?.role || userProfile?.role || userRole);
   const photoDataUrl = accountProfile?.photoDataUrl || accountForm.photoDataUrl;
   const initials = getInitials(displayName);
   const pageTitles = {
@@ -317,6 +401,7 @@ export default function Navbar({ onMenuClick }) {
     "/charts": "Chart Circulation",
     "/chart-viewing": "Chart Viewing",
     "/chartviewing": "Chart Viewing",
+    "/chart-requests": "Chart Requests",
     "/reports": "Chart Reports",
     "/medical-documents": "Medical Documents",
     "/lab-results": "Laboratory Results",
@@ -497,7 +582,7 @@ export default function Navbar({ onMenuClick }) {
                 <Circle size={8} className="fill-green-500 text-green-500" />
               </div>
               <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-400">
-                {accountProfile?.department || "Medical Records"}
+                {accountRoleLabel}
               </span>
             </div>
             <ChevronDown
@@ -841,6 +926,10 @@ export default function Navbar({ onMenuClick }) {
           setAccountError("");
           setAccountMessage("");
         }}
+      />
+      <FloatingToast
+        toast={incomingNotificationToast}
+        onClose={() => setIncomingNotificationToast(null)}
       />
     </>
   );

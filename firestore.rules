@@ -57,7 +57,12 @@ service cloud.firestore {
         && request.resource.data.role in ["staff", "nurse", "doctor"]
         && request.resource.data.accountStatus == "active";
 
-      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow read: if signedIn()
+        && (
+          request.auth.uid == userId
+          || isAdmin()
+          || (isActiveStaff() && resource.data.role == "doctor")
+        );
       allow update: if (isAdmin() && validSystemRole(request.resource.data.role))
         || (
           signedIn()
@@ -69,6 +74,7 @@ service cloud.firestore {
             "position",
             "department",
             "photoDataUrl",
+            "clinicalCoverDataUrl",
             "updatedAt"
           ])
           && request.resource.data.role == resource.data.role
@@ -89,7 +95,7 @@ service cloud.firestore {
     }
 
     match /charts/{caseNumber} {
-      allow read: if isActiveStaff();
+      allow read: if isActiveSystemUser();
       allow create, update: if isActiveStaff()
         && request.resource.data.caseNumber == caseNumber
         && isValidCaseNumber(request.resource.data.caseNumber);
@@ -99,6 +105,40 @@ service cloud.firestore {
     match /chartLogs/{logId} {
       allow read, create, update: if isActiveStaff();
       allow delete: if isAdmin();
+    }
+
+    match /chartRequests/{requestId} {
+      allow read: if isActiveStaff()
+        || (isActiveClinicalUser() && resource.data.requestedById == request.auth.uid);
+      allow create: if isActiveSystemUser()
+        && request.resource.data.requestedById == request.auth.uid
+        && request.resource.data.status == "pending"
+        && isValidCaseNumber(request.resource.data.caseNumber)
+        && request.resource.data.patientName is string;
+      allow update: if isActiveStaff()
+        || (
+          isActiveClinicalUser()
+          && resource.data.requestedById == request.auth.uid
+          && resource.data.status == "pending"
+          && request.resource.data.status == "canceled"
+          && request.resource.data.requestedById == resource.data.requestedById
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /userNotifications/{notificationId} {
+      allow read: if signedIn()
+        && (
+          resource.data.targetUserId == request.auth.uid
+          || (isActiveStaff() && resource.data.targetRole == "medicalRecords")
+        );
+      allow create: if isActiveSystemUser()
+        && request.resource.data.sourceUserId == request.auth.uid
+        && (
+          request.resource.data.targetUserId is string
+          || request.resource.data.targetRole == "medicalRecords"
+        );
+      allow update, delete: if false;
     }
 
     match /departments/{departmentId} {

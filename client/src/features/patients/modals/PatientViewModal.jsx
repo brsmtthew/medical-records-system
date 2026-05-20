@@ -1,6 +1,6 @@
 import Barcode from "react-barcode";
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { CalendarDays, ClipboardList, Download, MapPin, X } from "lucide-react";
+import { CalendarDays, ClipboardList, Download, MapPin, Stethoscope, X } from "lucide-react";
 import StatusBadge from "@shared/components/StatusBadge";
 import { formatDateInputLabel } from "@shared/utils/dateFormatting";
 
@@ -70,6 +70,12 @@ export default function PatientViewModal({
                   label={patient.type === "inpatient" ? "Admitted Location" : "Outpatient Department"}
                   value={patient.department || "Unassigned"}
                   accent="text-blue-700"
+                />
+                <DetailCard
+                  icon={Stethoscope}
+                  label="Attending Physician"
+                  value={patient.attendingDoctorName || "Unassigned"}
+                  accent="text-violet-700"
                 />
                 <DetailCard
                   icon={CalendarDays}

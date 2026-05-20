@@ -274,6 +274,169 @@ export default function Users() {
     { id: "nurses", label: "Nurses", value: nurseUsers, icon: HeartPulse, tone: "text-emerald-700", iconClass: "border-emerald-200 bg-emerald-50 text-emerald-700" },
     { id: "doctors", label: "Doctors", value: doctorUsers, icon: Stethoscope, tone: "text-violet-700", iconClass: "border-violet-200 bg-violet-50 text-violet-700" },
   ];
+  const recordsUsers = filteredUsers.filter((user) => [userRoles.admin, userRoles.staff].includes(normalizeUserRole(user.role)));
+  const clinicalUsers = filteredUsers.filter((user) => [userRoles.doctor, userRoles.nurse].includes(normalizeUserRole(user.role)));
+
+  const renderUserRows = (rows, emptyTitle, emptyDescription) => (
+    <tbody className="divide-y divide-slate-100">
+      {rows.map((user) => {
+        const userId = user.uid || user.id;
+        const isSelf = userId === currentUser?.uid;
+        const isDisabled = user.accountStatus === "disabled";
+        const role = normalizeUserRole(user.role);
+        const assignment = role === userRoles.doctor
+          ? user.clinic || "No clinic assigned"
+          : user.department || "No department assigned";
+
+        return (
+          <tr key={userId} className="mrs-table-row">
+            <td className="p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-green-50 text-xs font-black text-green-700">
+                  {user.photoDataUrl ? (
+                    <img src={user.photoDataUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    getInitials(user.fullName || user.displayName || user.email)
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-black uppercase text-slate-800">
+                    {user.fullName || user.displayName || "Unnamed User"}
+                  </p>
+                  <p className="mt-1 break-words text-[10px] font-bold text-slate-400">
+                    {user.email || "No email saved"}
+                  </p>
+                  {isSelf && (
+                    <p className="mt-1 text-[10px] font-black uppercase text-blue-600">
+                      Signed-in account
+                    </p>
+                  )}
+                </div>
+              </div>
+            </td>
+            <td className="p-3">
+              <select
+                value={role}
+                onChange={(event) => handleRoleChange(user, event.target.value)}
+                disabled={isSelf}
+                className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-black uppercase disabled:opacity-60"
+                aria-label={`Role for ${user.email || user.fullName || "user"}`}
+              >
+                <option value="staff">Medical Records Staff</option>
+                <option value="nurse">Nurse</option>
+                <option value="doctor">Doctor</option>
+                <option value="admin">Admin</option>
+              </select>
+            </td>
+            <td className="p-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-[10px] font-black uppercase text-slate-500">
+                  {role === userRoles.doctor ? "Clinic" : "Department"}
+                </p>
+                <p className="mt-1 break-words text-xs font-black uppercase text-slate-800">{assignment}</p>
+                {user.specialty && (
+                  <p className="mt-1 break-words text-[10px] font-bold uppercase text-violet-700">{user.specialty}</p>
+                )}
+                {user.licenseNumber && (
+                  <p className="mt-1 break-words text-[10px] font-mono font-bold text-slate-500">{user.licenseNumber}</p>
+                )}
+              </div>
+            </td>
+            <td className="p-3">
+              <span className={`mrs-status-badge ${isDisabled ? "mrs-status-danger" : "mrs-status-success"}`}>
+                {isDisabled ? "Blocked" : "Active"}
+              </span>
+            </td>
+            <td className="p-3">
+              <input
+                value={restrictionReasons[userId] ?? user.restrictionReason ?? ""}
+                onChange={(event) => setRestrictionReasons((current) => ({
+                  ...current,
+                  [userId]: event.target.value,
+                }))}
+                placeholder="Required before blocking"
+                className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-bold"
+                disabled={isSelf}
+              />
+            </td>
+            <td className="p-3">
+              <div className="flex justify-end gap-2">
+                {isDisabled ? (
+                  <button
+                    type="button"
+                    onClick={() => handleActivateUser(user)}
+                    disabled={isSelf}
+                    className="inline-flex min-w-28 items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-black uppercase text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50"
+                  >
+                    <UserCheck size={16} />
+                    Activate
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleBlockUser(user)}
+                    disabled={isSelf}
+                    className="inline-flex min-w-28 items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50"
+                  >
+                    <UserX size={16} />
+                    Block
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleDeleteUser(user)}
+                  disabled={isSelf}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                  aria-label={`Delete ${user.email || user.fullName || "user"}`}
+                  title="Delete user"
+                >
+                  <Trash2 size={16} />
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        );
+      })}
+
+      {rows.length === 0 && (
+        <tr>
+          <td colSpan="6" className="p-8 text-center">
+            <ShieldCheck size={34} className="mx-auto mb-3 text-slate-300" />
+            <p className="font-black uppercase text-slate-700">{emptyTitle}</p>
+            <p className="mt-1 text-sm font-semibold text-slate-400">{emptyDescription}</p>
+          </td>
+        </tr>
+      )}
+    </tbody>
+  );
+
+  const renderUsersTable = ({ title, description, rows, emptyTitle, emptyDescription }) => (
+    <section className="mrs-panel min-h-0 overflow-hidden rounded-xl">
+      <div className="mrs-section-band flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2">
+        <div>
+          <h2 className="text-sm font-black uppercase text-slate-800">{title}</h2>
+          <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">{description}</p>
+        </div>
+        <span className="mrs-status-badge mrs-status-neutral">{rows.length} shown</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1220px] table-fixed text-left">
+          <thead>
+            <tr className="mrs-section-band border-b border-slate-100">
+              <th className="w-[22%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
+              <th className="w-[15%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Role</th>
+              <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Assignment</th>
+              <th className="w-[11%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+              <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Block Reason</th>
+              <th className="w-[16%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</th>
+            </tr>
+          </thead>
+          {renderUserRows(rows, emptyTitle, emptyDescription)}
+        </table>
+      </div>
+    </section>
+  );
 
   return (
     <DashboardLayout>
@@ -363,170 +526,25 @@ export default function Users() {
           </div>
         </div>
 
-        <div className="mrs-panel min-h-0 flex-1 overflow-hidden rounded-xl">
-          <div className="min-h-0 h-full overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[1220px] table-fixed text-left">
-              <thead className="sticky top-0 z-10">
-                <tr className="mrs-section-band border-b border-slate-100">
-                  <th className="w-[22%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    User
-                  </th>
-                  <th className="w-[15%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Role
-                  </th>
-                  <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Assignment
-                  </th>
-                  <th className="w-[11%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Status
-                  </th>
-                  <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Block Reason
-                  </th>
-                  <th className="w-[16%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredUsers.map((user) => {
-                  const userId = user.uid || user.id;
-                  const isSelf = userId === currentUser?.uid;
-                  const isDisabled = user.accountStatus === "disabled";
-                  const role = normalizeUserRole(user.role);
-                  const assignment = role === userRoles.doctor
-                    ? user.clinic || "No clinic assigned"
-                    : user.department || "No department assigned";
-
-                  return (
-                    <tr key={userId} className="mrs-table-row">
-                      <td className="p-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-green-50 text-xs font-black text-green-700">
-                            {user.photoDataUrl ? (
-                              <img src={user.photoDataUrl} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              getInitials(user.fullName || user.displayName || user.email)
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="break-words text-sm font-black uppercase text-slate-800">
-                              {user.fullName || user.displayName || "Unnamed User"}
-                            </p>
-                            <p className="mt-1 break-words text-[10px] font-bold text-slate-400">
-                              {user.email || "No email saved"}
-                            </p>
-                            {isSelf && (
-                              <p className="mt-1 text-[10px] font-black uppercase text-blue-600">
-                                Signed-in account
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <select
-                          value={role}
-                          onChange={(event) => handleRoleChange(user, event.target.value)}
-                          disabled={isSelf}
-                          className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-black uppercase disabled:opacity-60"
-                          aria-label={`Role for ${user.email || user.fullName || "user"}`}
-                        >
-                          <option value="staff">Medical Records Staff</option>
-                          <option value="nurse">Nurse</option>
-                          <option value="doctor">Doctor</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      </td>
-                      <td className="p-3">
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                          <p className="text-[10px] font-black uppercase text-slate-500">
-                            {role === userRoles.doctor ? "Clinic" : "Department"}
-                          </p>
-                          <p className="mt-1 break-words text-xs font-black uppercase text-slate-800">{assignment}</p>
-                          {user.specialty && (
-                            <p className="mt-1 break-words text-[10px] font-bold uppercase text-violet-700">{user.specialty}</p>
-                          )}
-                          {user.licenseNumber && (
-                            <p className="mt-1 break-words text-[10px] font-mono font-bold text-slate-500">{user.licenseNumber}</p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <span className={`mrs-status-badge ${isDisabled ? "mrs-status-danger" : "mrs-status-success"}`}>
-                          {isDisabled ? "Blocked" : "Active"}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <input
-                          value={restrictionReasons[userId] ?? user.restrictionReason ?? ""}
-                          onChange={(event) => setRestrictionReasons((current) => ({
-                            ...current,
-                            [userId]: event.target.value,
-                          }))}
-                          placeholder="Required before blocking"
-                          className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-bold"
-                          disabled={isSelf}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <div className="flex justify-end gap-2">
-                          {isDisabled ? (
-                            <button
-                              type="button"
-                              onClick={() => handleActivateUser(user)}
-                              disabled={isSelf}
-                              className="inline-flex min-w-28 items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-black uppercase text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50"
-                            >
-                              <UserCheck size={16} />
-                              Activate
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleBlockUser(user)}
-                              disabled={isSelf}
-                              className="inline-flex min-w-28 items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50"
-                            >
-                              <UserX size={16} />
-                              Block
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteUser(user)}
-                            disabled={isSelf}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
-                            aria-label={`Delete ${user.email || user.fullName || "user"}`}
-                            title="Delete user"
-                          >
-                            <Trash2 size={16} />
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {filteredUsers.length === 0 && (
-                  <tr>
-                    <td colSpan="6" className="p-10 text-center">
-                      <ShieldCheck size={38} className="mx-auto mb-3 text-slate-300" />
-                      <p className="font-black uppercase text-slate-700">
-                        {users.length === 0 ? "No user profiles yet" : "No users match this view"}
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-slate-400">
-                        {users.length === 0
-                          ? "Profiles appear after users sign in or create a staff account."
-                          : "Choose another user navigation filter."}
-                      </p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          {renderUsersTable({
+            title: "Admin And Medical Records Staff",
+            description: "System administrators and daily records workspace accounts.",
+            rows: recordsUsers,
+            emptyTitle: users.length === 0 ? "No user profiles yet" : "No admin or staff accounts match this view",
+            emptyDescription: users.length === 0
+              ? "Profiles appear after users sign in or create an account."
+              : "Change the user filter or search term to see more records accounts.",
+          })}
+          {renderUsersTable({
+            title: "Doctors And Nurses",
+            description: "Clinical accounts for chart requests and clinical workspace access.",
+            rows: clinicalUsers,
+            emptyTitle: users.length === 0 ? "No user profiles yet" : "No doctor or nurse accounts match this view",
+            emptyDescription: users.length === 0
+              ? "Profiles appear after users sign in or create an account."
+              : "Change the user filter or search term to see more clinical accounts.",
+          })}
         </div>
       </div>
 

@@ -26,12 +26,14 @@ import {
   fallbackAdmissionLocations,
   fallbackOutpatientDepartments,
   subscribeToAdmissionLocations,
+  subscribeToDoctors,
   subscribeToOutpatientDepartments,
   subscribeToPatients,
   updatePatient as updatePatientRecord,
 } from "@features/patients/services/patientService";
 import { useAuth } from "@features/auth/context/useAuth";
 import { recordTimeValue } from "@shared/utils/recordSorting";
+import { buildAttendingDoctorFields, findDoctorById } from "@shared/utils/doctors";
 
 // Keeps patient case numbers consistent whether typed manually or scanned.
 function normalizeCaseNumber(value) {
@@ -58,6 +60,9 @@ function normalizePatientDates(patient) {
   return {
     ...patient,
     department: patient.department || "",
+    attendingDoctorId: patient.attendingDoctorId || "",
+    attendingDoctorName: patient.attendingDoctorName || "",
+    attendingDoctorClinic: patient.attendingDoctorClinic || "",
     admissionDate,
     dischargeDate,
   };
@@ -174,6 +179,7 @@ export default function Patients() {
   const canManagePatients = isAdmin || isStaff;
   const canDeletePatients = isAdmin;
   const [patients, setPatients] = useState([]);
+  const [doctors, setDoctors] = useState([]);
   const [admissionLocations, setAdmissionLocations] = useState([]);
   const [outpatientDepartments, setOutpatientDepartments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -187,7 +193,7 @@ export default function Patients() {
   const [infoMessage, setInfoMessage] = useState("");
   const [successMeta, setSuccessMeta] = useState(null);
   const [form, setForm] = useState({
-    name: "", caseNumber: "", department: "", recordType: "new", type: "outpatient", admissionDate: "", dischargeDate: ""
+    name: "", caseNumber: "", department: "", attendingDoctorId: "", attendingDoctorName: "", attendingDoctorClinic: "", recordType: "new", type: "outpatient", admissionDate: "", dischargeDate: ""
   });
 
   const [viewPatient, setViewPatient] = useState(null);
@@ -223,10 +229,16 @@ export default function Patients() {
       (error) => setFormError(error.message || "Unable to load outpatient departments from Firebase."),
     );
 
+    const unsubscribeDoctors = subscribeToDoctors(
+      setDoctors,
+      (error) => setFormError(error.message || "Unable to load doctor accounts from Firebase."),
+    );
+
     return () => {
       unsubscribePatients();
       unsubscribeAdmissionLocations();
       unsubscribeOutpatientDepartments();
+      unsubscribeDoctors();
     };
   }, []);
 
@@ -248,8 +260,8 @@ export default function Patients() {
   // Validates registration form fields and prepares a sanitized patient payload.
   const buildPatientFromForm = () => {
     const caseNumber = normalizeCaseNumber(form.caseNumber);
-    if (!form.name.trim() || !caseNumber || !form.department || !form.admissionDate) {
-      setFormError("Enter the patient name, case number, department/location, and date.");
+    if (!form.name.trim() || !caseNumber || !form.department || !form.attendingDoctorId || !form.admissionDate) {
+      setFormError("Enter the patient name, case number, department/location, attending physician, and date.");
       return null;
     }
     if (form.type === "inpatient" && !form.dischargeDate) {
@@ -270,6 +282,7 @@ export default function Patients() {
     const patientCandidate = normalizePatientDates({
       ...form,
       name: patientName,
+      ...buildAttendingDoctorFields(findDoctorById(doctors, form.attendingDoctorId)),
       recordType: hasPreviousRecord ? "old" : "new",
       caseNumber,
     });
@@ -304,6 +317,9 @@ export default function Patients() {
         name: "",
         caseNumber: "",
         department: "",
+        attendingDoctorId: "",
+        attendingDoctorName: "",
+        attendingDoctorClinic: "",
         recordType: "new",
         type: "outpatient",
         admissionDate: "",
@@ -333,8 +349,8 @@ export default function Patients() {
     if (pendingAction) return;
     const previousCaseNumber = editPatient.previousCaseNumber || editPatient.id;
     const caseNumber = normalizeCaseNumber(editPatient.caseNumber);
-    if (!editPatient.name.trim() || !caseNumber || !editPatient.department || !editPatient.admissionDate) {
-      setEditError("Patient name, case number, department/location, and date are required.");
+    if (!editPatient.name.trim() || !caseNumber || !editPatient.department || !editPatient.attendingDoctorId || !editPatient.admissionDate) {
+      setEditError("Patient name, case number, department/location, attending physician, and date are required.");
       return;
     }
     if (editPatient.type === "inpatient" && !editPatient.dischargeDate) {
@@ -361,6 +377,7 @@ export default function Patients() {
       name: patientName,
       caseNumber,
       department: editPatient.department || "",
+      ...buildAttendingDoctorFields(findDoctorById(doctors, editPatient.attendingDoctorId)),
       recordType: hasPreviousRecord ? "old" : editPatient.recordType || "new",
       type: editPatient.type,
       admissionDate: editPatient.admissionDate || "",
@@ -450,6 +467,8 @@ export default function Patients() {
         searchable(p.name).includes(search) ||
         searchable(p.caseNumber).includes(search) ||
         searchable(p.department).includes(search) ||
+        searchable(p.attendingDoctorName).includes(search) ||
+        searchable(p.attendingDoctorClinic).includes(search) ||
         searchable(p.admissionDate).includes(search) ||
         searchable(p.dischargeDate).includes(search);
       const matchesType = typeFilter === "all" || p.type === typeFilter;
@@ -596,14 +615,15 @@ export default function Patients() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto pr-1">
-            <table className="w-full min-w-[760px] table-fixed border-separate border-spacing-y-1.5">
+            <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-y-1.5">
               <thead className="sticky top-0 z-10 bg-slate-50">
                 <tr className="text-left">
-                  <th className="w-[30%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Patient Details</th>
-                  <th className="w-[20%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Location / Dept.</th>
-                  <th className="w-[22%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Dates</th>
-                  <th className="w-[12%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</th>
-                  <th className="w-[16%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                  <th className="w-[24%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Patient Details</th>
+                  <th className="w-[15%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Location / Dept.</th>
+                  <th className="w-[18%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Attending Physician</th>
+                  <th className="w-[19%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Dates</th>
+                  <th className="w-[9%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</th>
+                  <th className="w-[15%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -625,6 +645,16 @@ export default function Patients() {
                       <div className="font-black text-slate-800 text-xs uppercase break-words">
                         {p.department || "Unassigned"}
                       </div>
+                    </td>
+                    <td className="px-3 py-2 border-y border-slate-200 bg-white group-hover:bg-slate-50">
+                      <div className="font-black text-slate-800 text-xs uppercase break-words">
+                        {p.attendingDoctorName || "Unassigned"}
+                      </div>
+                      {p.attendingDoctorClinic && (
+                        <div className="mt-1 text-[10px] font-bold uppercase text-slate-400">
+                          {p.attendingDoctorClinic}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2 border-y border-slate-200 bg-white group-hover:bg-slate-50">
                       <div className="text-[10px] font-black text-amber-700 uppercase">Admission: {p.admissionDate || "--"}</div>
@@ -657,7 +687,7 @@ export default function Patients() {
 
                 {filteredPatients.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
+                    <td colSpan="6" className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
                       <ClipboardList size={40} className="mx-auto text-slate-300 mb-3" />
                       <p className="font-black text-slate-700 uppercase">
                         {isLoading ? "Loading patients..." : "No patients found"}
@@ -683,6 +713,7 @@ export default function Patients() {
           onSubmit={handleSubmit}
           patientDepartmentLabel={patientDepartmentLabel}
           patientDepartmentOptions={patientDepartmentOptions}
+          doctors={doctors}
           patients={patients}
           setForm={setForm}
           setFormError={setFormError}
@@ -693,6 +724,7 @@ export default function Patients() {
       <PatientEditModal
         editDepartmentLabel={editDepartmentLabel}
         editDepartmentOptions={editDepartmentOptions}
+        doctors={doctors}
         isFirstAdmissionRecord={isFirstAdmissionRecord}
         normalizePatientName={normalizePatientName}
         onClose={() => setEditPatient(null)}

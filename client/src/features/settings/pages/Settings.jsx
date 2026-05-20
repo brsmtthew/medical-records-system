@@ -264,8 +264,8 @@ export default function Settings({ initialTab = "rules" }) {
         adminOnly: true,
       });
       clearStoredNotifications();
-      clearStoredBellNotifications();
-      writeStoredUnreadNotifications(0);
+      clearStoredBellNotifications(currentUser?.uid || "");
+      writeStoredUnreadNotifications(0, currentUser?.uid || "");
       window.dispatchEvent(new CustomEvent("mrs-notifications-cleared", {
         detail: { scope: "notification-log" },
       }));

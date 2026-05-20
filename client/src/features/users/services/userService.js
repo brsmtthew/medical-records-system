@@ -12,6 +12,7 @@ export {
   subscribeToAdmissionLocations,
   subscribeToDepartments,
   subscribeToOutpatientDepartments,
+  subscribeToDoctors,
   subscribeToUsers,
   updateAdmissionLocation,
   updateDepartment,

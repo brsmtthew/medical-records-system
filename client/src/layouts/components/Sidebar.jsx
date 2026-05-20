@@ -47,6 +47,7 @@ export default function Sidebar({
     {
       label: "Charts",
       items: [
+        { name: "Chart Requests", icon: ClipboardList, path: "/chart-requests" },
         { name: "Chart Circulation", icon: FileText, path: "/charts" },
         { name: "Chart Viewing", icon: FileSearch, path: "/chart-viewing" },
       ],
@@ -85,8 +86,7 @@ export default function Sidebar({
     {
       label: "Chart Requests",
       items: [
-        { name: "Request Chart", icon: FileText, path: "/dashboard" },
-        { name: "My Requests", icon: ClipboardList, path: "/dashboard" },
+        { name: "Chart Requests", icon: ClipboardList, path: "/chart-requests" },
       ],
     },
   ];
