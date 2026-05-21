@@ -2,6 +2,7 @@ export {
   addAuditLog,
   addChartRequest,
   addChartLog,
+  checkoutChart,
   clearAuditLogs,
   deleteAuditLog,
   deleteChartLog,
@@ -16,4 +17,5 @@ export {
   updateChartRequest,
   updateChartLog,
   updateChartLogIfExists,
+  returnChart,
 } from "@services/recordsService";

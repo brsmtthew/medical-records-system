@@ -12,6 +12,7 @@ import {
 import DashboardLayout from "../../../layouts/DashboardLayout";
 import FloatingToast from "@shared/components/FloatingToast";
 import PatientCaseCell from "@shared/components/PatientCaseCell";
+import ChartRequestConfirmModal from "../modals/ChartRequestConfirmModal";
 import { addChartRequest, subscribeToChartRequests, subscribeToCharts, updateChartRequest } from "@features/charts/services/chartService";
 import { useAuth } from "@features/auth/context/useAuth";
 import { isMedicalRecordsRole, roleLabel } from "@shared/constants/userRoles";
@@ -29,6 +30,7 @@ const statusMeta = {
   pending: { label: "Pending", badge: "mrs-status-warning", icon: Clock },
   preparing: { label: "Preparing", badge: "mrs-status-info", icon: FileText },
   ready: { label: "Ready", badge: "mrs-status-success", icon: CheckCircle2 },
+  received: { label: "Received", badge: "mrs-status-info", icon: ClipboardList },
   completed: { label: "Completed", badge: "mrs-status-success", icon: CheckCircle2 },
   canceled: { label: "Canceled", badge: "mrs-status-danger", icon: XCircle },
 };
@@ -60,6 +62,7 @@ export default function ChartRequests() {
   const [statusFilter, setStatusFilter] = useState("active");
   const [toast, setToast] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
 
   useEffect(() => {
     const unsubscribeRequests = subscribeToChartRequests(
@@ -109,7 +112,7 @@ export default function ChartRequests() {
     return [
       { label: "Active", value: scopedRequests.filter((request) => !["completed", "canceled"].includes(request.status)).length, icon: ClipboardList },
       { label: "Ready", value: scopedRequests.filter((request) => request.status === "ready").length, icon: CheckCircle2 },
-      { label: "Completed", value: scopedRequests.filter((request) => request.status === "completed").length, icon: Clock },
+      { label: "Received", value: scopedRequests.filter((request) => request.status === "received").length, icon: ClipboardList },
     ];
   }, [currentUser?.uid, isRecordsUser, requests]);
 
@@ -142,7 +145,7 @@ export default function ChartRequests() {
     setToast(null);
   };
 
-  const handleSubmit = async (event) => {
+  const prepareSubmit = (event) => {
     event.preventDefault();
     const caseNumber = normalizeCaseNumber(form.caseNumber);
     const patientName = sanitizeText(form.patientName, { maxLength: 160, uppercase: true });
@@ -152,17 +155,25 @@ export default function ChartRequests() {
       setToast({ type: "error", message: "Enter the case number, patient name, and request purpose." });
       return;
     }
-    if (!window.confirm(`Send chart request for ${caseNumber} to Medical Records?`)) {
-      return;
-    }
 
+    setConfirmAction({
+      type: "submit",
+      caseNumber,
+      patientName,
+      purpose,
+      priority: form.priority,
+    });
+  };
+
+  const confirmSubmit = async () => {
+    if (!confirmAction || confirmAction.type !== "submit") return;
     try {
       setIsSaving(true);
       await addChartRequest({
-        caseNumber,
-        patientName,
-        purpose,
-        priority: form.priority,
+        caseNumber: confirmAction.caseNumber,
+        patientName: confirmAction.patientName,
+        purpose: confirmAction.purpose,
+        priority: confirmAction.priority,
         requestedBy: userProfile?.fullName || currentUser?.displayName || currentUser?.email || "",
         requestedByEmail: userProfile?.email || currentUser?.email || "",
         requestedByDepartment: userProfile?.department || "",
@@ -172,12 +183,13 @@ export default function ChartRequests() {
       setToast({
         type: "success",
         title: "Chart Request Sent",
-        message: `${caseNumber} was sent to Medical Records.`,
+        message: `${confirmAction.caseNumber} was sent to Medical Records.`,
         action: "Chart Request Created",
         audit: true,
-        caseNumber,
-        patientName,
+        caseNumber: confirmAction.caseNumber,
+        patientName: confirmAction.patientName,
       });
+      setConfirmAction(null);
     } catch (error) {
       setToast({ type: "error", message: error.message || "Unable to send chart request." });
     } finally {
@@ -186,14 +198,24 @@ export default function ChartRequests() {
   };
 
   const setRequestStatus = async (request, status) => {
-    if (!window.confirm(`Mark ${request.caseNumber} as ${status}?`)) {
-      return;
-    }
+    setConfirmAction({
+      type: status === "canceled" ? "cancel" : "status",
+      request,
+      status,
+      caseNumber: request.caseNumber,
+      patientName: request.patientName,
+      purpose: request.purpose,
+    });
+  };
 
+  const confirmStatusUpdate = async () => {
+    if (!confirmAction || !["status", "cancel"].includes(confirmAction.type)) return;
+    const { request, status } = confirmAction;
     const now = new Date().toISOString();
     const timeKey = {
       preparing: "preparedAt",
       ready: "readyAt",
+      received: "receivedAt",
       completed: "completedAt",
       canceled: "canceledAt",
     }[status];
@@ -212,12 +234,13 @@ export default function ChartRequests() {
         caseNumber: request.caseNumber,
         patientName: request.patientName,
       });
+      setConfirmAction(null);
     } catch (error) {
       setToast({ type: "error", message: error.message || "Unable to update this request." });
     }
   };
 
-  const statusFilters = ["active", "all", "pending", "preparing", "ready", "completed", "canceled"];
+  const statusFilters = ["active", "all", "pending", "preparing", "ready", "received", "completed", "canceled"];
 
   return (
     <DashboardLayout>
@@ -253,7 +276,7 @@ export default function ChartRequests() {
 
         {!isRecordsUser && (
           <>
-            <form onSubmit={handleSubmit} className="mrs-panel mrs-filter-strip shrink-0 rounded-xl p-3">
+            <form onSubmit={prepareSubmit} className="mrs-panel mrs-filter-strip shrink-0 rounded-xl p-3">
               <div className="grid gap-2 lg:grid-cols-[11rem_minmax(0,1fr)_10rem_minmax(0,1.2fr)_auto]">
                 <input
                   value={form.caseNumber}
@@ -448,12 +471,12 @@ export default function ChartRequests() {
                                   Prepare
                                 </button>
                               )}
-                              {["pending", "preparing"].includes(request.status) && (
+                              {request.status === "preparing" && (
                                 <button type="button" onClick={() => setRequestStatus(request, "ready")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
                                   Ready
                                 </button>
                               )}
-                              {request.status === "ready" && (
+                              {request.status === "received" && (
                                 <button type="button" onClick={() => setRequestStatus(request, "completed")} className="mrs-blue-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
                                   Complete
                                 </button>
@@ -464,12 +487,22 @@ export default function ChartRequests() {
                                 </button>
                               )}
                             </>
-                          ) : request.status === "pending" ? (
-                            <button type="button" onClick={() => setRequestStatus(request, "canceled")} className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-black uppercase text-red-600">
-                              Cancel
-                            </button>
                           ) : (
-                            <span className="text-[10px] font-black uppercase text-slate-400">No action</span>
+                            <>
+                              {request.status === "ready" && (
+                                <button type="button" onClick={() => setRequestStatus(request, "received")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  Received
+                                </button>
+                              )}
+                              {request.status === "pending" && (
+                                <button type="button" onClick={() => setRequestStatus(request, "canceled")} className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-black uppercase text-red-600">
+                                  Cancel
+                                </button>
+                              )}
+                              {!["pending", "ready"].includes(request.status) && (
+                                <span className="text-[10px] font-black uppercase text-slate-400">No action</span>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -495,6 +528,14 @@ export default function ChartRequests() {
       </div>
 
       <FloatingToast toast={toast} onClose={() => setToast(null)} />
+      <ChartRequestConfirmModal
+        action={confirmAction}
+        isSaving={isSaving}
+        onCancel={() => {
+          if (!isSaving) setConfirmAction(null);
+        }}
+        onConfirm={confirmAction?.type === "submit" ? confirmSubmit : confirmStatusUpdate}
+      />
     </DashboardLayout>
   );
 }

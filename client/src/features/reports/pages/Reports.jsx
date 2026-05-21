@@ -5,6 +5,7 @@ import PatientCaseCell from "@shared/components/PatientCaseCell";
 import ReportDeleteModal from "../modals/ReportDeleteModal";
 import {
   CalendarDays,
+  CheckCircle2,
   FileText,
   RotateCcw,
   Search,
@@ -13,16 +14,19 @@ import {
 import {
   deleteChartLog,
   subscribeToChartLogs,
+  subscribeToChartRequests,
 } from "../../charts/services/chartService";
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { useAuth } from "@features/auth/context/useAuth";
+import { isMedicalRecordsRole } from "@shared/constants/userRoles";
 import { readSystemSettings } from "@shared/utils/systemSettings";
 import { recordTimeValue } from "@shared/utils/recordSorting";
 import { statusBadgeClass, statusTextClass } from "@features/tracking/utils/trackingConfigs";
 
 const rowsPerPage = 25;
+const recordsFilters = ["all", "borrowed", "returned", "canceled"];
+const requestFilters = ["all", "pending", "preparing", "ready", "received", "completed", "canceled"];
 
-// Chooses the timestamp that best represents the visible activity for each log row.
 function getLogActivityDate(log) {
   if (log.action === "canceled") {
     return log.canceledAt || log.updatedAt || log.timestamp || log.borrowedAt || "";
@@ -35,7 +39,17 @@ function getLogActivityDate(log) {
   return log.borrowedAt || log.timestamp || "";
 }
 
-// Formats report timestamps as app-standard dates for table display and exports.
+function getRequestActivityDate(request) {
+  return request.completedAt
+    || request.receivedAt
+    || request.readyAt
+    || request.preparedAt
+    || request.canceledAt
+    || request.updatedAt
+    || request.createdAt
+    || "";
+}
+
 function formatDateTime(value) {
   if (!value) return "N/A";
   const time = recordTimeValue(value);
@@ -43,18 +57,22 @@ function formatDateTime(value) {
   return formatDisplayDate(time);
 }
 
-// Converts a timestamp into yyyy-mm-dd for comparing date input filters.
 function toDateKey(value) {
   const time = recordTimeValue(value);
   if (!time) return "";
   return new Date(time).toISOString().slice(0, 10);
 }
 
+function normalizeStatus(value, fallback = "pending") {
+  return String(value || fallback).toLowerCase();
+}
+
 export default function Reports() {
-  const { isAdmin } = useAuth();
-  const canManageReports = isAdmin;
+  const { currentUser, isAdmin, userRole } = useAuth();
+  const isRecordsUser = isMedicalRecordsRole(userRole);
+  const canManageReports = isRecordsUser && isAdmin;
   const [systemSettings] = useState(readSystemSettings);
-  const [reportLogs, setReportLogs] = useState([]);
+  const [reportRows, setReportRows] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [actionFilter, setActionFilter] = useState(systemSettings.defaultReportFilter || "all");
@@ -69,36 +87,98 @@ export default function Reports() {
   const [isDeletingLog, setIsDeletingLog] = useState(false);
 
   useEffect(() => {
-    return subscribeToChartLogs(
-      (rows) => {
-        setReportLogs(rows);
-        setIsLoading(false);
-      },
-      (error) => {
-        setLoadError(error.message || "Unable to load reports from Firebase.");
-        setIsLoading(false);
-      },
-    );
-  }, []);
+    setIsLoading(true);
+    setLoadError("");
 
-  const filteredLogs = useMemo(() => {
-    return reportLogs.filter((log) => {
-      const logDate = toDateKey(getLogActivityDate(log));
-      const matchesAction = actionFilter === "all" || log.action === actionFilter;
-      const matchesSearch = `${log.patientName || ""} ${log.caseNumber || ""} ${log.borrowedBy || ""} ${log.returnedBy || ""} ${log.department || ""}`
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
-      const matchesStart = !startDate || logDate >= startDate;
-      const matchesEnd = !endDate || logDate <= endDate;
+    const handleRows = (rows) => {
+      setReportRows(isRecordsUser ? rows : rows.filter((row) => row.requestedById === currentUser?.uid));
+      setIsLoading(false);
+    };
+
+    const handleError = (error) => {
+      setLoadError(error.message || "Unable to load reports from Firebase.");
+      setIsLoading(false);
+    };
+
+    return isRecordsUser
+      ? subscribeToChartLogs(handleRows, handleError)
+      : subscribeToChartRequests(handleRows, handleError);
+  }, [currentUser?.uid, isRecordsUser]);
+
+  const filterOptions = isRecordsUser ? recordsFilters : requestFilters;
+  const actionLabel = isRecordsUser ? "Action" : "Status";
+  const searchPlaceholder = isRecordsUser
+    ? "Search patient, case number, borrower, returner, or department"
+    : "Search patient, case number, request purpose, clinic, department, or status";
+
+  useEffect(() => {
+    if (!filterOptions.includes(actionFilter)) {
+      setActionFilter("all");
+      setCurrentPage(1);
+    }
+  }, [actionFilter, filterOptions]);
+
+  const filteredRows = useMemo(() => {
+    return reportRows.filter((row) => {
+      const status = isRecordsUser ? row.action : normalizeStatus(row.status);
+      const activityDate = toDateKey(isRecordsUser ? getLogActivityDate(row) : getRequestActivityDate(row));
+      const matchesAction = actionFilter === "all" || status === actionFilter;
+      const searchBlob = isRecordsUser
+        ? `${row.patientName || ""} ${row.caseNumber || ""} ${row.borrowedBy || ""} ${row.returnedBy || ""} ${row.department || ""} ${row.remarks || ""}`
+        : `${row.patientName || ""} ${row.caseNumber || ""} ${row.purpose || ""} ${row.requestedBy || ""} ${row.requestedByClinic || ""} ${row.department || ""} ${row.status || ""} ${row.remarks || ""}`;
+      const matchesSearch = searchBlob.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStart = !startDate || activityDate >= startDate;
+      const matchesEnd = !endDate || activityDate <= endDate;
 
       return matchesAction && matchesSearch && matchesStart && matchesEnd;
     });
-  }, [actionFilter, reportLogs, searchTerm, startDate, endDate]);
+  }, [actionFilter, isRecordsUser, reportRows, searchTerm, startDate, endDate]);
 
-  const activeBorrowed = reportLogs.filter((log) => log.action === "borrowed");
-  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / rowsPerPage));
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
-  const paginatedLogs = filteredLogs.slice((safeCurrentPage - 1) * rowsPerPage, safeCurrentPage * rowsPerPage);
+  const paginatedRows = filteredRows.slice((safeCurrentPage - 1) * rowsPerPage, safeCurrentPage * rowsPerPage);
+
+  const stats = isRecordsUser
+    ? [
+        {
+          label: "Total Number of Report Records",
+          value: filteredRows.length,
+          icon: FileText,
+          tone: "green",
+        },
+        {
+          label: "Total Number of Borrowed Charts",
+          value: reportRows.filter((row) => row.action === "borrowed").length,
+          icon: CalendarDays,
+          tone: "blue",
+        },
+        {
+          label: "Total Number of Returned Charts",
+          value: reportRows.filter((row) => row.action === "returned").length,
+          icon: RotateCcw,
+          tone: "green",
+        },
+      ]
+    : [
+        {
+          label: "Total Chart Requests",
+          value: filteredRows.length,
+          icon: FileText,
+          tone: "green",
+        },
+        {
+          label: "Ready For Pickup",
+          value: reportRows.filter((row) => normalizeStatus(row.status) === "ready").length,
+          icon: CheckCircle2,
+          tone: "blue",
+        },
+        {
+          label: "Completed Transactions",
+          value: reportRows.filter((row) => normalizeStatus(row.status) === "completed").length,
+          icon: RotateCcw,
+          tone: "green",
+        },
+      ];
 
   const highlightSearch = (value) => {
     const text = String(value || "");
@@ -117,28 +197,6 @@ export default function Reports() {
     );
   };
 
-  const stats = [
-    {
-      label: "Total Number of Report Records",
-      value: filteredLogs.length,
-      icon: FileText,
-      tone: "green",
-    },
-    {
-      label: "Total Number of Borrowed Charts",
-      value: activeBorrowed.length,
-      icon: CalendarDays,
-      tone: "blue",
-    },
-    {
-      label: "Total Number of Returned Charts",
-      value: reportLogs.filter((log) => log.action === "returned").length,
-      icon: RotateCcw,
-      tone: "green",
-    },
-  ];
-
-  // Clears report filters while showing feedback when the table is already unfiltered.
   const resetFilters = () => {
     if (actionFilter === "all" && !searchTerm && !startDate && !endDate) {
       setInfoMessage("No report filters to reset.");
@@ -152,7 +210,6 @@ export default function Reports() {
     setInfoMessage("Report filters were reset.");
   };
 
-  // Deletes one audit row after the confirmation dialog is accepted.
   const handleDeleteLog = async () => {
     if (!deleteLog || isDeletingLog) return;
     try {
@@ -174,6 +231,129 @@ export default function Reports() {
     }
   };
 
+  const renderRecordsRows = () => paginatedRows.map((log) => (
+    <tr key={log.id} className="mrs-table-row">
+      <td className="p-3">
+        <PatientCaseCell
+          patientName={highlightSearch(log.patientName)}
+          caseNumber={highlightSearch(log.caseNumber)}
+        />
+      </td>
+      <td className="p-3">
+        <p className={`text-xs font-black uppercase ${statusTextClass("borrowed")}`}>
+          Borrowed: {highlightSearch(log.borrowedBy || "N/A")}
+        </p>
+        {log.action === "returned" && (
+          <p className={`text-xs font-black uppercase ${statusTextClass("returned")}`}>
+            Returned: {highlightSearch(log.returnedBy || log.borrowedBy || "N/A")}
+          </p>
+        )}
+        <p className="text-[10px] font-bold uppercase text-slate-400">
+          {highlightSearch(log.department)}
+        </p>
+      </td>
+      <td className="p-3">
+        <span
+          className={`mrs-status-badge ${statusBadgeClass(log.action === "borrowed" ? "borrowed" : log.action === "canceled" ? "canceled" : "returned")}`}
+        >
+          {log.action === "borrowed" ? "borrowed" : log.action === "canceled" ? "canceled" : "returned"}
+        </span>
+      </td>
+      <td className="p-3">
+        <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("borrowed")}`}>
+          Borrowed: {formatDateTime(log.borrowedAt || log.timestamp)}
+        </p>
+        {log.action === "returned" && (
+          <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("returned")}`}>
+            Returned: {formatDateTime(log.returnedAt)}
+          </p>
+        )}
+        {log.action === "canceled" && (
+          <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("canceled")}`}>
+            Canceled: {formatDateTime(log.canceledAt || log.updatedAt)}
+          </p>
+        )}
+      </td>
+      <td className="p-3 text-[11px] font-semibold leading-snug text-slate-500 break-words">
+        {highlightSearch(log.remarks)}
+      </td>
+      {canManageReports && (
+        <td className="p-3">
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setDeleteLog(log)}
+              className="p-2 rounded-xl border-2 border-transparent text-red-500 transition-colors hover:border-red-200 hover:bg-red-50"
+              aria-label={`Delete report row ${log.caseNumber}`}
+            >
+              <Trash2 size={17} />
+            </button>
+          </div>
+        </td>
+      )}
+    </tr>
+  ));
+
+  const renderRequestRows = () => paginatedRows.map((request) => {
+    const status = normalizeStatus(request.status);
+
+    return (
+      <tr key={request.id} className="mrs-table-row">
+        <td className="p-3">
+          <PatientCaseCell
+            patientName={highlightSearch(request.patientName)}
+            caseNumber={highlightSearch(request.caseNumber)}
+          />
+        </td>
+        <td className="p-3">
+          <p className="text-xs font-black uppercase text-slate-700">
+            {highlightSearch(request.purpose || "Chart request")}
+          </p>
+          <p className="text-[10px] font-bold uppercase text-slate-400">
+            {highlightSearch(request.requestedByClinic || request.department || "Clinic")}
+          </p>
+        </td>
+        <td className="p-3">
+          <span className={`mrs-status-badge ${statusBadgeClass(status)}`}>
+            {status}
+          </span>
+        </td>
+        <td className="p-3">
+          <p className="text-[10px] font-black uppercase leading-tight text-slate-500">
+            Requested: {formatDateTime(request.createdAt)}
+          </p>
+          {request.preparedAt && (
+            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("borrowed")}`}>
+              Prepared: {formatDateTime(request.preparedAt)}
+            </p>
+          )}
+          {request.readyAt && (
+            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("returned")}`}>
+              Ready: {formatDateTime(request.readyAt)}
+            </p>
+          )}
+          {request.receivedAt && (
+            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("reviewed")}`}>
+              Received: {formatDateTime(request.receivedAt)}
+            </p>
+          )}
+          {request.completedAt && (
+            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("returned")}`}>
+              Completed: {formatDateTime(request.completedAt)}
+            </p>
+          )}
+          {request.canceledAt && (
+            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("canceled")}`}>
+              Canceled: {formatDateTime(request.canceledAt)}
+            </p>
+          )}
+        </td>
+        <td className="p-3 text-[11px] font-semibold leading-snug text-slate-500 break-words">
+          {highlightSearch(request.remarks || request.preparationNote || "N/A")}
+        </td>
+      </tr>
+    );
+  });
+
   return (
     <DashboardLayout>
       <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
@@ -183,7 +363,9 @@ export default function Reports() {
               Chart <span className="text-green-700">Reports</span>
             </h1>
             <p className="text-xs font-medium text-slate-500">
-              Audit chart movement, borrowed records, and return history.
+              {isRecordsUser
+                ? "Audit chart movement, borrowed records, and return history."
+                : "Review your chart request transaction history and pickup status."}
             </p>
           </div>
           <div className="grid min-w-0 grid-cols-3 gap-1.5 xl:justify-self-end xl:w-[min(56rem,100%)]">
@@ -233,7 +415,7 @@ export default function Reports() {
                         setSearchTerm(event.target.value);
                         setCurrentPage(1);
                       }}
-                      placeholder="Search patient, case number, borrower, returner, or department"
+                      placeholder={searchPlaceholder}
                       className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
                     />
                   </div>
@@ -273,9 +455,9 @@ export default function Reports() {
 
               <div className="flex flex-wrap items-end gap-1.5">
                 <div>
-                  <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">Action</span>
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">{actionLabel}</span>
                   <div className="flex flex-wrap gap-1.5">
-                    {["all", "borrowed", "returned", "canceled"].map((filter) => (
+                    {filterOptions.map((filter) => (
                       <button
                         key={filter}
                         onClick={() => {
@@ -304,13 +486,13 @@ export default function Reports() {
                       Patient / Case
                     </th>
                     <th className="w-[22%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Borrow / Return
+                      {isRecordsUser ? "Borrow / Return" : "Purpose / Unit"}
                     </th>
                     <th className="w-[12%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Status
                     </th>
                     <th className="w-[24%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      Movement Dates
+                      {isRecordsUser ? "Movement Dates" : "Transaction Dates"}
                     </th>
                     <th className="w-[14%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Remarks
@@ -323,69 +505,9 @@ export default function Reports() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paginatedLogs.map((log) => (
-                    <tr key={log.id} className="mrs-table-row">
-                      <td className="p-3">
-                        <PatientCaseCell
-                          patientName={highlightSearch(log.patientName)}
-                          caseNumber={highlightSearch(log.caseNumber)}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <p className={`text-xs font-black uppercase ${statusTextClass("borrowed")}`}>
-                          Borrowed: {highlightSearch(log.borrowedBy || "N/A")}
-                        </p>
-                        {log.action === "returned" && (
-                          <p className={`text-xs font-black uppercase ${statusTextClass("returned")}`}>
-                            Returned: {highlightSearch(log.returnedBy || log.borrowedBy || "N/A")}
-                          </p>
-                        )}
-                        <p className="text-[10px] font-bold uppercase text-slate-400">
-                          {highlightSearch(log.department)}
-                        </p>
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={`mrs-status-badge ${statusBadgeClass(log.action === "borrowed" ? "borrowed" : log.action === "canceled" ? "canceled" : "returned")}`}
-                        >
-                          {log.action === "borrowed" ? "borrowed" : log.action === "canceled" ? "canceled" : "returned"}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("borrowed")}`}>
-                          Borrowed: {formatDateTime(log.borrowedAt || log.timestamp)}
-                        </p>
-                        {log.action === "returned" && (
-                          <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("returned")}`}>
-                            Returned: {formatDateTime(log.returnedAt)}
-                          </p>
-                        )}
-                        {log.action === "canceled" && (
-                          <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("canceled")}`}>
-                            Canceled: {formatDateTime(log.canceledAt || log.updatedAt)}
-                          </p>
-                        )}
-                      </td>
-                      <td className="p-3 text-[11px] font-semibold leading-snug text-slate-500 break-words">
-                        {highlightSearch(log.remarks)}
-                      </td>
-                      {canManageReports && (
-                        <td className="p-3">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => setDeleteLog(log)}
-                              className="p-2 rounded-xl border-2 border-transparent text-red-500 transition-colors hover:border-red-200 hover:bg-red-50"
-                              aria-label={`Delete report row ${log.caseNumber}`}
-                            >
-                              <Trash2 size={17} />
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
+                  {isRecordsUser ? renderRecordsRows() : renderRequestRows()}
 
-                  {filteredLogs.length === 0 && (
+                  {filteredRows.length === 0 && (
                     <tr>
                       <td colSpan={canManageReports ? 6 : 5} className="p-10 text-center">
                         <FileText size={38} className="mx-auto text-slate-300 mb-3" />
@@ -393,7 +515,11 @@ export default function Reports() {
                           {isLoading ? "Loading reports..." : "No records found"}
                         </p>
                         <p className="text-sm text-slate-400 font-semibold mt-1">
-                          {isLoading ? "Reading logs from Firebase." : "Borrow or return a chart to create report logs."}
+                          {isLoading
+                            ? "Reading logs from Firebase."
+                            : isRecordsUser
+                              ? "Borrow or return a chart to create report logs."
+                              : "Submit a chart request to create transaction reports."}
                         </p>
                       </td>
                     </tr>
@@ -403,7 +529,7 @@ export default function Reports() {
             </div>
             <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs font-bold text-slate-500">
-                Showing {paginatedLogs.length} of {filteredLogs.length} report rows
+                Showing {paginatedRows.length} of {filteredRows.length} report rows
               </p>
               <div className="flex items-center justify-end gap-2">
                 <button

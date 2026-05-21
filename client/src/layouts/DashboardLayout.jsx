@@ -6,14 +6,22 @@ import Navbar from "./components/Navbar";
 export default function DashboardLayout({ children }) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    return localStorage.getItem("mrs-sidebar-collapsed") === "true";
+    try {
+      return localStorage.getItem("mrs-sidebar-collapsed") === "true";
+    } catch {
+      return false;
+    }
   });
 
   // Persists the desktop sidebar width preference between page loads.
   const toggleSidebarCollapsed = () => {
     setIsSidebarCollapsed((value) => {
       const nextValue = !value;
-      localStorage.setItem("mrs-sidebar-collapsed", String(nextValue));
+      try {
+        localStorage.setItem("mrs-sidebar-collapsed", String(nextValue));
+      } catch {
+        // Workstation browser policy can block localStorage; keep the UI state in memory.
+      }
       return nextValue;
     });
   };

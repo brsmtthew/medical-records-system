@@ -21,10 +21,44 @@ function readImageAsDataUrl(file) {
   });
 }
 
+function loadImage(sourceUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = sourceUrl;
+  });
+}
+
+async function optimizeCoverImage(file) {
+  if (!document.createElement("canvas").getContext) {
+    return readImageAsDataUrl(file);
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(sourceUrl);
+    const maxDimension = 1400;
+    const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    canvas.width = width;
+    canvas.height = height;
+    context.drawImage(image, 0, 0, width, height);
+
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
 function statusBadgeClass(status) {
   if (status === "ready" || status === "completed") return "mrs-status-success";
   if (status === "canceled") return "mrs-status-danger";
-  if (status === "preparing") return "mrs-status-info";
+  if (status === "preparing" || status === "received") return "mrs-status-info";
   return "mrs-status-warning";
 }
 
@@ -50,6 +84,7 @@ export default function ClinicalDashboard() {
   const stats = useMemo(() => ([
     { label: "Active Requests", value: requests.filter((request) => !["completed", "canceled"].includes(request.status)).length, icon: ClipboardList },
     { label: "Ready For Pickup", value: requests.filter((request) => request.status === "ready").length, icon: CheckCircle2 },
+    { label: "Received", value: requests.filter((request) => request.status === "received").length, icon: Hospital },
     { label: "Completed Logs", value: requests.filter((request) => request.status === "completed").length, icon: Clock },
   ]), [requests]);
   const recentRequests = requests.slice(0, 6);
@@ -82,80 +117,90 @@ export default function ClinicalDashboard() {
       setToast({ type: "error", message: "Choose an image file for the dashboard." });
       return;
     }
-    if (file.size > 900 * 1024) {
-      setToast({ type: "error", message: "Use an image smaller than 900 KB." });
+    if (file.size > 3 * 1024 * 1024) {
+      setToast({ type: "error", message: "Use an image smaller than 3 MB." });
       return;
     }
 
-    await saveCoverImage(await readImageAsDataUrl(file));
-    event.target.value = "";
+    try {
+      const optimizedImage = await optimizeCoverImage(file);
+      if (optimizedImage.length > 900 * 1024) {
+        setToast({ type: "error", message: "Use a smaller dashboard image." });
+        return;
+      }
+
+      await saveCoverImage(optimizedImage);
+      event.target.value = "";
+    } catch (error) {
+      setToast({ type: "error", message: error.message || "Unable to process that image." });
+    }
   };
 
   return (
     <DashboardLayout>
-      <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
-        <div className="mrs-panel overflow-hidden rounded-2xl">
-          <div className="relative min-h-[14rem]">
+      <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-y-auto pr-1">
+        <div className="mrs-panel overflow-hidden rounded-xl">
+          <div className="relative min-h-[11rem]">
             <img src={coverImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-slate-950/55" />
-            <div className="relative flex min-h-[14rem] flex-col justify-between gap-6 p-5 text-white">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="absolute inset-0 bg-slate-950/70" />
+            <div className="relative grid min-h-[11rem] gap-4 p-4 text-white lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-stretch">
+              <div className="flex min-w-0 flex-col justify-between gap-4">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-green-200">Version 3 Clinical Workspace</p>
-                  <h1 className="mt-2 text-3xl font-black uppercase tracking-tight">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-green-200">Version 3 Clinical Workspace</p>
+                  <h1 className="mt-1 text-2xl font-black uppercase tracking-tight sm:text-3xl">
                     {roleLabel(userRole)} Portal
                   </h1>
-                  <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-slate-100">
+                  <p className="mt-2 max-w-3xl text-xs font-semibold leading-relaxed text-slate-100 sm:text-sm">
                     Request charts, track pickup readiness, and review your transaction history from one clinical workspace.
                   </p>
                 </div>
-                <div className="rounded-xl border border-white/25 bg-white/15 p-4 backdrop-blur">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-200">{assignmentLabel}</p>
-                  <p className="mt-1 text-lg font-black uppercase">{assignment}</p>
-                  {userProfile?.specialty && (
-                    <p className="mt-1 text-xs font-bold uppercase text-green-100">{userProfile.specialty}</p>
+                <div className="flex flex-wrap gap-2">
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[10px] font-black uppercase text-white backdrop-blur transition hover:bg-white/20">
+                    <Camera size={15} />
+                    Upload Image
+                    <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+                  </label>
+                  {userProfile?.clinicalCoverDataUrl && (
+                    <button
+                      type="button"
+                      onClick={() => saveCoverImage("")}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[10px] font-black uppercase text-white backdrop-blur transition hover:bg-white/20"
+                    >
+                      <ImageOff size={15} />
+                      Reset Image
+                    </button>
                   )}
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-xs font-black uppercase text-white backdrop-blur transition hover:bg-white/25">
-                  <Camera size={16} />
-                  Upload Image
-                  <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
-                </label>
-                {userProfile?.clinicalCoverDataUrl && (
-                  <button
-                    type="button"
-                    onClick={() => saveCoverImage("")}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/25 bg-white/10 px-3 py-2 text-xs font-black uppercase text-white backdrop-blur transition hover:bg-white/20"
-                  >
-                    <ImageOff size={16} />
-                    Reset Image
-                  </button>
+              <div className="flex min-w-0 flex-col justify-center rounded-xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-200">{assignmentLabel}</p>
+                <p className="mt-1 break-words text-lg font-black uppercase leading-tight">{assignment}</p>
+                {userProfile?.specialty && (
+                  <p className="mt-2 break-words text-xs font-bold uppercase text-green-100">{userProfile.specialty}</p>
                 )}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((item) => (
-            <div key={item.label} className="mrs-card rounded-xl p-4">
+            <div key={item.label} className="mrs-card rounded-xl p-3">
               <div className="flex items-center justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
-                  <p className="mt-2 text-2xl font-black text-slate-900">{item.value}</p>
+                  <p className="mt-1 text-2xl font-black leading-none text-slate-900">{item.value}</p>
                 </div>
-                <div className="flex size-11 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-green-700">
-                  <item.icon size={21} />
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-green-700">
+                  <item.icon size={19} />
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-2 md:grid-cols-3">
           {[
             {
               title: "Request Patient Chart",
@@ -173,17 +218,17 @@ export default function ClinicalDashboard() {
               icon: Clock,
             },
           ].map((item) => (
-            <div key={item.title} className="mrs-card rounded-xl p-4">
-              <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-green-50 text-green-700">
-                <item.icon size={20} />
+            <div key={item.title} className="mrs-card rounded-xl p-3">
+              <div className="mb-2 flex size-9 items-center justify-center rounded-xl bg-green-50 text-green-700">
+                <item.icon size={18} />
               </div>
-              <p className="text-sm font-black uppercase text-slate-900">{item.title}</p>
-              <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-600">{item.text}</p>
+              <p className="text-xs font-black uppercase text-slate-900">{item.title}</p>
+              <p className="mt-1 text-[11px] font-semibold leading-relaxed text-slate-600">{item.text}</p>
             </div>
           ))}
         </div>
 
-        <div className="mrs-panel rounded-xl">
+        <div className="mrs-panel min-h-[20rem] overflow-hidden rounded-xl">
           <div className="mrs-section-band flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
             <div>
               <p className="text-sm font-black uppercase text-slate-900">My Transaction Logs</p>
@@ -210,7 +255,7 @@ export default function ClinicalDashboard() {
                       <p className="text-xs font-black uppercase text-slate-900">{request.patientName || "No patient name"}</p>
                       <p className="mt-1 font-mono text-[10px] font-black uppercase text-green-700">{request.caseNumber}</p>
                     </td>
-                    <td className="p-3 text-xs font-bold text-slate-600">{request.purpose || "No purpose saved"}</td>
+                    <td className="p-3 text-xs font-bold leading-snug text-slate-600">{request.purpose || "No purpose saved"}</td>
                     <td className="p-3">
                       <span className={`mrs-status-badge ${statusBadgeClass(request.status)}`}>{request.status || "pending"}</span>
                     </td>
@@ -231,18 +276,18 @@ export default function ClinicalDashboard() {
           </div>
         </div>
 
-        <div className="mrs-panel rounded-xl p-4">
+        <div className="mrs-panel rounded-xl p-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-              <Stethoscope size={20} />
-            </div>
-            <div>
-              <p className="text-sm font-black uppercase text-slate-900">Chart Request Module</p>
-              <p className="text-xs font-semibold text-slate-600">
-                Chart Transactions will connect over-the-counter borrowing and online chart requests in one workflow.
-              </p>
-            </div>
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                <Stethoscope size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-black uppercase text-slate-900">Chart Request Module</p>
+                <p className="text-xs font-semibold text-slate-600">
+                  Open requests to submit new charts, mark pickup receipt, or review request history.
+                </p>
+              </div>
             </div>
             <Link
               to="/chart-requests"

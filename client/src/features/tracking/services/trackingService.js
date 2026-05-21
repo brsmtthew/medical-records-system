@@ -17,6 +17,11 @@ import { auth, db } from "@/firebaseClient";
 import { sortNewestFirst } from "@shared/utils/recordSorting";
 import { sanitizeRecordPayload } from "@shared/utils/security";
 import { getActiveUserProfile, recordsUnavailableMessage } from "@services/recordsService";
+import {
+  assertCanReleaseTrackingRow,
+  assertCanReviewTrackingRow,
+  assertEditableTrackingRow,
+} from "@shared/utils/workflowGuards";
 
 const allowedCollections = new Set([
   "medicalDocumentRequests",
@@ -48,8 +53,8 @@ async function requireActiveTrackingRole({ adminOnly = false } = {}) {
   }
   const role = profile.role === "admin" ? "admin" : "staff";
 
-  if (profile.accountStatus === "disabled") {
-    throw new Error("This account is disabled.");
+  if (profile.accountStatus !== "active") {
+    throw new Error("This account is not active.");
   }
   if (adminOnly && role !== "admin") {
     throw new Error("Administrator access is required for this action.");
@@ -207,8 +212,13 @@ export async function addTrackingRow(collectionName, payload) {
 export async function updateTrackingRow(collectionName, id, payload) {
   const database = requireTrackingDb(collectionName);
   await requireActiveTrackingRole();
+  const rowRef = doc(database, collectionName, id);
+  const rowSnapshot = await getDoc(rowRef);
+  const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
+  assertEditableTrackingRow(currentRow);
+
   const normalizedPayload = normalizeTrackingPayload(collectionName, payload);
-  await updateDoc(doc(database, collectionName, id), {
+  await updateDoc(rowRef, {
     ...sanitizeTrackingPayload(normalizedPayload),
     typeList: Array.isArray(normalizedPayload.typeList) ? normalizedPayload.typeList.slice(0, 3) : [],
     copyCount: Math.max(0, Number(normalizedPayload.copyCount) || 0),
@@ -268,6 +278,8 @@ export async function deleteTrackingRowType(collectionName, id, type) {
   const rowRef = doc(database, collectionName, id);
   const rowSnapshot = await getDoc(rowRef);
   const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
+  assertEditableTrackingRow(currentRow);
+
   const typeList = rowTypeList(currentRow);
   const nextTypeList = typeList.filter((item) => item !== type);
 
@@ -286,6 +298,10 @@ export async function deleteTrackingRowType(collectionName, id, type) {
 export async function markTrackingRowReviewed(collectionName, id, payload = {}) {
   const database = requireTrackingDb(collectionName);
   const { user, profile } = await requireActiveTrackingRole();
+  const rowSnapshot = await getDoc(doc(database, collectionName, id));
+  const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
+  assertCanReviewTrackingRow(currentRow);
+
   const reviewedAt = new Date().toISOString();
   const reviewPayload = sanitizeTrackingPayload(payload);
   const reviewedBy = reviewPayload.reviewedBy || profile.fullName || user.displayName || user.email || "Unknown User";
@@ -310,14 +326,10 @@ export async function releaseTrackingRow(collectionName, id, payload) {
   const database = requireTrackingDb(collectionName);
   const { user, profile } = await requireActiveTrackingRole();
   const rowRef = doc(database, collectionName, id);
-
-  if (collectionName === "labResultRequests" && payload.paymentStatus !== "paid") {
-    const rowSnapshot = await getDoc(rowRef);
-    const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
-    if (currentRow.paymentStatus !== "paid") {
-      throw new Error("Lab result must be marked paid before release.");
-    }
-  }
+  const rowSnapshot = await getDoc(rowRef);
+  const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
+  const candidateRow = { ...currentRow, ...payload };
+  assertCanReleaseTrackingRow(collectionName, candidateRow);
 
   const releasePayload = sanitizeTrackingPayload(payload);
   const releasedAt = new Date().toISOString();

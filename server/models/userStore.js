@@ -9,6 +9,10 @@ function normalizeEmail(email) {
 }
 
 export async function seedDefaultAdmin() {
+  if (process.env.NODE_ENV === "production" && (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)) {
+    throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are required to seed the production admin account.");
+  }
+
   const email = normalizeEmail(process.env.ADMIN_EMAIL || "admin@example.com");
   if (users.has(email)) return;
 

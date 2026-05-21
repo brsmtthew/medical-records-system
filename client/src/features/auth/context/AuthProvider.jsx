@@ -80,9 +80,9 @@ export function AuthProvider({ children }) {
             uid: user.uid,
             fullName: user.displayName || "",
             email: user.email || "",
-            role: "staff",
-            accountStatus: "active",
-            department: "Medical Records",
+            role: "",
+            accountStatus: "missing",
+            department: "",
           };
           setUserProfile(fallbackProfile);
           syncActiveUserProfile(fallbackProfile);

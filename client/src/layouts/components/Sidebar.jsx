@@ -89,6 +89,12 @@ export default function Sidebar({
         { name: "Chart Requests", icon: ClipboardList, path: "/chart-requests" },
       ],
     },
+    {
+      label: "Reports",
+      items: [
+        { name: "Chart Reports", icon: BarChart3, path: "/reports" },
+      ],
+    },
   ];
   const navSections = isMedicalRecordsUser ? recordsNavSections : clinicalNavSections;
 

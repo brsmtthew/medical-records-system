@@ -47,7 +47,7 @@ export default function Login() {
     email: "",
     password: "",
     confirmPassword: "",
-    remember: true,
+    remember: false,
   });
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -301,15 +301,22 @@ export default function Login() {
                     )}
 
                     <div className="flex items-center justify-between gap-3 px-1 text-sm">
-                      <label className="flex cursor-pointer items-center font-semibold text-slate-600">
-                        <input
-                          type="checkbox"
-                          checked={form.remember}
-                          onChange={(e) => updateForm("remember", e.target.checked)}
-                          className="mr-2 rounded border-black text-green-600 focus:ring-green-500"
-                        />
-                        Keep signed in
-                      </label>
+                      <div>
+                        <label className="flex cursor-pointer items-center font-semibold text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={form.remember}
+                            onChange={(e) => updateForm("remember", e.target.checked)}
+                            className="mr-2 rounded border-black text-green-600 focus:ring-green-500"
+                          />
+                          Keep signed in on this browser
+                        </label>
+                        {!form.remember && (
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                            Safer for testing separate users in separate tabs.
+                          </p>
+                        )}
+                      </div>
                       {!isCreateAccount && (
                         <button
                           type="button"

@@ -7,6 +7,7 @@ import {
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -16,6 +17,7 @@ import { auth, db } from "@/firebaseClient";
 import { sortNewestFirst } from "@shared/utils/recordSorting";
 import { sanitizeRecordPayload, sanitizeText } from "@shared/utils/security";
 import { allUserRoles, medicalRecordsRoles, normalizeUserRole, userRoles } from "@shared/constants/userRoles";
+import { assertChartRequestTransition } from "@shared/utils/workflowGuards";
 
 export const recordsUnavailableMessage = "Firebase database is not configured.";
 export const fallbackDepartments = [
@@ -84,11 +86,11 @@ async function requireActiveRole({ adminOnly = false, roles = medicalRecordsRole
     const profileSnapshot = await getDoc(doc(database, "users", user.uid));
     profile = profileSnapshot.exists() ? { uid: user.uid, ...profileSnapshot.data() } : {};
   }
-  const isActive = profile.accountStatus !== "disabled";
+  const isActive = profile.accountStatus === "active";
   const role = normalizeUserRole(profile.role);
 
   if (!isActive) {
-    throw new Error("This account is disabled.");
+    throw new Error("This account is not active.");
   }
   if (adminOnly && role !== userRoles.admin) {
     throw new Error("Administrator access is required for this action.");
@@ -905,6 +907,107 @@ export async function updateChart(caseNumber, updates) {
   });
 }
 
+// Atomically checks out a chart so two workstations cannot borrow the same folder.
+export async function checkoutChart(caseNumber, log, updates) {
+  const database = requireDb();
+  await requireActiveRole();
+  const safeCaseNumber = sanitizeText(caseNumber, { maxLength: 60, uppercase: true });
+  const chartRef = doc(database, "charts", safeCaseNumber);
+  const logRef = doc(collection(database, "chartLogs"));
+  const safeLog = sanitizeChartLogPayload(log);
+  const safeUpdates = sanitizeChartPayload(updates);
+
+  await runTransaction(database, async (transaction) => {
+    const chartSnapshot = await transaction.get(chartRef);
+    if (!chartSnapshot.exists()) {
+      throw new Error("No chart found for that case number.");
+    }
+
+    const chart = chartSnapshot.data();
+    if (chart.status === "borrowed") {
+      throw new Error("This chart is already borrowed.");
+    }
+
+    transaction.set(logRef, {
+      ...safeLog,
+      caseNumber: safeCaseNumber,
+      createdAt: serverTimestamp(),
+    });
+    transaction.update(chartRef, {
+      ...safeUpdates,
+      caseNumber: safeCaseNumber,
+      status: "borrowed",
+      activeLogId: logRef.id,
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  return logRef.id;
+}
+
+// Atomically checks in a chart and closes or recreates the matching borrow log.
+export async function returnChart(caseNumber, returnedLog, updates) {
+  const database = requireDb();
+  await requireActiveRole();
+  const safeCaseNumber = sanitizeText(caseNumber, { maxLength: 60, uppercase: true });
+  const chartRef = doc(database, "charts", safeCaseNumber);
+  const safeReturnedLog = sanitizeChartLogPayload(returnedLog);
+  const safeUpdates = sanitizeChartPayload(updates);
+
+  return runTransaction(database, async (transaction) => {
+    const chartSnapshot = await transaction.get(chartRef);
+    if (!chartSnapshot.exists()) {
+      throw new Error("No chart found for that case number.");
+    }
+
+    const chart = chartSnapshot.data();
+    if (chart.status !== "borrowed") {
+      throw new Error("This chart is already available.");
+    }
+
+    let recreatedReturnLog = false;
+    if (chart.activeLogId) {
+      const logRef = doc(database, "chartLogs", chart.activeLogId);
+      const logSnapshot = await transaction.get(logRef);
+
+      if (logSnapshot.exists()) {
+        transaction.update(logRef, {
+          ...safeReturnedLog,
+          caseNumber: safeCaseNumber,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const replacementLogRef = doc(collection(database, "chartLogs"));
+        transaction.set(replacementLogRef, {
+          ...safeReturnedLog,
+          caseNumber: safeCaseNumber,
+          remarks: safeReturnedLog.remarks || "Chart returned after borrowed report row was deleted",
+          createdAt: serverTimestamp(),
+        });
+        recreatedReturnLog = true;
+      }
+    } else {
+      const logRef = doc(collection(database, "chartLogs"));
+      transaction.set(logRef, {
+        ...safeReturnedLog,
+        caseNumber: safeCaseNumber,
+        createdAt: serverTimestamp(),
+      });
+      recreatedReturnLog = true;
+    }
+
+    transaction.update(chartRef, {
+      ...safeUpdates,
+      caseNumber: safeCaseNumber,
+      status: "available",
+      activeLogId: "",
+      updatedAt: serverTimestamp(),
+    });
+
+    return { recreatedReturnLog };
+  });
+}
+
 // Adds a new chart audit log and returns its id for active-borrow linking.
 export async function addChartLog(log) {
   const database = requireDb();
@@ -1021,7 +1124,8 @@ export async function addChartRequest(request) {
   return requestRef.id;
 }
 
-// Updates request preparation status from Medical Records or cancels a user's own pending request.
+// Updates chart request status while preserving the handoff sequence:
+// Records prepares the chart, the requester marks it received, then Records completes it.
 export async function updateChartRequest(id, updates) {
   const database = requireDb();
   const { user, profile, role } = await requireActiveRole({ roles: allUserRoles });
@@ -1035,14 +1139,23 @@ export async function updateChartRequest(id, updates) {
   const isRecordsUser = medicalRecordsRoles.includes(role);
   const safeUpdates = sanitizeChartRequestPayload(updates);
   const nextStatus = safeUpdates.status || currentRequest.status;
+  assertChartRequestTransition(currentRequest.status, nextStatus);
+
+  if (isRecordsUser && nextStatus === "received") {
+    throw new Error("The requesting clinician must confirm chart receipt.");
+  }
 
   if (!isRecordsUser) {
     const canCancelOwnRequest =
       currentRequest.requestedById === user.uid &&
       currentRequest.status === "pending" &&
       nextStatus === "canceled";
+    const canConfirmOwnReceipt =
+      currentRequest.requestedById === user.uid &&
+      currentRequest.status === "ready" &&
+      nextStatus === "received";
 
-    if (!canCancelOwnRequest) {
+    if (!canCancelOwnRequest && !canConfirmOwnReceipt) {
       throw new Error("Only Medical Records can update chart request status.");
     }
   }
@@ -1078,6 +1191,17 @@ export async function updateChartRequest(id, updates) {
       patientName: currentRequest.patientName || "",
       caseNumber: currentRequest.caseNumber || "",
       action: "Chart Request Canceled",
+      sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
+      targetRole: "medicalRecords",
+    });
+  } else if (!isRecordsUser && nextStatus === "received") {
+    await addUserNotification({
+      type: "success",
+      title: "Chart Received",
+      message: `${currentRequest.caseNumber} was received by the requester.`,
+      patientName: currentRequest.patientName || "",
+      caseNumber: currentRequest.caseNumber || "",
+      action: "Chart Request Received",
       sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
       targetRole: "medicalRecords",
     });

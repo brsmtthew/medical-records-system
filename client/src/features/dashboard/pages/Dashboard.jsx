@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../../layouts/DashboardLayout";
 import PatientCaseCell from "@shared/components/PatientCaseCell";
 import { motion as Motion } from "framer-motion";
@@ -314,52 +314,70 @@ export default function Dashboard() {
     };
   }, []);
 
-  const periodMovementEvents = buildChartMovementEvents(logs, selectedPeriod, selectedDate, selectedMonth, selectedYear);
-  const periodPatients = patients.filter((patient) => isPatientInPeriod(patient, selectedPeriod, selectedDate, selectedMonth, selectedYear));
-  const periodInpatientCount = periodPatients.filter((patient) => patient.type === "inpatient").length;
-  const periodOutpatientCount = periodPatients.filter((patient) => patient.type === "outpatient").length;
-  const newPatientCount = periodPatients.filter((patient) => (patient.recordType || "new") === "new").length;
-  const oldPatientCount = periodPatients.filter((patient) => (patient.recordType || "new") === "old").length;
-  const patientMix = [
-    { name: "Inpatient", value: periodInpatientCount, color: "bg-green-600", text: "text-green-700" },
-    { name: "Outpatient", value: periodOutpatientCount, color: "bg-blue-600", text: "text-blue-700" },
-    { name: "New", value: newPatientCount, color: "bg-emerald-500", text: "text-emerald-700" },
-    { name: "Old", value: oldPatientCount, color: "bg-amber-500", text: "text-amber-700" },
-  ];
-  const periodPatientTotal = periodPatients.length;
-  const maxPatientMix = Math.max(...patientMix.map((item) => item.value), 1);
-  const periodInpatients = periodPatients.filter((patient) => patient.type === "inpatient");
-  const periodOutpatients = periodPatients.filter((patient) => patient.type === "outpatient");
-  const inpatientServices = buildServiceAnalytics(periodInpatients);
-  const outpatientServices = buildServiceAnalytics(periodOutpatients);
-  const configuredDepartments = departments.length > 0
-    ? departments.map((department) => department.name)
-    : fallbackDepartments;
-  const logDepartments = periodMovementEvents.map((event) => event.department).filter(Boolean);
-  const chartDepartmentNames = [...new Set([...configuredDepartments, ...logDepartments])];
-  const chartMovementRows = chartDepartmentNames.map((department) => {
-    const departmentEvents = periodMovementEvents.filter((event) => event.department === department);
+  const periodMovementEvents = useMemo(
+    () => buildChartMovementEvents(logs, selectedPeriod, selectedDate, selectedMonth, selectedYear),
+    [logs, selectedDate, selectedMonth, selectedPeriod, selectedYear],
+  );
+  const periodPatients = useMemo(
+    () => patients.filter((patient) => isPatientInPeriod(patient, selectedPeriod, selectedDate, selectedMonth, selectedYear)),
+    [patients, selectedDate, selectedMonth, selectedPeriod, selectedYear],
+  );
+  const patientAnalytics = useMemo(() => {
+    const periodInpatients = periodPatients.filter((patient) => patient.type === "inpatient");
+    const periodOutpatients = periodPatients.filter((patient) => patient.type === "outpatient");
+    const periodInpatientCount = periodInpatients.length;
+    const periodOutpatientCount = periodOutpatients.length;
+    const newPatientCount = periodPatients.filter((patient) => (patient.recordType || "new") === "new").length;
+    const oldPatientCount = periodPatients.filter((patient) => (patient.recordType || "new") === "old").length;
+    const patientMix = [
+      { name: "Inpatient", value: periodInpatientCount, color: "bg-green-600", text: "text-green-700" },
+      { name: "Outpatient", value: periodOutpatientCount, color: "bg-blue-600", text: "text-blue-700" },
+      { name: "New", value: newPatientCount, color: "bg-emerald-500", text: "text-emerald-700" },
+      { name: "Old", value: oldPatientCount, color: "bg-amber-500", text: "text-amber-700" },
+    ];
+
     return {
-      name: department,
-      borrowed: departmentEvents.filter((event) => event.type === "borrowed").length,
-      returned: departmentEvents.filter((event) => event.type === "returned").length,
+      inpatientServices: buildServiceAnalytics(periodInpatients),
+      maxPatientMix: Math.max(...patientMix.map((item) => item.value), 1),
+      outpatientServices: buildServiceAnalytics(periodOutpatients),
+      patientMix,
+      periodPatientTotal: periodPatients.length,
     };
-  });
-  const chartMovementData = chartMovementRows.some((row) => row.borrowed > 0 || row.returned > 0)
-    ? chartMovementRows
-    : [{ name: "No Logs", borrowed: 0, returned: 0 }];
-  const recentActivity = [...periodMovementEvents]
-    .sort((first, second) => second.date.getTime() - first.date.getTime())
-    .map((event) => ({
-    action: event.type === "borrowed" ? "Borrowed" : "Returned",
-    patientName: event.patientName,
-    chart: event.log.caseNumber,
-    person: event.type === "returned"
-      ? event.log.returnedBy || event.log.borrowedBy || "N/A"
-      : event.log.borrowedBy || "N/A",
-    time: event.date ? formatDisplayDate(event.date) : "",
-    tone: event.type === "borrowed" ? "blue" : "green",
-  }));
+  }, [periodPatients]);
+  const { inpatientServices, maxPatientMix, outpatientServices, patientMix, periodPatientTotal } = patientAnalytics;
+  const chartMovementData = useMemo(() => {
+    const configuredDepartments = departments.length > 0
+      ? departments.map((department) => department.name)
+      : fallbackDepartments;
+    const logDepartments = periodMovementEvents.map((event) => event.department).filter(Boolean);
+    const chartDepartmentNames = [...new Set([...configuredDepartments, ...logDepartments])];
+    const chartMovementRows = chartDepartmentNames.map((department) => {
+      const departmentEvents = periodMovementEvents.filter((event) => event.department === department);
+      return {
+        name: department,
+        borrowed: departmentEvents.filter((event) => event.type === "borrowed").length,
+        returned: departmentEvents.filter((event) => event.type === "returned").length,
+      };
+    });
+
+    return chartMovementRows.some((row) => row.borrowed > 0 || row.returned > 0)
+      ? chartMovementRows
+      : [{ name: "No Logs", borrowed: 0, returned: 0 }];
+  }, [departments, periodMovementEvents]);
+  const recentActivity = useMemo(() => (
+    [...periodMovementEvents]
+      .sort((first, second) => second.date.getTime() - first.date.getTime())
+      .map((event) => ({
+        action: event.type === "borrowed" ? "Borrowed" : "Returned",
+        patientName: event.patientName,
+        chart: event.log.caseNumber,
+        person: event.type === "returned"
+          ? event.log.returnedBy || event.log.borrowedBy || "N/A"
+          : event.log.borrowedBy || "N/A",
+        time: event.date ? formatDisplayDate(event.date) : "",
+        tone: event.type === "borrowed" ? "blue" : "green",
+      }))
+  ), [periodMovementEvents]);
   const periodLabel = selectedPeriod === "today"
     ? formatDateInputLabel(selectedDate)
     : selectedPeriod === "monthly"

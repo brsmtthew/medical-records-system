@@ -16,12 +16,11 @@ import {
   Table2,
 } from "lucide-react";
 import {
-  addChartLog,
+  checkoutChart,
   fallbackDepartments,
+  returnChart,
   subscribeToCharts,
   subscribeToDepartments,
-  updateChart,
-  updateChartLogIfExists,
 } from "@features/charts/services/chartService";
 import { buildReturnedChartLog, buildReturnedChartUpdate } from "@features/charts/utils/chartTransactions";
 
@@ -245,7 +244,9 @@ export default function Charts() {
         searchable(chart.patientName).includes(query) ||
         searchable(chart.caseNumber).includes(query) ||
         searchable(chart.borrower).includes(query) ||
-        searchable(chart.department).includes(query);
+        searchable(chart.department).includes(query) ||
+        searchable(chart.attendingDoctorName).includes(query) ||
+        searchable(chart.attendingDoctorClinic).includes(query);
 
       return matchesStatus && matchesSearch;
     });
@@ -300,14 +301,12 @@ export default function Charts() {
 
     try {
       setIsSavingTransaction(true);
-      const activeLogId = await addChartLog(log);
-      await updateChart(caseNumber, {
+      await checkoutChart(caseNumber, log, {
         status: "borrowed",
         borrower: confirmTransaction.borrower,
         department: confirmTransaction.department,
         borrowedAt: now.toISOString(),
         dueDate: "",
-        activeLogId,
         history: [
           {
             action: "checkout",
@@ -379,20 +378,7 @@ export default function Charts() {
 
     try {
       setIsSavingTransaction(true);
-      if (chart.activeLogId) {
-        const updatedActiveLog = await updateChartLogIfExists(chart.activeLogId, returnedLog);
-
-        if (!updatedActiveLog) {
-          await addChartLog({
-            ...returnedLog,
-            remarks: "Chart returned after borrowed report row was deleted",
-          });
-        }
-      } else {
-        await addChartLog(returnedLog);
-      }
-
-      await updateChart(caseNumber, buildReturnedChartUpdate({
+      await returnChart(caseNumber, returnedLog, buildReturnedChartUpdate({
         chart,
         returner: confirmTransaction.returner,
         returnedAt,
@@ -618,7 +604,7 @@ export default function Charts() {
             </div>
             <input
               type="text"
-              placeholder="Search patient, case, borrower, department"
+              placeholder="Search patient, case, borrower, department, or physician"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={fieldClass.replace("px-3", "pl-9 pr-3").replace("py-3", "py-2")}
@@ -629,13 +615,14 @@ export default function Charts() {
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="mrs-panel mt-2 min-h-0 flex-1 overflow-hidden rounded-xl">
             <div className="h-full overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[780px] table-fixed text-left">
+            <table className="w-full min-w-[960px] table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="mrs-section-band border-b border-slate-200">
-                  <th className="w-[30%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
-                  <th className="w-[27%] p-3 text-[10px] font-black uppercase text-slate-400">Holder / Dept.</th>
-                  <th className="w-[28%] p-3 text-[10px] font-black uppercase text-slate-400">Chart Status</th>
-                  <th className="w-[15%] p-3 text-right text-[10px] font-black uppercase text-slate-400">History</th>
+                  <th className="w-[27%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
+                  <th className="w-[22%] p-3 text-[10px] font-black uppercase text-slate-400">Attending Physician</th>
+                  <th className="w-[21%] p-3 text-[10px] font-black uppercase text-slate-400">Holder / Dept.</th>
+                  <th className="w-[18%] p-3 text-[10px] font-black uppercase text-slate-400">Chart Status</th>
+                  <th className="w-[12%] p-3 text-right text-[10px] font-black uppercase text-slate-400">History</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -678,6 +665,10 @@ export default function Charts() {
                           </div>
                         </td>
                         <td className="p-3">
+                          <div className="break-words text-xs font-black uppercase text-slate-700">{chart.attendingDoctorName || "Unassigned"}</div>
+                          <div className="mt-1 break-words text-[10px] font-bold uppercase text-slate-400">{chart.attendingDoctorClinic || "No clinic"}</div>
+                        </td>
+                        <td className="p-3">
                           <div className="text-xs font-black uppercase text-slate-700">{chart.borrower || "Records Room"}</div>
                           <div className="text-[10px] font-bold uppercase text-slate-400">{chart.department || "Available"}</div>
                         </td>
@@ -715,7 +706,7 @@ export default function Charts() {
 
                 {filteredCharts.length === 0 && (
                   <tr>
-                    <td colSpan="4" className="p-10 text-center">
+                    <td colSpan="5" className="p-10 text-center">
                       <Archive size={40} className="mx-auto text-slate-300 mb-3" />
                       <p className="font-black text-slate-700 uppercase">
                         {isLoading ? "Loading charts..." : "No charts found"}

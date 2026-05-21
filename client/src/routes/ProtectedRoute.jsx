@@ -12,7 +12,11 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
   const lastActivityRef = useRef(0);
   const [sessionWarning, setSessionWarning] = useState(false);
   const [privacyAcknowledged, setPrivacyAcknowledged] = useState(() => {
-    return localStorage.getItem("mrs-confidentiality-ack") === "true";
+    try {
+      return localStorage.getItem("mrs-confidentiality-ack") === "true";
+    } catch {
+      return false;
+    }
   });
   const { authLoading, isAuthenticated, isAccountDisabled, isAdmin, userRole } = useAuth();
 
@@ -136,7 +140,11 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
             <button
               type="button"
               onClick={() => {
-                localStorage.setItem("mrs-confidentiality-ack", "true");
+                try {
+                  localStorage.setItem("mrs-confidentiality-ack", "true");
+                } catch {
+                  // Browser storage policy may block persistence; acknowledge for this session.
+                }
                 setPrivacyAcknowledged(true);
               }}
               className="mrs-primary-button mt-5 w-full rounded-xl px-4 py-3 text-xs font-black uppercase"
