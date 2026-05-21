@@ -225,8 +225,8 @@ function renderMultilineValue(value, tone) {
           <p key={`${line}-${index}`} className="whitespace-normal break-words text-slate-700">
             {hasLabel ? (
               <>
-                <span className={`mrs-value-label ${colorClass}`}>{label.trim()}</span>
-                <span className="mrs-value-main">{stackDateTimeText(rest.join(":").trim() || "N/A")}</span>
+                <span className={`font-black ${colorClass}`}>{label.trim()}:</span>{" "}
+                <span className="font-black text-slate-900">{stackDateTimeText(rest.join(":").trim() || "N/A")}</span>
               </>
             ) : (
               <span className={colorClass}>{line}</span>
@@ -257,12 +257,12 @@ function renderCellValue(column, row) {
     return (
       <div className="mrs-value-stack space-y-1 text-[10px] font-black uppercase leading-tight">
         <p className="break-words">
-          <span className={`mrs-value-label ${toneClass}`}>{column.dateRange.firstLabel}</span>
-          <span className="mrs-value-main">{stackDateTimeText(firstValue)}</span>
+          <span className={toneClass}>{column.dateRange.firstLabel}:</span>{" "}
+          <span className="text-slate-900">{stackDateTimeText(firstValue)}</span>
         </p>
         <p className="break-words">
-          <span className={`mrs-value-label ${toneClass}`}>{column.dateRange.secondLabel}</span>
-          <span className="mrs-value-main">{stackDateTimeText(secondValue)}</span>
+          <span className={toneClass}>{column.dateRange.secondLabel}:</span>{" "}
+          <span className="text-slate-900">{stackDateTimeText(secondValue)}</span>
         </p>
       </div>
     );

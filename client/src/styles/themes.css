@@ -385,12 +385,16 @@
     color: rgb(196 181 253);
   }
 
+  html.dark .text-red-900,
+  html.dark .text-red-800,
   html.dark .text-red-700,
   html.dark .text-red-600,
   html.dark .text-red-500 {
     color: rgb(252 165 165);
   }
 
+  html.dark .text-amber-900,
+  html.dark .text-amber-800,
   html.dark .text-amber-700,
   html.dark .text-amber-600,
   html.dark .text-amber-500 {

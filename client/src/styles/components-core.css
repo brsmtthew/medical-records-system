@@ -293,6 +293,20 @@
     z-index: 1;
   }
 
+  .mrs-sidebar-nav {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.34) transparent;
+  }
+
+  .mrs-sidebar-nav::-webkit-scrollbar {
+    width: 0.28rem;
+  }
+
+  .mrs-sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.34);
+    border-radius: 999px;
+  }
+
   .mrs-sidebar-icon-frame {
     background: rgba(255, 255, 255, 0.09) !important;
     border: 1px solid rgba(203, 213, 225, 0.18);

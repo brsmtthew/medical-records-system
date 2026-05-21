@@ -98,6 +98,53 @@ export default function Sidebar({
   ];
   const navSections = isMedicalRecordsUser ? recordsNavSections : clinicalNavSections;
 
+  const renderNavItem = (item, options = {}) => {
+    const isActive = location.pathname === item.path;
+    const Icon = item.icon;
+    const collapsed = options.collapsed ?? isCollapsed;
+
+    return (
+      <Motion.button
+        type="button"
+        key={item.name}
+        onClick={() => {
+          navigate(item.path);
+          onNavigate?.();
+        }}
+        whileHover={{ x: 4 }}
+        whileTap={{ scale: 0.98 }}
+        title={collapsed ? item.name : undefined}
+        className={`
+          mrs-sidebar-link group flex w-full cursor-pointer items-center rounded-xl border text-left transition-all duration-300 ease-out
+          ${collapsed ? "justify-center px-0 py-1 2xl:py-1.5" : "gap-2.5 px-2.5 py-1.5 2xl:gap-3 2xl:px-3 2xl:py-2"}
+          ${isActive ? "mrs-sidebar-link-active" : ""}
+        `}
+      >
+        <span className={`mrs-sidebar-icon-frame flex shrink-0 items-center justify-center rounded-lg transition-all ${
+          collapsed ? "size-8 2xl:size-9" : "size-7 2xl:size-8"
+        }`}>
+          <Icon
+            size={collapsed ? 18 : 17}
+            strokeWidth={2.2}
+          />
+        </span>
+
+        {!collapsed && (
+          <span className="min-w-0 flex-1 whitespace-nowrap text-xs font-bold tracking-wide 2xl:text-sm">
+            {item.name}
+          </span>
+        )}
+
+        {isActive && !collapsed && (
+          <Motion.div
+            layoutId="activeIndicator"
+            className="ml-auto h-1.5 w-1.5 rounded-full bg-green-600"
+          />
+        )}
+      </Motion.button>
+    );
+  };
+
   return (
     <div
       className={`mrs-sidebar relative flex h-full min-h-0 select-none flex-col overflow-hidden border-r text-slate-100 shadow-xl transition-all duration-300 ease-out ${
@@ -146,7 +193,7 @@ export default function Sidebar({
         )}
       </div>
 
-      <nav className="min-h-0 flex-1 space-y-1.5 overflow-hidden pr-0.5 2xl:space-y-2">
+      <nav className={`mrs-sidebar-nav min-h-0 flex-1 overflow-y-auto pr-0.5 ${isCollapsed ? "space-y-1" : "space-y-1.5 2xl:space-y-2"}`}>
         {navSections.map((section) => (
           section.items.length > 0 && (
             <div key={section.label} className="space-y-1">
@@ -157,50 +204,7 @@ export default function Sidebar({
                   </p>
                 </div>
               )}
-              {section.items.map((item) => {
-                const isActive = location.pathname === item.path;
-
-                return (
-                  <Motion.button
-                    type="button"
-                    key={item.name}
-                    onClick={() => {
-                      navigate(item.path);
-                      onNavigate?.();
-                    }}
-                    whileHover={{ x: 4 }}
-                    whileTap={{ scale: 0.98 }}
-                    title={isCollapsed ? item.name : undefined}
-                    className={`
-                      mrs-sidebar-link group flex w-full cursor-pointer items-center rounded-xl border text-left transition-all duration-300 ease-out
-                      ${isCollapsed ? "justify-center px-0 py-2 2xl:py-2.5" : "gap-2.5 px-2.5 py-1.5 2xl:gap-3 2xl:px-3 2xl:py-2"}
-                      ${isActive ? "mrs-sidebar-link-active" : ""}
-                    `}
-                  >
-                    <span className={`mrs-sidebar-icon-frame flex shrink-0 items-center justify-center rounded-lg transition-all ${
-                      isCollapsed ? "size-9 2xl:size-10" : "size-7 2xl:size-8"
-                    }`}>
-                      <item.icon
-                        size={isCollapsed ? 19 : 17}
-                        strokeWidth={2.2}
-                      />
-                    </span>
-
-                    {!isCollapsed && (
-                      <span className="min-w-0 flex-1 whitespace-nowrap text-xs font-bold tracking-wide 2xl:text-sm">
-                        {item.name}
-                      </span>
-                    )}
-
-                    {isActive && !isCollapsed && (
-                      <Motion.div
-                        layoutId="activeIndicator"
-                        className="ml-auto h-1.5 w-1.5 rounded-full bg-green-600"
-                      />
-                    )}
-                  </Motion.button>
-                );
-              })}
+              {section.items.map((item) => renderNavItem(item))}
             </div>
           )
         ))}

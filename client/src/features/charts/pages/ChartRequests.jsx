@@ -126,6 +126,8 @@ export default function ChartRequests() {
         chart.caseNumber,
         chart.patientName,
         chart.patientDepartment,
+        chart.attendingDoctorName,
+        chart.attendingDoctorClinic,
         chart.patientType,
       ].some((value) => searchable(value).includes(query));
     });
@@ -329,17 +331,18 @@ export default function ChartRequests() {
                   <input
                     value={chartSearchTerm}
                     onChange={(event) => setChartSearchTerm(event.target.value)}
-                    placeholder="Search available charts by case, patient, or department"
+                    placeholder="Search available charts by case, patient, department, or physician"
                     className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
                   />
                 </div>
                 <div className="max-h-52 overflow-x-auto overflow-y-auto rounded-lg border border-slate-200">
-                  <table className="w-full min-w-[680px] table-fixed text-left">
+                  <table className="w-full min-w-[820px] table-fixed text-left">
                     <thead className="sticky top-0 z-10">
                       <tr className="mrs-section-band border-b border-slate-200">
-                        <th className="w-[45%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
-                        <th className="w-[25%] p-3 text-[10px] font-black uppercase text-slate-400">Department</th>
-                        <th className="w-[15%] p-3 text-[10px] font-black uppercase text-slate-400">Type</th>
+                        <th className="w-[32%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
+                        <th className="w-[19%] p-3 text-[10px] font-black uppercase text-slate-400">Department</th>
+                        <th className="w-[24%] p-3 text-[10px] font-black uppercase text-slate-400">Attending Physician</th>
+                        <th className="w-[10%] p-3 text-[10px] font-black uppercase text-slate-400">Type</th>
                         <th className="w-[15%] p-3 text-right text-[10px] font-black uppercase text-slate-400">Action</th>
                       </tr>
                     </thead>
@@ -354,6 +357,16 @@ export default function ChartRequests() {
                             <PatientCaseCell patientName={chart.patientName} caseNumber={chart.caseNumber} />
                           </td>
                           <td className="p-3 text-xs font-black uppercase text-slate-700">{chart.patientDepartment || "No department"}</td>
+                          <td className="p-3">
+                            <p className="break-words text-xs font-black uppercase text-slate-700">
+                              {chart.attendingDoctorName || "Unassigned"}
+                            </p>
+                            {chart.attendingDoctorClinic && (
+                              <p className="mt-1 break-words text-[10px] font-bold uppercase text-slate-400">
+                                {chart.attendingDoctorClinic}
+                              </p>
+                            )}
+                          </td>
                           <td className="p-3">
                             <span className="mrs-status-badge mrs-status-neutral">{chart.patientType || "record"}</span>
                           </td>
@@ -373,7 +386,7 @@ export default function ChartRequests() {
                       ))}
                       {availableCharts.length === 0 && (
                         <tr>
-                          <td colSpan="4" className="p-6 text-center">
+                          <td colSpan="5" className="p-6 text-center">
                             <p className="font-black uppercase text-slate-700">No available charts found</p>
                             <p className="mt-1 text-xs font-semibold text-slate-400">Try another search or ask Medical Records to verify chart status.</p>
                           </td>
