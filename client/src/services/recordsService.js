@@ -171,6 +171,7 @@ function sanitizeChartPayload(chart) {
     dischargeDate: { maxLength: 20 },
     status: { maxLength: 30 },
     borrower: { maxLength: 160 },
+    borrowerId: { maxLength: 120 },
     department: { maxLength: 120, uppercase: true },
     borrowedAt: { maxLength: 40 },
     dueDate: { maxLength: 40 },
@@ -184,6 +185,7 @@ function sanitizeChartLogPayload(log) {
     caseNumber: { maxLength: 60, uppercase: true },
     patientName: { maxLength: 160, uppercase: true },
     borrowedBy: { maxLength: 160 },
+    requestedById: { maxLength: 120 },
     returnedBy: { maxLength: 160 },
     department: { maxLength: 120, uppercase: true },
     action: { maxLength: 30 },
@@ -261,8 +263,12 @@ function sanitizeChartRequestPayload(request) {
     preparedBy: { maxLength: 160 },
     preparedAt: { maxLength: 40 },
     readyAt: { maxLength: 40 },
+    receivedAt: { maxLength: 40 },
+    borrowedAt: { maxLength: 40 },
+    returnedAt: { maxLength: 40 },
     completedAt: { maxLength: 40 },
     canceledAt: { maxLength: 40 },
+    activeLogId: { maxLength: 120 },
     remarks: { maxLength: 500 },
   });
 }
@@ -1090,34 +1096,95 @@ function requesterDisplayName(name, role) {
   return safeName;
 }
 
-// Adds a clinical online chart request for Medical Records preparation.
+// Adds a clinical chart request and checks out the physical chart to that unit.
 export async function addChartRequest(request) {
   const database = requireDb();
   const { user, profile, role } = await requireActiveRole({ roles: allUserRoles });
   const safeRequest = sanitizeChartRequestPayload(request);
+  const safeCaseNumber = sanitizeText(safeRequest.caseNumber, { maxLength: 60, uppercase: true });
   const requestedBy = requesterDisplayName(
     safeRequest.requestedBy || profile.fullName || profile.displayName || user.displayName || user.email || "",
     role,
   );
-  const requestRef = await addDoc(collection(database, "chartRequests"), {
-    ...safeRequest,
-    requestedById: user.uid,
-    requestedBy,
-    requestedByEmail: safeRequest.requestedByEmail || profile.email || user.email || "",
-    requestedByRole: role,
-    requestedByDepartment: safeRequest.requestedByDepartment || profile.department || "",
-    requestedByClinic: safeRequest.requestedByClinic || profile.clinic || "",
-    status: "pending",
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  const borrowerDepartment = safeRequest.requestedByClinic || safeRequest.requestedByDepartment || profile.clinic || profile.department || "Clinic / Nurse Station";
+  const requestedAt = new Date().toISOString();
+  const requestRef = doc(collection(database, "chartRequests"));
+  const chartRef = doc(database, "charts", safeCaseNumber);
+  const logRef = doc(collection(database, "chartLogs"));
+
+  await runTransaction(database, async (transaction) => {
+    const chartSnapshot = await transaction.get(chartRef);
+    if (!chartSnapshot.exists()) {
+      throw new Error("No chart found for that case number.");
+    }
+
+    const chart = chartSnapshot.data();
+    if (chart.status === "borrowed") {
+      throw new Error("This chart is already borrowed.");
+    }
+
+    transaction.set(logRef, {
+      action: "borrowed",
+      patientName: safeRequest.patientName || chart.patientName || "",
+      caseNumber: safeCaseNumber,
+      borrowedBy: requestedBy,
+      requestedById: user.uid,
+      returnedBy: "",
+      department: borrowerDepartment,
+      timestamp: requestedAt,
+      borrowedAt: requestedAt,
+      returnedAt: "",
+      dueDate: "",
+      remarks: safeRequest.purpose || "Chart requested and borrowed",
+      createdAt: serverTimestamp(),
+    });
+
+    transaction.update(chartRef, {
+      caseNumber: safeCaseNumber,
+      status: "borrowed",
+      borrower: requestedBy,
+      borrowerId: user.uid,
+      department: borrowerDepartment,
+      borrowedAt: requestedAt,
+      dueDate: "",
+      activeLogId: logRef.id,
+      history: [
+        {
+          action: "checkout",
+          borrower: requestedBy,
+          returnedBy: "",
+          department: borrowerDepartment,
+          date: requestedAt,
+        },
+        ...(chart.history || []),
+      ],
+      updatedAt: serverTimestamp(),
+    });
+
+    transaction.set(requestRef, {
+      ...safeRequest,
+      caseNumber: safeCaseNumber,
+      requestedById: user.uid,
+      requestedBy,
+      requestedByEmail: safeRequest.requestedByEmail || profile.email || user.email || "",
+      requestedByRole: role,
+      requestedByDepartment: safeRequest.requestedByDepartment || profile.department || "",
+      requestedByClinic: safeRequest.requestedByClinic || profile.clinic || "",
+      status: "borrowed",
+      borrowedAt: requestedAt,
+      activeLogId: logRef.id,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   });
+
   await addUserNotification({
-    type: "info",
-    title: "New Chart Request",
-    message: `${requestedBy || "Clinical user"} requested chart ${safeRequest.caseNumber}.`,
+    type: "success",
+    title: "Chart Borrowed",
+    message: `${requestedBy || "Clinical user"} borrowed chart ${safeCaseNumber}.`,
     patientName: safeRequest.patientName,
-    caseNumber: safeRequest.caseNumber,
-    action: "Chart Request Submitted",
+    caseNumber: safeCaseNumber,
+    action: "Chart Request Borrowed",
     sourceUserName: requestedBy,
     targetRole: "medicalRecords",
   });
@@ -1154,8 +1221,12 @@ export async function updateChartRequest(id, updates) {
       currentRequest.requestedById === user.uid &&
       currentRequest.status === "ready" &&
       nextStatus === "received";
+    const canReturnOwnBorrowedChart =
+      currentRequest.requestedById === user.uid &&
+      currentRequest.status === "borrowed" &&
+      nextStatus === "returned";
 
-    if (!canCancelOwnRequest && !canConfirmOwnReceipt) {
+    if (!canCancelOwnRequest && !canConfirmOwnReceipt && !canReturnOwnBorrowedChart) {
       throw new Error("Only Medical Records can update chart request status.");
     }
   }
@@ -1166,11 +1237,95 @@ export async function updateChartRequest(id, updates) {
       }
     : {};
 
-  await updateDoc(requestRef, {
-    ...safeUpdates,
-    ...staffStamp,
-    updatedAt: serverTimestamp(),
-  });
+  if (nextStatus === "returned") {
+    const safeCaseNumber = sanitizeText(currentRequest.caseNumber, { maxLength: 60, uppercase: true });
+    const chartRef = doc(database, "charts", safeCaseNumber);
+    const returnedAt = safeUpdates.returnedAt || new Date().toISOString();
+    const returner = currentRequest.requestedBy || profile.fullName || profile.displayName || user.displayName || user.email || "";
+
+    await runTransaction(database, async (transaction) => {
+      const chartSnapshot = await transaction.get(chartRef);
+      if (!chartSnapshot.exists()) {
+        throw new Error("No chart found for that case number.");
+      }
+
+      const chart = chartSnapshot.data();
+      if (chart.status !== "borrowed") {
+        throw new Error("This chart is already available.");
+      }
+
+      const returnedLog = {
+        action: "returned",
+        patientName: currentRequest.patientName || chart.patientName || "",
+        caseNumber: safeCaseNumber,
+        borrowedBy: chart.borrower || currentRequest.requestedBy || "N/A",
+        requestedById: currentRequest.requestedById || user.uid,
+        returnedBy: returner,
+        department: chart.department || currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "N/A",
+        timestamp: chart.borrowedAt || currentRequest.borrowedAt || returnedAt,
+        borrowedAt: chart.borrowedAt || currentRequest.borrowedAt || returnedAt,
+        returnedAt,
+        dueDate: "",
+        remarks: safeUpdates.remarks || "Chart returned by requester",
+        updatedAt: serverTimestamp(),
+      };
+      const activeLogId = chart.activeLogId || currentRequest.activeLogId;
+
+      if (activeLogId) {
+        const logRef = doc(database, "chartLogs", activeLogId);
+        const logSnapshot = await transaction.get(logRef);
+
+        if (logSnapshot.exists()) {
+          transaction.update(logRef, returnedLog);
+        } else {
+          transaction.set(doc(collection(database, "chartLogs")), {
+            ...returnedLog,
+            createdAt: serverTimestamp(),
+          });
+        }
+      } else {
+        transaction.set(doc(collection(database, "chartLogs")), {
+          ...returnedLog,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      transaction.update(chartRef, {
+        caseNumber: safeCaseNumber,
+        status: "available",
+        borrower: "",
+        borrowerId: "",
+        department: "",
+        borrowedAt: "",
+        dueDate: "",
+        activeLogId: "",
+        history: [
+          {
+            action: "checkin",
+            date: returnedAt,
+            borrower: chart.borrower || currentRequest.requestedBy || "N/A",
+            returnedBy: returner,
+            department: chart.department || currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "N/A",
+          },
+          ...(chart.history || []),
+        ],
+        updatedAt: serverTimestamp(),
+      });
+
+      transaction.update(requestRef, {
+        ...safeUpdates,
+        status: "returned",
+        returnedAt,
+        updatedAt: serverTimestamp(),
+      });
+    });
+  } else {
+    await updateDoc(requestRef, {
+      ...safeUpdates,
+      ...staffStamp,
+      updatedAt: serverTimestamp(),
+    });
+  }
 
   if (isRecordsUser && currentRequest.requestedById && currentRequest.requestedById !== user.uid) {
     await addUserNotification({
@@ -1202,6 +1357,17 @@ export async function updateChartRequest(id, updates) {
       patientName: currentRequest.patientName || "",
       caseNumber: currentRequest.caseNumber || "",
       action: "Chart Request Received",
+      sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
+      targetRole: "medicalRecords",
+    });
+  } else if (!isRecordsUser && nextStatus === "returned") {
+    await addUserNotification({
+      type: "success",
+      title: "Chart Returned",
+      message: `${currentRequest.caseNumber} was returned by the requester.`,
+      patientName: currentRequest.patientName || "",
+      caseNumber: currentRequest.caseNumber || "",
+      action: "Chart Request Returned",
       sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
       targetRole: "medicalRecords",
     });

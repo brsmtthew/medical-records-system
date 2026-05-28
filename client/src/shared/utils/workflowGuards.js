@@ -1,8 +1,10 @@
 const chartRequestTransitions = {
-  pending: new Set(["preparing", "canceled"]),
+  pending: new Set(["preparing", "borrowed", "canceled"]),
   preparing: new Set(["ready", "canceled"]),
   ready: new Set(["received", "canceled"]),
   received: new Set(["completed", "canceled"]),
+  borrowed: new Set(["returned"]),
+  returned: new Set(["completed"]),
   completed: new Set([]),
   canceled: new Set([]),
 };

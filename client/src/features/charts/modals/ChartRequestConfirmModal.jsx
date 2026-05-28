@@ -1,10 +1,12 @@
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, ClipboardList, Send, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardList, RotateCcw, Send, XCircle } from "lucide-react";
 
 const statusLabels = {
   preparing: "Prepare",
   ready: "Ready",
   received: "Received",
+  borrowed: "Borrowed",
+  returned: "Return",
   completed: "Complete",
   canceled: "Cancel",
 };
@@ -44,6 +46,8 @@ export default function ChartRequestConfirmModal({
                   <Send size={23} />
                 ) : action.type === "cancel" ? (
                   <XCircle size={24} />
+                ) : action.status === "returned" ? (
+                  <RotateCcw size={24} />
                 ) : action.status === "received" ? (
                   <ClipboardList size={24} />
                 ) : (
@@ -52,7 +56,7 @@ export default function ChartRequestConfirmModal({
               </div>
               <div>
                 <h3 className="text-lg font-black uppercase text-slate-900">
-                  {action.type === "submit" ? "Send Chart Request?" : `${statusLabels[action.status] || "Update"} Request?`}
+                  {action.type === "submit" ? "Borrow This Chart?" : `${statusLabels[action.status] || "Update"} Request?`}
                 </h3>
                 <p className="text-xs font-bold uppercase text-slate-400">
                   Review request details before saving

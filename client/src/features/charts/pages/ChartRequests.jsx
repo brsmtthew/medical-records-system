@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Clock,
   FileText,
+  RotateCcw,
   Search,
   Send,
   XCircle,
@@ -31,6 +32,8 @@ const statusMeta = {
   preparing: { label: "Preparing", badge: "mrs-status-info", icon: FileText },
   ready: { label: "Ready", badge: "mrs-status-success", icon: CheckCircle2 },
   received: { label: "Received", badge: "mrs-status-info", icon: ClipboardList },
+  borrowed: { label: "Borrowed", badge: "mrs-status-info", icon: FileText },
+  returned: { label: "Returned", badge: "mrs-status-success", icon: RotateCcw },
   completed: { label: "Completed", badge: "mrs-status-success", icon: CheckCircle2 },
   canceled: { label: "Canceled", badge: "mrs-status-danger", icon: XCircle },
 };
@@ -111,8 +114,8 @@ export default function ChartRequests() {
 
     return [
       { label: "Active", value: scopedRequests.filter((request) => !["completed", "canceled"].includes(request.status)).length, icon: ClipboardList },
-      { label: "Ready", value: scopedRequests.filter((request) => request.status === "ready").length, icon: CheckCircle2 },
-      { label: "Received", value: scopedRequests.filter((request) => request.status === "received").length, icon: ClipboardList },
+      { label: "Borrowed", value: scopedRequests.filter((request) => request.status === "borrowed").length, icon: FileText },
+      { label: "Returned", value: scopedRequests.filter((request) => request.status === "returned").length, icon: RotateCcw },
     ];
   }, [currentUser?.uid, isRecordsUser, requests]);
 
@@ -184,9 +187,9 @@ export default function ChartRequests() {
       setForm(initialForm);
       setToast({
         type: "success",
-        title: "Chart Request Sent",
-        message: `${confirmAction.caseNumber} was sent to Medical Records.`,
-        action: "Chart Request Created",
+        title: "Chart Borrowed",
+        message: `${confirmAction.caseNumber} was borrowed by your unit.`,
+        action: "Chart Request Borrowed",
         audit: true,
         caseNumber: confirmAction.caseNumber,
         patientName: confirmAction.patientName,
@@ -218,6 +221,8 @@ export default function ChartRequests() {
       preparing: "preparedAt",
       ready: "readyAt",
       received: "receivedAt",
+      borrowed: "borrowedAt",
+      returned: "returnedAt",
       completed: "completedAt",
       canceled: "canceledAt",
     }[status];
@@ -242,7 +247,7 @@ export default function ChartRequests() {
     }
   };
 
-  const statusFilters = ["active", "all", "pending", "preparing", "ready", "received", "completed", "canceled"];
+  const statusFilters = ["active", "all", "borrowed", "returned", "pending", "preparing", "ready", "received", "completed", "canceled"];
 
   return (
     <DashboardLayout>
@@ -255,8 +260,8 @@ export default function ChartRequests() {
             </h1>
             <p className="mt-1 text-xs font-semibold text-slate-500">
               {isRecordsUser
-                ? "Prepare and close clinical requests before physical chart pickup."
-                : `Send chart requests to Medical Records from the ${roleLabel(userRole)} workspace.`}
+                ? "Monitor clinical chart borrowing and close returned requests."
+                : `Borrow physical charts for the ${roleLabel(userRole)} workspace and return them when done.`}
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -303,7 +308,7 @@ export default function ChartRequests() {
                 <input
                   value={form.purpose}
                   onChange={(event) => updateForm("purpose", event.target.value)}
-                  placeholder="Purpose / remarks"
+                  placeholder="Borrowing purpose / remarks"
                   className="mrs-field rounded-lg px-3 py-2 text-xs font-bold"
                 />
                 <button
@@ -312,7 +317,7 @@ export default function ChartRequests() {
                   className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-black uppercase disabled:opacity-60"
                 >
                   <Send size={16} />
-                  {isSaving ? "Sending" : "Send"}
+                  {isSaving ? "Borrowing" : "Borrow"}
                 </button>
               </div>
             </form>
@@ -321,7 +326,7 @@ export default function ChartRequests() {
               <div className="mrs-section-band flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2">
                 <div>
                   <p className="text-xs font-black uppercase text-slate-800">Available Charts</p>
-                  <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">Click a row to fill the request form.</p>
+                  <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">Click a row to fill the borrowing form.</p>
                 </div>
                 <span className="mrs-status-badge mrs-status-success">{availableCharts.length} available</span>
               </div>
@@ -494,7 +499,12 @@ export default function ChartRequests() {
                                   Complete
                                 </button>
                               )}
-                              {!["completed", "canceled"].includes(request.status) && (
+                              {request.status === "returned" && (
+                                <button type="button" onClick={() => setRequestStatus(request, "completed")} className="mrs-blue-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  Complete
+                                </button>
+                              )}
+                              {!["borrowed", "returned", "completed", "canceled"].includes(request.status) && (
                                 <button type="button" onClick={() => setRequestStatus(request, "canceled")} className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-black uppercase text-red-600">
                                   Cancel
                                 </button>
@@ -507,12 +517,17 @@ export default function ChartRequests() {
                                   Received
                                 </button>
                               )}
+                              {request.status === "borrowed" && (
+                                <button type="button" onClick={() => setRequestStatus(request, "returned")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  Return
+                                </button>
+                              )}
                               {request.status === "pending" && (
                                 <button type="button" onClick={() => setRequestStatus(request, "canceled")} className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-black uppercase text-red-600">
                                   Cancel
                                 </button>
                               )}
-                              {!["pending", "ready"].includes(request.status) && (
+                              {!["pending", "ready", "borrowed"].includes(request.status) && (
                                 <span className="text-[10px] font-black uppercase text-slate-400">No action</span>
                               )}
                             </>
@@ -529,7 +544,7 @@ export default function ChartRequests() {
                       <ClipboardList size={40} className="mx-auto mb-3 text-slate-300" />
                       <p className="font-black uppercase text-slate-700">No chart requests found</p>
                       <p className="mt-1 text-sm font-semibold text-slate-400">
-                        {isRecordsUser ? "New clinical requests will appear here." : "Send a request when a physical chart is needed."}
+                        {isRecordsUser ? "New clinical borrow requests will appear here." : "Borrow a physical chart when it is needed."}
                       </p>
                     </td>
                   </tr>
