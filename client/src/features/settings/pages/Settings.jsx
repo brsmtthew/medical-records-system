@@ -62,6 +62,7 @@ import {
 } from "@shared/utils/notificationLog";
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { useAuth } from "@features/auth/context/useAuth";
+import { roleLabel } from "@shared/constants/userRoles";
 
 const tabs = [
   { id: "rules", label: "System Settings", icon: SettingsIcon },
@@ -602,20 +603,21 @@ export default function Settings({ initialTab = "rules" }) {
   };
 
   // Updates a user's role while preventing the signed-in admin from demoting their own account.
-  const handleRoleChange = async (user, role) => {
+  const handleRoleChange = (user, role) => {
     const userId = user.uid || user.id;
+    if (role === user.role) return;
     if (userId === currentUser?.uid && role !== "admin") {
       setAccessError("You cannot remove admin access from your own signed-in account.");
       return;
     }
 
-    try {
-      await updateUserAccess(userId, { role });
-      setAccessError("");
-      setAccessMessage(`${user.fullName || user.email || "User"} role updated to ${role}.`);
-    } catch (error) {
-      setAccessError(error.message || "Unable to update user role.");
-    }
+    setAccessError("");
+    setPendingAccessAction({
+      type: "role",
+      user,
+      role,
+      targetRoleLabel: roleLabel(role),
+    });
   };
 
   // Opens a confirmation before blocking a staff account with a required reason.
@@ -651,7 +653,9 @@ export default function Settings({ initialTab = "rules" }) {
     const userName = user.fullName || user.email || "User";
 
     try {
-      if (type === "block") {
+      if (type === "role") {
+        await updateUserAccess(userId, { role: pendingAccessAction.role });
+      } else if (type === "block") {
         await updateUserAccess(userId, {
           accountStatus: "disabled",
           restrictionReason: reason,
@@ -663,7 +667,11 @@ export default function Settings({ initialTab = "rules" }) {
         });
       }
       setAccessError("");
-      setAccessMessage(`${userName} was ${type === "block" ? "blocked" : "activated"}.`);
+      setAccessMessage(
+        type === "role"
+          ? `${userName} role updated to ${roleLabel(pendingAccessAction.role)}.`
+          : `${userName} was ${type === "block" ? "blocked" : "activated"}.`,
+      );
       setPendingAccessAction(null);
     } catch (error) {
       setAccessError(error.message || `Unable to ${type} user.`);
@@ -690,7 +698,7 @@ export default function Settings({ initialTab = "rules" }) {
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden lg:grid-cols-12">
           <div className="lg:col-span-3">
             <div className="mrs-settings-menu mrs-panel flex flex-col rounded-2xl p-2.5">
-              <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-1.5 lg:overflow-visible">
+              <div className="flex flex-wrap gap-2 overflow-x-hidden lg:block lg:space-y-1.5 lg:overflow-visible">
               {visibleTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = safeActiveTab === tab.id;
@@ -931,15 +939,15 @@ export default function Settings({ initialTab = "rules" }) {
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200">
-                      <div className="mrs-section-band grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 px-3 py-2">
+                    <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto rounded-xl border border-slate-200">
+                      <div className="mrs-section-band grid grid-cols-[minmax(0,1fr)_8rem] border-b border-slate-100 px-3 py-2">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Department Name</p>
                         <p className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</p>
                       </div>
                       {departments.map((department) => (
                         <div
                           key={department.id}
-                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2.5 last:border-b-0"
+                          className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2.5 last:border-b-0"
                         >
                           {editingDepartment?.id === department.id ? (
                             <form onSubmit={handleUpdateDepartment} className="col-span-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -1012,15 +1020,15 @@ export default function Settings({ initialTab = "rules" }) {
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200">
-                      <div className="mrs-section-band grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 px-3 py-2">
+                    <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto rounded-xl border border-slate-200">
+                      <div className="mrs-section-band grid grid-cols-[minmax(0,1fr)_8rem] border-b border-slate-100 px-3 py-2">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Admission Location</p>
                         <p className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</p>
                       </div>
                       {admissionLocations.map((location) => (
                         <div
                           key={location.id}
-                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2.5 last:border-b-0"
+                          className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2.5 last:border-b-0"
                         >
                           {editingAdmissionLocation?.id === location.id ? (
                             <form onSubmit={handleUpdateAdmissionLocation} className="col-span-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -1093,15 +1101,15 @@ export default function Settings({ initialTab = "rules" }) {
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl border border-slate-200">
-                      <div className="mrs-section-band grid min-w-[620px] grid-cols-[1fr_9rem] border-b border-slate-100 px-3 py-2">
+                    <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto rounded-xl border border-slate-200">
+                      <div className="mrs-section-band grid grid-cols-[minmax(0,1fr)_8rem] border-b border-slate-100 px-3 py-2">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Outpatient Department</p>
                         <p className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</p>
                       </div>
                       {outpatientDepartments.map((department) => (
                         <div
                           key={department.id}
-                          className="grid min-w-[620px] grid-cols-[1fr_9rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2.5 last:border-b-0"
+                          className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-3 border-b border-slate-100 bg-white px-3 py-2.5 last:border-b-0"
                         >
                           {editingOutpatientDepartment?.id === department.id ? (
                             <form onSubmit={handleUpdateOutpatientDepartment} className="col-span-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -1493,7 +1501,7 @@ export default function Settings({ initialTab = "rules" }) {
           />
           <UserAccessConfirmModal
             action={pendingAccessAction}
-            confirmLabel={pendingAccessAction?.type === "block" ? "Block" : "Activate"}
+            confirmLabel={pendingAccessAction?.type === "block" ? "Block" : pendingAccessAction?.type === "role" ? "Change Role" : "Activate"}
             onCancel={() => setPendingAccessAction(null)}
             onConfirm={confirmAccessAction}
           />

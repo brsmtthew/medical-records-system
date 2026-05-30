@@ -12,6 +12,7 @@ import {
   Clock,
   FileText,
   History,
+  LoaderCircle,
   RotateCcw,
   Search,
   Table2,
@@ -627,8 +628,8 @@ export default function Charts() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="mrs-panel mt-2 min-h-0 flex-1 overflow-hidden rounded-xl">
-            <div className="h-full overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[960px] table-fixed text-left">
+            <div className="h-full overflow-x-hidden overflow-y-auto">
+            <table className="w-full table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="mrs-section-band border-b border-slate-200">
                   <th className="w-[27%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
@@ -720,7 +721,11 @@ export default function Charts() {
                 {filteredCharts.length === 0 && (
                   <tr>
                     <td colSpan="5" className="p-10 text-center">
-                      <Archive size={40} className="mx-auto text-slate-300 mb-3" />
+                      {isLoading ? (
+                        <LoaderCircle size={40} className="mx-auto mb-3 animate-spin text-green-700" />
+                      ) : (
+                        <Archive size={40} className="mx-auto text-slate-300 mb-3" />
+                      )}
                       <p className="font-black text-slate-700 uppercase">
                         {isLoading ? "Loading charts..." : "No charts found"}
                       </p>

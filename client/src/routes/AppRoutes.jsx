@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { LoaderCircle } from "lucide-react";
 
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -22,9 +23,12 @@ const PrintReports = lazy(() => import("../features/reports/pages/PrintReports")
 function RouteLoader() {
   return (
     <div className="mrs-shell flex min-h-dvh items-center justify-center p-4 font-sans">
-      <div className="mrs-surface rounded-xl px-5 py-4">
-        <p className="text-xs font-black uppercase tracking-widest text-slate-500">Loading Workspace</p>
+      <div className="mrs-surface flex items-center gap-3 rounded-xl px-5 py-4">
+        <LoaderCircle className="size-5 animate-spin text-green-700" />
+        <div>
+          <p className="text-xs font-black uppercase tracking-widest text-slate-500">Loading Workspace</p>
         <p className="mt-1 text-lg font-black uppercase text-slate-900">TGMCI Records</p>
+        </div>
       </div>
     </div>
   );

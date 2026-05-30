@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Camera, ImageOff, Moon, Palette, RotateCcw, Save, Sun, UserRound } from "lucide-react";
+import { Camera, ImageOff, LoaderCircle, Moon, Palette, RotateCcw, Save, Sun, UserRound } from "lucide-react";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import DashboardLayout from "../../../layouts/DashboardLayout";
@@ -243,7 +243,7 @@ export default function ClinicalSettings() {
                     disabled={isSavingPanel}
                     className="mrs-primary-button inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-[10px] font-black uppercase disabled:opacity-60"
                   >
-                    <Save size={15} />
+                    {isSavingPanel ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}
                     {isSavingPanel ? "Saving" : "Save Panel"}
                   </button>
                 </div>

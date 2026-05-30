@@ -330,8 +330,8 @@ function ExcelPreviewModal({ columns, fileName, isOpen, onClose, onExport, rows,
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto p-4">
-          <table className="w-full min-w-[980px] table-fixed text-left">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4">
+          <table className="w-full table-fixed text-left">
             <thead className="sticky top-0 z-10 bg-white">
               <tr className="border-b border-slate-100">
                 {columns.map((column) => (
@@ -621,8 +621,8 @@ export default function PrintReports() {
             <StatusLegend options={reportLegendOptions(activeConfig)} />
           </div>
 
-            <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[980px] table-fixed text-left">
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+            <table className="w-full table-fixed text-left">
               <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b border-slate-100">
                   {activeColumns.map((column) => (

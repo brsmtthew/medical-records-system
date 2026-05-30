@@ -1,4 +1,4 @@
-import { Edit, Plus, Trash2 } from "lucide-react";
+import { Edit, LoaderCircle, Plus, Trash2 } from "lucide-react";
 
 const actionCopy = {
   add: {
@@ -63,8 +63,9 @@ export default function DepartmentEditorConfirmModal({
             type="button"
             onClick={onConfirm}
             disabled={isSaving}
-            className={`rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-70 ${copy.button}`}
+            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-70 ${copy.button}`}
           >
+            {isSaving && <LoaderCircle size={16} className="animate-spin" />}
             {isSaving ? "Saving..." : copy.verb}
           </button>
         </div>

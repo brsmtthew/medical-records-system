@@ -142,8 +142,8 @@ export default function ClinicalDashboard() {
               View All
             </Link>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] table-fixed text-left">
+          <div className="overflow-x-hidden">
+            <table className="w-full table-fixed text-left">
               <thead>
                 <tr className="border-b border-slate-100">
                   <th className="w-[30%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Patient / Case</th>

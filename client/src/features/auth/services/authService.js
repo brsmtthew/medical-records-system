@@ -14,7 +14,7 @@ import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db, firebaseConfig } from "@/firebaseClient";
 import { apiRequest } from "@services/apiClient";
-import { clearSession, saveSession } from "@services/sessionService";
+import { clearPersistentSignIn, clearSession, savePersistentSignIn, saveSession } from "@services/sessionService";
 import { addAuditLog, getActiveUserProfile } from "@services/recordsService";
 import { managedUserRoles, normalizeUserRole, roleLabel, userRoles } from "@shared/constants/userRoles";
 
@@ -79,11 +79,13 @@ export function hasAuthConfig() {
 export async function signInWithEmail({ email, password, remember }) {
   assertLoginNotLocked(email);
   await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+  savePersistentSignIn(remember);
   let userCredential;
   try {
     userCredential = await signInWithEmailAndPassword(auth, email, password);
     clearLoginAttempts(email);
   } catch (error) {
+    savePersistentSignIn(false);
     recordFailedLoginAttempt(email);
     throw error;
   }
@@ -131,7 +133,14 @@ export async function signInWithEmail({ email, password, remember }) {
 
 export async function createStaffAccount({ email, password, fullName, remember }) {
   await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
-  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  savePersistentSignIn(remember);
+  let userCredential;
+  try {
+    userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    savePersistentSignIn(false);
+    throw error;
+  }
 
   await updateProfile(userCredential.user, {
     displayName: fullName,
@@ -254,6 +263,7 @@ export function requestPasswordReset(email) {
 
 export function signOutCurrentUser() {
   clearSession();
+  clearPersistentSignIn();
   return auth ? signOut(auth) : Promise.resolve();
 }
 

@@ -1,5 +1,5 @@
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { UserPlus } from "lucide-react";
+import { LoaderCircle, UserPlus } from "lucide-react";
 import StatusBadge from "@shared/components/StatusBadge";
 
 export default function PatientCreateConfirmModal({
@@ -72,8 +72,9 @@ export default function PatientCreateConfirmModal({
                 <button
                   onClick={onConfirm}
                   disabled={isSaving}
-                  className="mrs-primary-button rounded-xl px-4 py-3 text-xs font-black uppercase disabled:cursor-not-allowed disabled:opacity-70"
+                  className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase disabled:cursor-not-allowed disabled:opacity-70"
                 >
+                  {isSaving && <LoaderCircle size={16} className="animate-spin" />}
                   {isSaving ? "Saving..." : "Confirm"}
                 </button>
               </div>

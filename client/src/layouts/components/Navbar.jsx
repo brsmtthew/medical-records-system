@@ -32,7 +32,7 @@ import {
 import FloatingToast from "@shared/components/FloatingToast";
 import { useAuth } from "@features/auth/context/useAuth";
 import { auth, db } from "@/firebaseClient";
-import { clearSession } from "@services/sessionService";
+import { clearPersistentSignIn, clearSession } from "@services/sessionService";
 import {
   maxNotificationLogItems,
   normalizeNotification,
@@ -310,6 +310,7 @@ export default function Navbar({ onMenuClick }) {
   // Ends the Firebase session and sends the user back to the login page.
   const handleSignOut = async () => {
     clearSession();
+    clearPersistentSignIn();
     if (auth) {
       await signOut(auth);
     }

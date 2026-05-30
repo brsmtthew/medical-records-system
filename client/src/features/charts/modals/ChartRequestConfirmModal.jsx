@@ -1,5 +1,5 @@
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, ClipboardList, RotateCcw, Send, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardList, LoaderCircle, RotateCcw, Send, XCircle } from "lucide-react";
 
 const statusLabels = {
   reviewing: "Review",
@@ -100,12 +100,13 @@ export default function ChartRequestConfirmModal({
                 type="button"
                 onClick={onConfirm}
                 disabled={isSaving}
-                className={`rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-70 ${
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-70 ${
                   action.type === "cancel"
                     ? "bg-red-600 shadow-red-600/20"
                     : "mrs-primary-button"
                 }`}
               >
+                {isSaving && <LoaderCircle size={16} className="animate-spin" />}
                 {isSaving ? "Saving..." : "Confirm"}
               </button>
             </div>

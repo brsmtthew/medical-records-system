@@ -7,6 +7,7 @@ import {
   Clock,
   Eye,
   FileText,
+  LoaderCircle,
   RotateCcw,
   Search,
   Send,
@@ -41,6 +42,17 @@ const statusMeta = {
   returnReceived: { label: "Return Received", badge: "mrs-status-info", icon: ClipboardList },
   completed: { label: "Completed", badge: "mrs-status-success", icon: CheckCircle2 },
   canceled: { label: "Canceled", badge: "mrs-status-danger", icon: XCircle },
+};
+
+const statusRemarks = {
+  reviewing: "Request is being reviewed by Medical Records.",
+  preparing: "Chart is being prepared for release.",
+  ready: "Chart is ready for pickup.",
+  received: "Requester confirmed chart receipt.",
+  returned: "Chart was returned by the requester.",
+  returnReceived: "Returned chart was received by Medical Records.",
+  completed: "Chart request transaction completed.",
+  canceled: "Chart request was canceled.",
 };
 
 function normalizeCaseNumber(value) {
@@ -275,6 +287,7 @@ export default function ChartRequests() {
     try {
       await updateChartRequest(request.id, {
         status,
+        remarks: statusRemarks[status] || "",
         ...(timeKey ? { [timeKey]: now } : {}),
       });
       setToast({
@@ -362,7 +375,7 @@ export default function ChartRequests() {
                   disabled={isSaving}
                   className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-black uppercase disabled:opacity-60"
                 >
-                  <Send size={16} />
+                  {isSaving ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
                   {isSaving ? "Submitting" : "Submit"}
                 </button>
               </div>
@@ -386,8 +399,8 @@ export default function ChartRequests() {
                     className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
                   />
                 </div>
-                <div className="max-h-52 overflow-x-auto overflow-y-auto rounded-lg border border-slate-200">
-                  <table className="w-full min-w-[820px] table-fixed text-left">
+                <div className="max-h-52 overflow-x-hidden overflow-y-auto rounded-lg border border-slate-200">
+                  <table className="w-full table-fixed text-left">
                     <thead className="sticky top-0 z-10">
                       <tr className="mrs-section-band border-b border-slate-200">
                         <th className="w-[32%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
@@ -482,17 +495,17 @@ export default function ChartRequests() {
         </div>
 
         <div className="mrs-panel min-h-0 flex-1 overflow-hidden rounded-xl">
-          <div className="h-full overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[1180px] table-fixed text-left">
+          <div className="h-full overflow-x-hidden overflow-y-auto">
+            <table className="w-full table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="mrs-section-band border-b border-slate-200">
-                  <th className="w-[18%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
+                  <th className="w-[17%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
                   <th className="w-[15%] p-3 text-[10px] font-black uppercase text-slate-400">Requester</th>
-                  <th className="w-[17%] p-3 text-[10px] font-black uppercase text-slate-400">Unit / Physician</th>
-                  <th className="w-[15%] p-3 text-[10px] font-black uppercase text-slate-400">Purpose</th>
+                  <th className="w-[16%] p-3 text-[10px] font-black uppercase text-slate-400">Unit / Physician</th>
+                  <th className="w-[14%] p-3 text-[10px] font-black uppercase text-slate-400">Purpose</th>
                   <th className="w-[12%] p-3 text-[10px] font-black uppercase text-slate-400">Status</th>
-                  <th className="w-[13%] p-3 text-[10px] font-black uppercase text-slate-400">Transaction Dates</th>
-                  <th className="w-[10%] p-3 text-right text-[10px] font-black uppercase text-slate-400">Actions</th>
+                  <th className="w-[14%] p-3 text-[10px] font-black uppercase text-slate-400">Transaction Dates</th>
+                  <th className="w-[12%] p-3 text-right text-[10px] font-black uppercase text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

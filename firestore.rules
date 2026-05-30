@@ -91,6 +91,18 @@ service cloud.firestore {
         );
     }
 
+    function preservesRole() {
+      return (
+          !("role" in resource.data)
+          && !("role" in request.resource.data)
+        )
+        || (
+          "role" in resource.data
+          && "role" in request.resource.data
+          && request.resource.data.role == resource.data.role
+        );
+    }
+
     function validChartRequestTransition(currentStatus, nextStatus) {
       return currentStatus == nextStatus
         || (currentStatus == "pending" && nextStatus in ["reviewing", "canceled"])
@@ -131,7 +143,14 @@ service cloud.firestore {
           || isAdmin()
           || (isActiveStaff() && resource.data.role == "doctor")
         );
-      allow update: if (isAdmin() && validUserProfileShape())
+      allow update: if (
+          isAdmin()
+          && validUserProfileShape()
+          && (
+            request.auth.uid != userId
+            || (preservesRole() && preservesAccountStatus())
+          )
+        )
         || (
           signedIn()
           && request.auth.uid == userId

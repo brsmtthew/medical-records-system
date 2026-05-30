@@ -7,10 +7,13 @@ import ReportDeleteModal from "../modals/ReportDeleteModal";
 import {
   CalendarDays,
   CheckCircle2,
+  Eye,
   FileText,
+  LoaderCircle,
   RotateCcw,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
 import {
   deleteChartLog,
@@ -107,6 +110,35 @@ function requestDateRows(request) {
   ].filter(([, value]) => Boolean(value));
 }
 
+function compactRequestDateRows(dateRows) {
+  if (dateRows.length <= 2) return dateRows;
+  const requestedRow = dateRows.find(([label]) => label === "Requested") || dateRows[0];
+  const completedRow = dateRows.find(([label]) => label === "Completed");
+  const latestRow = completedRow || dateRows[dateRows.length - 1];
+  return requestedRow[0] === latestRow[0] ? [requestedRow] : [requestedRow, latestRow];
+}
+
+function requestReportRemark(request) {
+  if (request.remarks || request.preparationNote) {
+    return request.remarks || request.preparationNote;
+  }
+
+  const status = normalizeStatus(request.status);
+  const statusRemarks = {
+    pending: "Waiting for Medical Records review.",
+    reviewing: "Request is being reviewed by Medical Records.",
+    preparing: "Chart is being prepared for release.",
+    ready: "Chart is ready for pickup.",
+    received: "Requester confirmed chart receipt.",
+    returned: "Chart was returned by the requester.",
+    returnreceived: "Returned chart was received by Medical Records.",
+    completed: "Chart request transaction completed.",
+    canceled: "Chart request was canceled.",
+  };
+
+  return statusRemarks[status] || "No additional remarks.";
+}
+
 export default function Reports() {
   const location = useLocation();
   const { currentUser, isAdmin, userRole } = useAuth();
@@ -126,6 +158,7 @@ export default function Reports() {
   const [successMeta, setSuccessMeta] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isDeletingLog, setIsDeletingLog] = useState(false);
+  const [timelineRequest, setTimelineRequest] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -178,7 +211,7 @@ export default function Reports() {
       const matchesAction = actionFilter === "all" || status === actionFilter;
       const searchBlob = isRecordsUser
         ? `${row.patientName || ""} ${row.caseNumber || ""} ${row.borrowedBy || ""} ${row.returnedBy || ""} ${row.department || ""} ${row.remarks || ""}`
-        : `${row.patientName || ""} ${row.caseNumber || ""} ${row.purpose || ""} ${row.requestedBy || ""} ${row.requestedByClinic || ""} ${row.department || ""} ${row.status || ""} ${row.remarks || ""}`;
+        : `${row.patientName || ""} ${row.caseNumber || ""} ${row.purpose || ""} ${row.requestedBy || ""} ${row.requestedByClinic || ""} ${row.department || ""} ${row.status || ""} ${requestReportRemark(row)}`;
       const matchesSearch = searchBlob.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStart = !startDate || activityDate >= startDate;
       const matchesEnd = !endDate || activityDate <= endDate;
@@ -351,6 +384,7 @@ export default function Reports() {
     const status = normalizeStatus(request.status);
     const requesterPhysician = requesterPhysicianLabel(request);
     const dateRows = requestDateRows(request);
+    const summaryDateRows = compactRequestDateRows(dateRows);
 
     return (
       <tr key={request.id} className="mrs-table-row">
@@ -382,14 +416,25 @@ export default function Reports() {
           </span>
         </td>
         <td className="p-3">
-          {dateRows.map(([label, value, colorClass]) => (
+          {summaryDateRows.map(([label, value, colorClass]) => (
             <p key={label} className={`text-[10px] font-black uppercase leading-tight ${colorClass}`}>
               {label}: {formatDateTime(value)}
             </p>
           ))}
+          {dateRows.length > summaryDateRows.length && (
+            <button
+              type="button"
+              onClick={() => setTimelineRequest(request)}
+              className="mrs-soft-button mt-2 inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-black uppercase"
+            >
+              <Eye size={13} />
+              Timeline
+              <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] text-green-800">{dateRows.length}</span>
+            </button>
+          )}
         </td>
         <td className="p-3 text-[11px] font-semibold leading-snug text-slate-500 break-words">
-          {highlightSearch(request.remarks || request.preparationNote || "N/A")}
+          {highlightSearch(requestReportRemark(request))}
         </td>
       </tr>
     );
@@ -519,8 +564,8 @@ export default function Reports() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
-              <table className={`w-full table-fixed text-left ${isRecordsUser ? "min-w-[900px]" : "min-w-[1080px]"}`}>
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              <table className="w-full table-fixed text-left">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-slate-100 bg-white">
                     <th className={`${isRecordsUser ? "w-[19%]" : "w-[18%]"} whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400`}>
@@ -556,7 +601,11 @@ export default function Reports() {
                   {filteredRows.length === 0 && (
                     <tr>
                       <td colSpan={isRecordsUser ? (canManageReports ? 6 : 5) : 6} className="p-10 text-center">
-                        <FileText size={38} className="mx-auto text-slate-300 mb-3" />
+                        {isLoading ? (
+                          <LoaderCircle size={38} className="mx-auto mb-3 animate-spin text-green-700" />
+                        ) : (
+                          <FileText size={38} className="mx-auto text-slate-300 mb-3" />
+                        )}
                         <p className="font-black text-slate-700 uppercase">
                           {isLoading ? "Loading reports..." : "No records found"}
                         </p>
@@ -611,6 +660,36 @@ export default function Reports() {
           onCancel={() => setDeleteLog(null)}
           onConfirm={handleDeleteLog}
         />
+      )}
+      {timelineRequest && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
+          <div className="absolute inset-0 bg-slate-950/50" onClick={() => setTimelineRequest(null)} />
+          <div className="mrs-panel relative w-full max-w-md rounded-2xl p-5">
+            <button
+              type="button"
+              onClick={() => setTimelineRequest(null)}
+              className="absolute right-4 top-4 rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+              aria-label="Close transaction timeline"
+            >
+              <X size={18} />
+            </button>
+            <div className="pr-12">
+              <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Transaction Timeline</p>
+              <h2 className="mt-1 break-words text-lg font-black uppercase text-slate-900">
+                {timelineRequest.patientName || "Chart Request"}
+              </h2>
+              <p className="mt-1 font-mono text-xs font-black uppercase text-green-800">{timelineRequest.caseNumber}</p>
+            </div>
+            <div className="mt-4 space-y-2">
+              {requestDateRows(timelineRequest).map(([label, value, colorClass]) => (
+                <div key={label} className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className={`text-xs font-black uppercase ${colorClass}`}>{label}</p>
+                  <p className="text-right text-xs font-bold uppercase text-slate-700">{formatDateTime(value)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
       <FloatingToast
         toast={

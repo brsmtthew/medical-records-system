@@ -16,6 +16,7 @@ import {
   Trash2,
   Search,
   ClipboardList,
+  LoaderCircle,
   Users,
   Bed,
   UserRound,
@@ -630,8 +631,8 @@ export default function Patients() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto pr-1">
-            <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-y-1.5">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1">
+            <table className="w-full table-fixed border-separate border-spacing-y-1.5">
               <thead className="sticky top-0 z-10 bg-slate-50">
                 <tr className="text-left">
                   <th className="w-[24%] px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Patient Details</th>
@@ -704,7 +705,11 @@ export default function Patients() {
                 {filteredPatients.length === 0 && (
                   <tr>
                     <td colSpan="6" className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
-                      <ClipboardList size={40} className="mx-auto text-slate-300 mb-3" />
+                      {isLoading ? (
+                        <LoaderCircle size={40} className="mx-auto mb-3 animate-spin text-green-700" />
+                      ) : (
+                        <ClipboardList size={40} className="mx-auto text-slate-300 mb-3" />
+                      )}
                       <p className="font-black text-slate-700 uppercase">
                         {isLoading ? "Loading patients..." : "No patients found"}
                       </p>

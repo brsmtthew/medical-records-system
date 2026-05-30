@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
+import { LoaderCircle } from "lucide-react";
 import { useAuth } from "@features/auth/context/useAuth";
 import { auth } from "@/firebaseClient";
-import { cancelAutoLogout, scheduleAutoLogout } from "@services/sessionService";
+import { cancelAutoLogout, clearPersistentSignIn, readPersistentSignIn, scheduleAutoLogout } from "@services/sessionService";
 import { readSystemSettings } from "@shared/utils/systemSettings";
 
 export default function ProtectedRoute({ children, requireAdmin = false, roles = [] }) {
@@ -23,6 +24,9 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
   useEffect(() => {
     // Locks inactive protected routes using the workstation timeout from Settings.
     if (!isAuthenticated || !auth) return undefined;
+    if (readPersistentSignIn()) {
+      return undefined;
+    }
 
     const settings = readSystemSettings();
     const timeoutMinutes = Math.min(60, Math.max(5, Number(settings.sessionTimeoutMinutes) || 10));
@@ -86,9 +90,12 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
   if (authLoading) {
     return (
       <div className="mrs-shell min-h-screen flex items-center justify-center font-sans">
-        <div className="mrs-surface rounded-2xl px-6 py-5">
-          <p className="text-sm font-black uppercase text-slate-800">Checking Access</p>
-          <p className="text-xs font-bold text-slate-400 mt-1">Please wait...</p>
+        <div className="mrs-surface flex items-center gap-3 rounded-2xl px-6 py-5">
+          <LoaderCircle className="size-5 animate-spin text-green-700" />
+          <div>
+            <p className="text-sm font-black uppercase text-slate-800">Checking Access</p>
+            <p className="text-xs font-bold text-slate-400 mt-1">Please wait...</p>
+          </div>
         </div>
       </div>
     );
@@ -108,7 +115,10 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
           </p>
           <button
             type="button"
-            onClick={() => auth && signOut(auth)}
+            onClick={() => {
+              clearPersistentSignIn();
+              if (auth) signOut(auth);
+            }}
             className="mrs-primary-button mt-6 rounded-xl px-5 py-3 text-xs font-black uppercase"
           >
             Return to Login
