@@ -66,6 +66,10 @@ export function getActiveUserProfile(userId) {
   return activeUserProfile?.uid === userId ? activeUserProfile : null;
 }
 
+function isActiveProfile(profile = {}) {
+  return !["disabled", "deleted", "missing"].includes(profile.accountStatus || "active");
+}
+
 // Returns the configured Firestore instance or fails fast with a user-facing setup message.
 function requireDb() {
   if (!db) {
@@ -86,7 +90,7 @@ async function requireActiveRole({ adminOnly = false, roles = medicalRecordsRole
     const profileSnapshot = await getDoc(doc(database, "users", user.uid));
     profile = profileSnapshot.exists() ? { uid: user.uid, ...profileSnapshot.data() } : {};
   }
-  const isActive = profile.accountStatus === "active";
+  const isActive = isActiveProfile(profile);
   const role = normalizeUserRole(profile.role);
 
   if (!isActive) {
@@ -250,6 +254,7 @@ function sanitizeUserNotificationPayload(notification) {
     sourceUserName: { maxLength: 160 },
     targetUserId: { maxLength: 120 },
     targetRole: { maxLength: 60 },
+    targetPath: { maxLength: 200 },
   });
 }
 
@@ -266,6 +271,7 @@ function sanitizeChartRequestPayload(request) {
     purpose: { maxLength: 300 },
     priority: { maxLength: 30 },
     status: { maxLength: 30 },
+    reviewedAt: { maxLength: 40 },
     preparedBy: { maxLength: 160 },
     acceptedBy: { maxLength: 160 },
     acceptedById: { maxLength: 120 },
@@ -283,6 +289,7 @@ function sanitizeChartRequestPayload(request) {
     returnConfirmedById: { maxLength: 120 },
     returnConfirmedAt: { maxLength: 40 },
     returnedAt: { maxLength: 40 },
+    returnReceivedAt: { maxLength: 40 },
     completedAt: { maxLength: 40 },
     canceledAt: { maxLength: 40 },
     activeLogId: { maxLength: 120 },
@@ -1110,7 +1117,11 @@ function requesterDisplayName(name, role) {
   return prefixedUserName(name, role);
 }
 
+<<<<<<< HEAD
 // Adds a clinical chart request that Records must approve before checkout.
+=======
+// Adds a clinical chart request without releasing the physical chart until Records marks it ready.
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
 export async function addChartRequest(request) {
   const database = requireDb();
   const { user, profile, role } = await requireActiveRole({ roles: allUserRoles });
@@ -1120,9 +1131,28 @@ export async function addChartRequest(request) {
     safeRequest.requestedBy || profile.fullName || profile.displayName || user.displayName || user.email || "",
     role,
   );
+<<<<<<< HEAD
   const borrowerDepartment = safeRequest.requestedByClinic || safeRequest.requestedByDepartment || profile.clinic || profile.department || "Clinic / Nurse Station";
   const requestedAt = new Date().toISOString();
   const chartRef = doc(database, "charts", safeCaseNumber);
+=======
+  const requestRef = doc(collection(database, "chartRequests"));
+  const chartRef = doc(database, "charts", safeCaseNumber);
+  const requestChecks = medicalRecordsRoles.includes(role)
+    ? [where("caseNumber", "==", safeCaseNumber)]
+    : [where("requestedById", "==", user.uid), where("caseNumber", "==", safeCaseNumber)];
+  const activeRequestSnapshot = await getDocs(query(collection(database, "chartRequests"), ...requestChecks));
+  const hasActiveRequest = activeRequestSnapshot.docs.some((requestSnapshot) => {
+    const status = requestSnapshot.data().status || "pending";
+    return !["completed", "canceled"].includes(status);
+  });
+
+  if (hasActiveRequest) {
+    throw new Error(medicalRecordsRoles.includes(role)
+      ? "This chart already has an active request in process."
+      : "You already have an active request for this chart.");
+  }
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
 
   const chartSnapshot = await getDoc(chartRef);
   if (!chartSnapshot.exists()) {
@@ -1132,6 +1162,7 @@ export async function addChartRequest(request) {
     throw new Error("This chart is already borrowed.");
   }
 
+<<<<<<< HEAD
   const requestRef = await addDoc(collection(database, "chartRequests"), {
     ...safeRequest,
     caseNumber: safeCaseNumber,
@@ -1146,22 +1177,53 @@ export async function addChartRequest(request) {
     requestedAt,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+=======
+    const chart = chartSnapshot.data();
+    if (chart.status === "borrowed") {
+      throw new Error("This chart is already borrowed.");
+    }
+
+    transaction.set(requestRef, {
+      ...safeRequest,
+      caseNumber: safeCaseNumber,
+      requestedById: user.uid,
+      requestedBy,
+      requestedByEmail: safeRequest.requestedByEmail || profile.email || user.email || "",
+      requestedByRole: role,
+      requestedByDepartment: safeRequest.requestedByDepartment || profile.department || "",
+      requestedByClinic: safeRequest.requestedByClinic || profile.clinic || "",
+      status: "pending",
+      activeLogId: "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
   });
 
   await addUserNotification({
     type: "info",
+<<<<<<< HEAD
     title: "Chart Approval Needed",
+=======
+    title: "Chart Request Submitted",
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
     message: `${requestedBy || "Clinical user"} requested chart ${safeCaseNumber}.`,
     patientName: safeRequest.patientName,
     caseNumber: safeCaseNumber,
     action: "Chart Request Submitted",
     sourceUserName: requestedBy,
     targetRole: "medicalRecords",
+    targetPath: `/chart-requests?search=${encodeURIComponent(safeCaseNumber)}`,
   });
   return requestRef.id;
 }
 
+<<<<<<< HEAD
 // Updates chart request status while preserving Records approval and return confirmation.
+=======
+// Updates chart request status while preserving the handoff sequence:
+// Records prepares the chart, the requester returns it, Records receives the return, then completes it.
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
 export async function updateChartRequest(id, updates) {
   const database = requireDb();
   const { user, profile, role } = await requireActiveRole({ roles: allUserRoles });
@@ -1198,7 +1260,11 @@ export async function updateChartRequest(id, updates) {
     const canMarkOwnChartForReturn =
       currentRequest.requestedById === user.uid &&
       currentRequest.status === "received" &&
+<<<<<<< HEAD
       nextStatus === "for_return";
+=======
+      nextStatus === "returned";
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
 
     if (!canCancelOwnRequest && !canConfirmOwnReceipt && !canMarkOwnChartForReturn) {
       throw new Error("Only Medical Records can update chart request status.");
@@ -1312,10 +1378,20 @@ export async function updateChartRequest(id, updates) {
       throw new Error("Medical Records must confirm the physical return.");
     }
 
+<<<<<<< HEAD
     const safeCaseNumber = sanitizeText(currentRequest.caseNumber, { maxLength: 60, uppercase: true });
     const chartRef = doc(database, "charts", safeCaseNumber);
     const returnedAt = safeUpdates.returnedAt || new Date().toISOString();
     const returner = currentRequest.requestedBy || "Clinical user";
+=======
+  if (nextStatus === "ready") {
+    const safeCaseNumber = sanitizeText(currentRequest.caseNumber, { maxLength: 60, uppercase: true });
+    const chartRef = doc(database, "charts", safeCaseNumber);
+    const logRef = doc(collection(database, "chartLogs"));
+    const readyAt = safeUpdates.readyAt || new Date().toISOString();
+    const borrowerDepartment = currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "Clinic / Nurse Station";
+    const preparedBy = staffStamp.preparedBy || "";
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
 
     await runTransaction(database, async (transaction) => {
       const liveRequestSnapshot = await transaction.get(requestRef);
@@ -1334,14 +1410,15 @@ export async function updateChartRequest(id, updates) {
       }
 
       const chart = chartSnapshot.data();
-      if (chart.status !== "borrowed") {
-        throw new Error("This chart is already available.");
+      if (chart.status === "borrowed") {
+        throw new Error("This chart is already borrowed.");
       }
 
-      const returnedLog = {
-        action: "returned",
+      transaction.set(logRef, {
+        action: "borrowed",
         patientName: currentRequest.patientName || chart.patientName || "",
         caseNumber: safeCaseNumber,
+<<<<<<< HEAD
         borrowedBy: chart.borrower || currentRequest.requestedBy || "N/A",
         requestedById: currentRequest.requestedById || user.uid,
         requestId: id,
@@ -1376,15 +1453,29 @@ export async function updateChartRequest(id, updates) {
           createdAt: serverTimestamp(),
         });
       }
+=======
+        borrowedBy: currentRequest.requestedBy || "Clinical requester",
+        requestedById: currentRequest.requestedById || "",
+        returnedBy: "",
+        department: borrowerDepartment,
+        timestamp: readyAt,
+        borrowedAt: readyAt,
+        returnedAt: "",
+        dueDate: "",
+        remarks: safeUpdates.remarks || currentRequest.purpose || "Chart prepared and locked for pickup",
+        createdAt: serverTimestamp(),
+      });
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
 
       transaction.update(chartRef, {
         caseNumber: safeCaseNumber,
-        status: "available",
-        borrower: "",
-        borrowerId: "",
-        department: "",
-        borrowedAt: "",
+        status: "borrowed",
+        borrower: currentRequest.requestedBy || "Clinical requester",
+        borrowerId: currentRequest.requestedById || "",
+        department: borrowerDepartment,
+        borrowedAt: readyAt,
         dueDate: "",
+<<<<<<< HEAD
         activeLogId: "",
         activeRequestId: "",
         history: [
@@ -1395,6 +1486,16 @@ export async function updateChartRequest(id, updates) {
             returnedBy: returner,
             confirmedBy: userName,
             department: chart.department || currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "N/A",
+=======
+        activeLogId: logRef.id,
+        history: [
+          {
+            action: "checkout",
+            borrower: currentRequest.requestedBy || "Clinical requester",
+            returnedBy: "",
+            department: borrowerDepartment,
+            date: readyAt,
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
           },
           ...(chart.history || []),
         ],
@@ -1403,11 +1504,114 @@ export async function updateChartRequest(id, updates) {
 
       transaction.update(requestRef, {
         ...safeUpdates,
-        status: "returned",
+        preparedBy,
+        status: "ready",
+        readyAt,
+        borrowedAt: readyAt,
+        activeLogId: logRef.id,
+        updatedAt: serverTimestamp(),
+      });
+    });
+  } else if (nextStatus === "returned") {
+    const returnedAt = safeUpdates.returnedAt || new Date().toISOString();
+
+    await updateDoc(requestRef, {
+      ...safeUpdates,
+      status: "returned",
+      returnedAt,
+      updatedAt: serverTimestamp(),
+    });
+  } else if (nextStatus === "returnReceived") {
+    const safeCaseNumber = sanitizeText(currentRequest.caseNumber, { maxLength: 60, uppercase: true });
+    const chartRef = doc(database, "charts", safeCaseNumber);
+    const returnReceivedAt = safeUpdates.returnReceivedAt || new Date().toISOString();
+    const returnedAt = currentRequest.returnedAt || safeUpdates.returnedAt || returnReceivedAt;
+    const returner = currentRequest.requestedBy || "Clinical requester";
+    const receivedBy = staffStamp.preparedBy || profile.fullName || profile.displayName || user.displayName || user.email || "";
+
+    await runTransaction(database, async (transaction) => {
+      const chartSnapshot = await transaction.get(chartRef);
+      if (!chartSnapshot.exists()) {
+        throw new Error("No chart found for that case number.");
+      }
+
+      const chart = chartSnapshot.data();
+      if (!["borrowed", "available"].includes(chart.status)) {
+        throw new Error("This chart cannot be received right now.");
+      }
+
+      if (chart.status === "borrowed") {
+        const returnedLog = {
+          action: "returned",
+          patientName: currentRequest.patientName || chart.patientName || "",
+          caseNumber: safeCaseNumber,
+          borrowedBy: chart.borrower || currentRequest.requestedBy || "N/A",
+          requestedById: currentRequest.requestedById || user.uid,
+          returnedBy: returner,
+          department: chart.department || currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "N/A",
+          timestamp: chart.borrowedAt || currentRequest.borrowedAt || returnedAt,
+          borrowedAt: chart.borrowedAt || currentRequest.borrowedAt || returnedAt,
+          returnedAt,
+          dueDate: "",
+          remarks: safeUpdates.remarks || `Returned by requester and received by ${receivedBy}`,
+          updatedAt: serverTimestamp(),
+        };
+        const activeLogId = chart.activeLogId || currentRequest.activeLogId;
+
+        if (activeLogId) {
+          const logRef = doc(database, "chartLogs", activeLogId);
+          const logSnapshot = await transaction.get(logRef);
+
+          if (logSnapshot.exists()) {
+            transaction.update(logRef, returnedLog);
+          } else {
+            transaction.set(doc(collection(database, "chartLogs")), {
+              ...returnedLog,
+              createdAt: serverTimestamp(),
+            });
+          }
+        } else {
+          transaction.set(doc(collection(database, "chartLogs")), {
+            ...returnedLog,
+            createdAt: serverTimestamp(),
+          });
+        }
+
+        transaction.update(chartRef, {
+          caseNumber: safeCaseNumber,
+          status: "available",
+          borrower: "",
+          borrowerId: "",
+          department: "",
+          borrowedAt: "",
+          dueDate: "",
+          activeLogId: "",
+          history: [
+            {
+              action: "checkin",
+              date: returnReceivedAt,
+              borrower: chart.borrower || currentRequest.requestedBy || "N/A",
+              returnedBy: receivedBy,
+              department: chart.department || currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "N/A",
+            },
+            ...(chart.history || []),
+          ],
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      transaction.update(requestRef, {
+        ...safeUpdates,
+        ...staffStamp,
+        status: "returnReceived",
         returnedAt,
+<<<<<<< HEAD
         returnConfirmedAt: returnedAt,
         returnConfirmedBy: userName,
         returnConfirmedById: user.uid,
+=======
+        returnReceivedAt,
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
         updatedAt: serverTimestamp(),
       });
     });
@@ -1445,6 +1649,7 @@ export async function updateChartRequest(id, updates) {
       action: "Chart Request Status Updated",
       sourceUserName: userName,
       targetUserId: currentRequest.requestedById,
+      targetPath: `/chart-requests?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
     });
   } else if (!isRecordsUser && nextStatus === "canceled") {
     await addUserNotification({
@@ -1456,6 +1661,7 @@ export async function updateChartRequest(id, updates) {
       action: "Chart Request Canceled",
       sourceUserName: userName,
       targetRole: "medicalRecords",
+      targetPath: `/chart-requests?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
     });
   } else if (!isRecordsUser && nextStatus === "received") {
     await addUserNotification({
@@ -1465,8 +1671,25 @@ export async function updateChartRequest(id, updates) {
       patientName: currentRequest.patientName || "",
       caseNumber: currentRequest.caseNumber || "",
       action: "Chart Request Received",
+<<<<<<< HEAD
       sourceUserName: userName,
+=======
+      sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
       targetRole: "medicalRecords",
+      targetPath: `/chart-requests?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
+    });
+  } else if (!isRecordsUser && nextStatus === "returned") {
+    await addUserNotification({
+      type: "success",
+      title: "Chart Returned",
+      message: `${currentRequest.caseNumber} was returned by the requester.`,
+      patientName: currentRequest.patientName || "",
+      caseNumber: currentRequest.caseNumber || "",
+      action: "Chart Request Returned",
+      sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
+      targetRole: "medicalRecords",
+      targetPath: `/chart-requests?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
     });
   }
 }

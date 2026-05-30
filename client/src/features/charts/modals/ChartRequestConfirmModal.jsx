@@ -1,15 +1,24 @@
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, ClipboardList, RotateCcw, Send, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardList, LoaderCircle, RotateCcw, Send, XCircle } from "lucide-react";
 
 const statusLabels = {
+<<<<<<< HEAD
   accepted: "Accept",
+=======
+  reviewing: "Review",
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
   preparing: "Prepare",
   for_pickup: "For Pick-Up",
   ready: "For Pick-Up",
   received: "Received",
+<<<<<<< HEAD
   borrowed: "Borrowed",
   for_return: "For Return",
   returned: "Confirm Return",
+=======
+  returned: "Return",
+  returnReceived: "Receive Return",
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
   completed: "Complete",
   canceled: "Cancel",
 };
@@ -59,7 +68,11 @@ export default function ChartRequestConfirmModal({
               </div>
               <div>
                 <h3 className="text-lg font-black uppercase text-slate-900">
+<<<<<<< HEAD
                   {action.type === "submit" ? "Request This Chart?" : `${statusLabels[action.status] || "Update"} Request?`}
+=======
+                  {action.type === "submit" ? "Submit Chart Request?" : `${statusLabels[action.status] || "Update"} Request?`}
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
                 </h3>
                 <p className="text-xs font-bold uppercase text-slate-400">
                   Review request details before saving
@@ -102,12 +115,13 @@ export default function ChartRequestConfirmModal({
                 type="button"
                 onClick={onConfirm}
                 disabled={isSaving}
-                className={`rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-70 ${
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-70 ${
                   action.type === "cancel"
                     ? "bg-red-600 shadow-red-600/20"
                     : "mrs-primary-button"
                 }`}
               >
+                {isSaving && <LoaderCircle size={16} className="animate-spin" />}
                 {isSaving ? "Saving..." : "Confirm"}
               </button>
             </div>

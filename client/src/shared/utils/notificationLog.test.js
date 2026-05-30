@@ -24,6 +24,7 @@ test("normalizeNotification keeps audit fields for patient actions", () => {
   assert.equal(notification.userEmail, "maria@example.com");
   assert.equal(notification.userId, "user-1");
   assert.equal(notification.adminOnly, false);
+  assert.equal(notification.readAt, "");
   assert.equal(notification.createdAt, "2026-05-02T08:00:00.000Z");
 });
 
@@ -41,6 +42,7 @@ test("normalizeNotification falls back safely for general notifications", () => 
   assert.equal(notification.userEmail, "");
   assert.equal(notification.userId, "");
   assert.equal(notification.adminOnly, false);
+  assert.equal(notification.readAt, "");
   assert.ok(notification.id);
   assert.ok(notification.createdAt);
 });
@@ -53,4 +55,16 @@ test("normalizeNotification preserves admin-only visibility", () => {
   });
 
   assert.equal(notification.adminOnly, true);
+});
+
+test("normalizeNotification preserves notification navigation and read state", () => {
+  const notification = normalizeNotification({
+    title: "Chart Request Updated",
+    message: "CASE-001 is now ready.",
+    targetPath: "/chart-requests?search=CASE-001",
+    readAt: "2026-05-02T09:00:00.000Z",
+  });
+
+  assert.equal(notification.targetPath, "/chart-requests?search=CASE-001");
+  assert.equal(notification.readAt, "2026-05-02T09:00:00.000Z");
 });

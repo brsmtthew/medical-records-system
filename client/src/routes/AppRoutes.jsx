@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { LoaderCircle } from "lucide-react";
 
 import ProtectedRoute from "./ProtectedRoute";
 
@@ -9,6 +10,7 @@ const Patients = lazy(() => import("../features/patients/pages/Patients"));
 const Charts = lazy(() => import("../features/charts/pages/Charts"));
 const Reports = lazy(() => import("../features/reports/pages/Reports"));
 const Settings = lazy(() => import("../features/settings/pages/Settings"));
+const ClinicalSettings = lazy(() => import("../features/settings/pages/ClinicalSettings"));
 const ChartViewing = lazy(() => import("../features/charts/pages/ChartViewing"));
 const ChartRequests = lazy(() => import("../features/charts/pages/ChartRequests"));
 const ChartReturns = lazy(() => import("../features/charts/pages/ChartReturns"));
@@ -22,9 +24,12 @@ const PrintReports = lazy(() => import("../features/reports/pages/PrintReports")
 function RouteLoader() {
   return (
     <div className="mrs-shell flex min-h-dvh items-center justify-center p-4 font-sans">
-      <div className="mrs-surface rounded-xl px-5 py-4">
-        <p className="text-xs font-black uppercase tracking-widest text-slate-500">Loading Workspace</p>
+      <div className="mrs-surface flex items-center gap-3 rounded-xl px-5 py-4">
+        <LoaderCircle className="size-5 animate-spin text-green-700" />
+        <div>
+          <p className="text-xs font-black uppercase tracking-widest text-slate-500">Loading Workspace</p>
         <p className="mt-1 text-lg font-black uppercase text-slate-900">TGMCI Records</p>
+        </div>
       </div>
     </div>
   );
@@ -113,6 +118,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute roles={["admin", "staff"]}>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/clinical-settings"
+          element={
+            <ProtectedRoute roles={["nurse", "doctor"]}>
+              <ClinicalSettings />
             </ProtectedRoute>
           }
         />

@@ -1044,7 +1044,7 @@ export default function TrackingPage({ config }) {
             <StatusLegend options={config.statusOptions} />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
             {visibleTypes.map((type) => {
               const tableRows = config.typeOptions ? displayedRows : filteredRows;
 
@@ -1056,7 +1056,7 @@ export default function TrackingPage({ config }) {
                       <p className="text-xs font-bold text-slate-400">{tableRows.length} record(s)</p>
                     </div>
                   )}
-                  <table className="w-full min-w-[980px] table-fixed text-left">
+                  <table className="w-full table-fixed text-left">
                     <thead className="sticky top-0 z-10">
                       <tr className="mrs-section-band border-b border-slate-100">
                         {activeColumns.map((column) => (
@@ -1214,7 +1214,7 @@ export default function TrackingPage({ config }) {
             : infoMessage
               ? { type: "info", message: infoMessage }
               : successMessage
-                ? { type: "success", title: config.singleLabel, message: successMessage, audit: true, action: `${config.singleLabel} Updated` }
+                ? { type: "success", title: config.singleLabel, message: successMessage, audit: true, action: `${config.singleLabel} Updated`, targetPath: "/tracking-reports" }
                 : null
         }
         onClose={() => {

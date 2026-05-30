@@ -1,5 +1,5 @@
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { FileText, RotateCcw } from "lucide-react";
+import { FileText, LoaderCircle, RotateCcw } from "lucide-react";
 
 const modalCardClass =
   "mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto rounded-2xl p-4";
@@ -93,10 +93,11 @@ export default function ChartTransactionConfirmModal({
               <button
                 onClick={transaction.type === "borrow" ? onConfirmBorrow : onConfirmReturn}
                 disabled={isSaving}
-                className={`flex-1 rounded-xl py-3 font-black uppercase text-white shadow-lg transition ${
+                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-black uppercase text-white shadow-lg transition ${
                   transaction.type === "borrow" ? "mrs-blue-button" : "bg-green-600"
                 } disabled:cursor-not-allowed disabled:opacity-70`}
               >
+                {isSaving && <LoaderCircle size={17} className="animate-spin" />}
                 {isSaving ? "Saving..." : "Confirm"}
               </button>
             </div>

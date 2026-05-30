@@ -53,7 +53,7 @@ async function requireActiveTrackingRole({ adminOnly = false } = {}) {
   }
   const role = profile.role === "admin" ? "admin" : "staff";
 
-  if (profile.accountStatus !== "active") {
+  if (["disabled", "deleted", "missing"].includes(profile.accountStatus || "active")) {
     throw new Error("This account is not active.");
   }
   if (adminOnly && role !== "admin") {

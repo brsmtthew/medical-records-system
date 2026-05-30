@@ -29,14 +29,7 @@ export function formatTrackingDateOnly(value) {
 
 export function formatTrackingDateTimeWithTime(value) {
   const time = recordTimeValue(value);
-  if (!time) return "N/A";
-
-  const date = new Date(time);
-  const timePart = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `${formatDisplayDate(time)} ${timePart}`;
+  return time ? formatDisplayDate(time) : "N/A";
 }
 
 export function trackingDateColumn(label, key, width) {
@@ -48,13 +41,7 @@ export function trackingDateColumn(label, key, width) {
       const time = recordTimeValue(row[key]);
       if (!time) return "N/A";
 
-      const date = new Date(time);
-      const datePart = formatDisplayDate(time);
-      const timePart = date.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-      });
-      return `${datePart} ${timePart}`;
+      return formatDisplayDate(time);
     },
   };
 }
@@ -89,13 +76,7 @@ export function trackingDateTimeColumn(label, key, width) {
       const time = recordTimeValue(row[key]);
       if (!time) return "N/A";
 
-      const date = new Date(time);
-      const datePart = formatDisplayDate(time);
-      const timePart = date.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-      });
-      return `${datePart} ${timePart}`;
+      return formatDisplayDate(time);
     },
   };
 }

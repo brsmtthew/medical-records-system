@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import DashboardLayout from "../../../layouts/DashboardLayout";
 import FloatingToast from "@shared/components/FloatingToast";
 import PatientCaseCell from "@shared/components/PatientCaseCell";
@@ -11,6 +12,7 @@ import {
   Clock,
   FileText,
   History,
+  LoaderCircle,
   RotateCcw,
   Search,
   Table2,
@@ -107,6 +109,7 @@ const softButtonClass =
   "mrs-soft-button inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase";
 
 export default function Charts() {
+  const location = useLocation();
   const [charts, setCharts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [borrowCaseNumber, setBorrowCaseNumber] = useState("");
@@ -123,6 +126,15 @@ export default function Charts() {
   const [notice, setNotice] = useState(null);
   const [transactionToast, setTransactionToast] = useState(null);
   const [isSavingTransaction, setIsSavingTransaction] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const routeSearchQuery = params.get("search") || "";
+    if (!routeSearchQuery) return;
+
+    setSearchQuery(routeSearchQuery);
+    setStatusFilter("all");
+  }, [location.search]);
 
   // Shows an inline toast-style notice for transaction validation.
   const setTransactionNotice = (type, message) => {
@@ -327,6 +339,7 @@ export default function Charts() {
         patientName: chart.patientName,
         caseNumber,
         action: "Chart Borrowed",
+        targetPath: `/charts?search=${encodeURIComponent(caseNumber)}`,
       });
     } catch (error) {
       setTransactionNotice("error", error.message || "Unable to update chart in Firebase.");
@@ -391,6 +404,7 @@ export default function Charts() {
         patientName: chart.patientName,
         caseNumber,
         action: "Chart Returned",
+        targetPath: `/charts?search=${encodeURIComponent(caseNumber)}`,
       });
     } catch (error) {
       setTransactionNotice("error", error.message || "Unable to update chart in Firebase.");
@@ -614,8 +628,8 @@ export default function Charts() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="mrs-panel mt-2 min-h-0 flex-1 overflow-hidden rounded-xl">
-            <div className="h-full overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[960px] table-fixed text-left">
+            <div className="h-full overflow-x-hidden overflow-y-auto">
+            <table className="w-full table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="mrs-section-band border-b border-slate-200">
                   <th className="w-[27%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
@@ -707,7 +721,11 @@ export default function Charts() {
                 {filteredCharts.length === 0 && (
                   <tr>
                     <td colSpan="5" className="p-10 text-center">
-                      <Archive size={40} className="mx-auto text-slate-300 mb-3" />
+                      {isLoading ? (
+                        <LoaderCircle size={40} className="mx-auto mb-3 animate-spin text-green-700" />
+                      ) : (
+                        <Archive size={40} className="mx-auto text-slate-300 mb-3" />
+                      )}
                       <p className="font-black text-slate-700 uppercase">
                         {isLoading ? "Loading charts..." : "No charts found"}
                       </p>

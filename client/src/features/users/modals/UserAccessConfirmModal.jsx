@@ -1,4 +1,4 @@
-import { Trash2, UserCheck, UserX } from "lucide-react";
+import { ShieldCheck, Trash2, UserCheck, UserX } from "lucide-react";
 
 export default function UserAccessConfirmModal({
   action,
@@ -11,10 +11,12 @@ export default function UserAccessConfirmModal({
 
   const isBlockAction = action.type === "block";
   const isDeleteAction = action.type === "delete";
+  const isRoleAction = action.type === "role";
   const successButtonClass = successColor === "green"
     ? "bg-green-600 shadow-green-500/20"
     : "bg-green-700 shadow-green-700/20";
   const targetName = action.user.fullName || action.user.email || "this user";
+  const targetRole = action.targetRoleLabel || action.role || "the selected role";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
@@ -28,19 +30,23 @@ export default function UserAccessConfirmModal({
             ? "bg-red-50 text-red-600"
             : isBlockAction
             ? "bg-red-50 text-red-600"
+            : isRoleAction
+            ? "bg-blue-50 text-blue-700"
             : "bg-green-50 text-green-700"
         }`}>
-          {isDeleteAction ? <Trash2 size={26} /> : isBlockAction ? <UserX size={26} /> : <UserCheck size={26} />}
+          {isDeleteAction ? <Trash2 size={26} /> : isBlockAction ? <UserX size={26} /> : isRoleAction ? <ShieldCheck size={26} /> : <UserCheck size={26} />}
         </div>
         <h2 className="text-xl font-black uppercase text-slate-800">
-          {isDeleteAction ? "Delete User Account?" : isBlockAction ? "Block User Account?" : "Activate User Account?"}
+          {isDeleteAction ? "Delete User Account?" : isBlockAction ? "Block User Account?" : isRoleAction ? "Change User Role?" : "Activate User Account?"}
         </h2>
         <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-500">
           {isDeleteAction
             ? `This will remove ${targetName} from the user list and stop future access with this profile.`
             : isBlockAction
               ? `This will stop ${targetName} from accessing the system.`
-              : `This will restore access for ${targetName}.`}
+              : isRoleAction
+                ? `This will change ${targetName}'s access role to ${targetRole}.`
+                : `This will restore access for ${targetName}.`}
         </p>
         {isBlockAction && (
           <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3">

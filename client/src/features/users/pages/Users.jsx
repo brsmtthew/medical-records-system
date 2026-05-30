@@ -75,21 +75,23 @@ export default function Users() {
     };
   }, []);
 
-  const handleRoleChange = async (user, role) => {
+  const handleRoleChange = (user, role) => {
     const userId = user.uid || user.id;
     const normalizedRole = normalizeUserRole(role);
+    const currentRole = normalizeUserRole(user.role);
+    if (normalizedRole === currentRole) return;
     if (userId === currentUser?.uid && normalizedRole !== userRoles.admin) {
       setAccessError("You cannot remove admin access from your own signed-in account.");
       return;
     }
 
-    try {
-      await updateUserAccess(userId, { role: normalizedRole });
-      setAccessError("");
-      setAccessMessage(`${user.fullName || user.email || "User"} role updated to ${roleLabel(normalizedRole)}.`);
-    } catch (error) {
-      setAccessError(error.message || "Unable to update user role.");
-    }
+    setAccessError("");
+    setPendingAccessAction({
+      type: "role",
+      user,
+      role: normalizedRole,
+      targetRoleLabel: roleLabel(normalizedRole),
+    });
   };
 
   const updateCreateForm = (key, value) => {
@@ -216,6 +218,8 @@ export default function Users() {
     try {
       if (type === "delete") {
         await deleteUserProfile(userId);
+      } else if (type === "role") {
+        await updateUserAccess(userId, { role: pendingAccessAction.role });
       } else if (type === "block") {
         await updateUserAccess(userId, {
           accountStatus: "disabled",
@@ -229,7 +233,11 @@ export default function Users() {
       }
 
       setAccessError("");
-      setAccessMessage(`${userName} was ${type === "delete" ? "deleted" : type === "block" ? "blocked" : "activated"}.`);
+      setAccessMessage(
+        type === "role"
+          ? `${userName} role updated to ${roleLabel(pendingAccessAction.role)}.`
+          : `${userName} was ${type === "delete" ? "deleted" : type === "block" ? "blocked" : "activated"}.`,
+      );
       setPendingAccessAction(null);
     } catch (error) {
       setAccessError(error.message || `Unable to ${type} user.`);
@@ -368,7 +376,7 @@ export default function Users() {
                     type="button"
                     onClick={() => handleActivateUser(user)}
                     disabled={isSelf}
-                    className="inline-flex min-w-28 items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-black uppercase text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50"
+                    className="inline-flex min-w-24 items-center justify-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-2 text-xs font-black uppercase text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50"
                   >
                     <UserCheck size={16} />
                     Activate
@@ -378,7 +386,7 @@ export default function Users() {
                     type="button"
                     onClick={() => handleBlockUser(user)}
                     disabled={isSelf}
-                    className="inline-flex min-w-28 items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50"
+                    className="inline-flex min-w-24 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50"
                   >
                     <UserX size={16} />
                     Block
@@ -388,12 +396,11 @@ export default function Users() {
                   type="button"
                   onClick={() => handleDeleteUser(user)}
                   disabled={isSelf}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-black uppercase text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
                   aria-label={`Delete ${user.email || user.fullName || "user"}`}
                   title="Delete user"
                 >
                   <Trash2 size={16} />
-                  Delete
                 </button>
               </div>
             </td>
@@ -422,14 +429,14 @@ export default function Users() {
         </div>
         <span className="mrs-status-badge mrs-status-neutral">{rows.length} shown</span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1220px] table-fixed text-left">
+      <div className="overflow-hidden">
+        <table className="w-full table-fixed text-left">
           <thead>
             <tr className="mrs-section-band border-b border-slate-100">
-              <th className="w-[22%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
+              <th className="w-[23%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
               <th className="w-[15%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Role</th>
               <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Assignment</th>
-              <th className="w-[11%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+              <th className="w-[10%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
               <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Block Reason</th>
               <th className="w-[16%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</th>
             </tr>
@@ -552,6 +559,7 @@ export default function Users() {
 
       <UserAccessConfirmModal
         action={pendingAccessAction}
+        confirmLabel={pendingAccessAction?.type === "role" ? "Change Role" : "Confirm"}
         onCancel={() => setPendingAccessAction(null)}
         onConfirm={confirmAccessAction}
         successColor="darkGreen"
@@ -572,7 +580,7 @@ export default function Users() {
           accessError
             ? { type: "error", message: accessError }
             : accessMessage
-              ? { type: "success", title: "User Access", message: accessMessage, action: "User Access Updated", audit: true, adminOnly: true }
+              ? { type: "success", title: "User Access", message: accessMessage, action: "User Access Updated", audit: true, adminOnly: true, targetPath: "/users" }
               : null
         }
         onClose={() => {

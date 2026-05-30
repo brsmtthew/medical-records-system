@@ -107,14 +107,7 @@ function stackDateTimeText(value) {
 
 function formatReportDateTime(value) {
   const time = recordTimeValue(value);
-  if (!time) return "N/A";
-
-  const date = new Date(time);
-  const timePart = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `${formatDisplayDate(time)} ${timePart}`;
+  return time ? formatDisplayDate(time) : "N/A";
 }
 
 function receiverLabel(row) {
@@ -442,7 +435,7 @@ export default function TrackingReports() {
               <div className="mt-2">
                 <h2 className="text-xl font-black uppercase text-slate-900">{activeConfig.pluralLabel} Report</h2>
                 <p className="text-xs font-semibold text-slate-500">
-                  Generated {new Date().toLocaleString()}
+                  Generated {formatDisplayDate(new Date())}
                 </p>
               </div>
               <p className="mt-1 text-xs font-black uppercase text-slate-500">
@@ -530,7 +523,7 @@ export default function TrackingReports() {
             <StatusLegend options={reportStatusOptions(activeConfig)} />
           </div>
 
-          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
             {(activeConfig.typeOptions ? activeConfig.typeOptions.filter((type) => type.value === selectedType) : [{ value: "all", label: "" }]).map((type) => {
               const tableRows = activeConfig.typeOptions
                 ? displayedRows
@@ -544,7 +537,7 @@ export default function TrackingReports() {
                       <p className="text-xs font-bold text-slate-400">{tableRows.length} record(s)</p>
                     </div>
                   )}
-                  <table className="w-full min-w-[980px] table-fixed text-left">
+                  <table className="w-full table-fixed text-left">
                     <thead className="sticky top-0 z-10">
                       <tr className="mrs-section-band border-b border-slate-100">
                         {activeColumns.map((column) => (

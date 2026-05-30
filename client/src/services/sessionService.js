@@ -1,5 +1,6 @@
 const accessTokenKey = "mrs-access-token";
 const userKey = "mrs-auth-user";
+const persistentSignInKey = "mrs-keep-signed-in";
 let expiryTimer = null;
 
 function parseJwtPayload(token) {
@@ -31,6 +32,34 @@ export function clearSession() {
   sessionStorage.removeItem(userKey);
   if (expiryTimer) window.clearTimeout(expiryTimer);
   expiryTimer = null;
+}
+
+export function savePersistentSignIn(remember) {
+  try {
+    if (remember) {
+      localStorage.setItem(persistentSignInKey, "true");
+    } else {
+      localStorage.removeItem(persistentSignInKey);
+    }
+  } catch {
+    // Restricted browser profiles can block localStorage.
+  }
+}
+
+export function readPersistentSignIn() {
+  try {
+    return localStorage.getItem(persistentSignInKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function clearPersistentSignIn() {
+  try {
+    localStorage.removeItem(persistentSignInKey);
+  } catch {
+    // Restricted browser profiles can block localStorage.
+  }
 }
 
 export function cancelAutoLogout() {

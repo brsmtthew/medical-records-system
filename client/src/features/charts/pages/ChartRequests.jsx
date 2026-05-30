@@ -1,12 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   CheckCircle2,
+  CalendarDays,
   ClipboardList,
   Clock,
+  Eye,
   FileText,
+  LoaderCircle,
   RotateCcw,
   Search,
   Send,
+  X,
   XCircle,
 } from "lucide-react";
 
@@ -29,17 +34,36 @@ const initialForm = {
 
 const statusMeta = {
   pending: { label: "Pending", badge: "mrs-status-warning", icon: Clock },
+<<<<<<< HEAD
   accepted: { label: "Accepted", badge: "mrs-status-info", icon: CheckCircle2 },
+=======
+  reviewing: { label: "Reviewing", badge: "mrs-status-info", icon: ClipboardList },
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
   preparing: { label: "Preparing", badge: "mrs-status-info", icon: FileText },
   for_pickup: { label: "For Pick-Up", badge: "mrs-status-success", icon: ClipboardList },
   ready: { label: "For Pick-Up", badge: "mrs-status-success", icon: CheckCircle2 },
   received: { label: "Received", badge: "mrs-status-info", icon: ClipboardList },
+<<<<<<< HEAD
   borrowed: { label: "Received", badge: "mrs-status-info", icon: FileText },
   for_return: { label: "For Return", badge: "mrs-status-warning", icon: RotateCcw },
   return_pending: { label: "For Return", badge: "mrs-status-warning", icon: RotateCcw },
+=======
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
   returned: { label: "Returned", badge: "mrs-status-success", icon: RotateCcw },
+  returnReceived: { label: "Return Received", badge: "mrs-status-info", icon: ClipboardList },
   completed: { label: "Completed", badge: "mrs-status-success", icon: CheckCircle2 },
   canceled: { label: "Canceled", badge: "mrs-status-danger", icon: XCircle },
+};
+
+const statusRemarks = {
+  reviewing: "Request is being reviewed by Medical Records.",
+  preparing: "Chart is being prepared for release.",
+  ready: "Chart is ready for pickup.",
+  received: "Requester confirmed chart receipt.",
+  returned: "Chart was returned by the requester.",
+  returnReceived: "Returned chart was received by Medical Records.",
+  completed: "Chart request transaction completed.",
+  canceled: "Chart request was canceled.",
 };
 
 function normalizeCaseNumber(value) {
@@ -58,7 +82,35 @@ function displayStatusFilter(filter) {
   return filter.replace("_", " ");
 }
 
+function requesterUnitLabel(request) {
+  return request.requestedByClinic || request.requestedByDepartment || "No assignment";
+}
+
+function requesterPhysicianLabel(request) {
+  if (request.requestedByRole === "doctor") return requesterDisplayName(request);
+  return request.attendingDoctorName || request.physicianName || "";
+}
+
+function statusLabel(status) {
+  return statusMeta[status]?.label || status || "Pending";
+}
+
+function requestDateRows(request) {
+  return [
+    ["Requested", request.createdAt, "text-slate-500"],
+    ["Reviewed", request.reviewedAt, "mrs-status-text-reviewed"],
+    ["Prepared", request.preparedAt, "mrs-status-text-borrowed"],
+    ["Ready", request.readyAt, "mrs-status-text-success"],
+    ["Received", request.receivedAt, "mrs-status-text-reviewed"],
+    ["Returned", request.returnedAt, "mrs-status-text-success"],
+    ["Return Received", request.returnReceivedAt, "mrs-status-text-reviewed"],
+    ["Completed", request.completedAt, "mrs-status-text-success"],
+    ["Canceled", request.canceledAt, "mrs-status-text-warning"],
+  ].filter(([, value]) => Boolean(value));
+}
+
 export default function ChartRequests() {
+  const location = useLocation();
   const { userProfile, userRole, currentUser } = useAuth();
   const isRecordsUser = isMedicalRecordsRole(userRole);
   const [requests, setRequests] = useState([]);
@@ -70,6 +122,16 @@ export default function ChartRequests() {
   const [toast, setToast] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [transactionRequest, setTransactionRequest] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const routeSearchTerm = params.get("search") || "";
+    if (!routeSearchTerm) return;
+
+    setSearchTerm(routeSearchTerm);
+    setStatusFilter("all");
+  }, [location.search]);
 
   useEffect(() => {
     const unsubscribeRequests = subscribeToChartRequests(
@@ -118,8 +180,13 @@ export default function ChartRequests() {
 
     return [
       { label: "Active", value: scopedRequests.filter((request) => !["completed", "canceled"].includes(request.status)).length, icon: ClipboardList },
+<<<<<<< HEAD
       { label: "For Pick-Up", value: scopedRequests.filter((request) => ["for_pickup", "ready"].includes(request.status)).length, icon: FileText },
       { label: "For Return", value: scopedRequests.filter((request) => request.status === "for_return").length, icon: RotateCcw },
+=======
+      { label: "Protected", value: scopedRequests.filter((request) => ["ready", "received", "returned"].includes(request.status)).length, icon: FileText },
+      { label: "Returned", value: scopedRequests.filter((request) => request.status === "returned").length, icon: RotateCcw },
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
     ];
   }, [currentUser?.uid, isRecordsUser, requests]);
 
@@ -191,12 +258,18 @@ export default function ChartRequests() {
       setForm(initialForm);
       setToast({
         type: "success",
+<<<<<<< HEAD
         title: "Chart Requested",
         message: `${confirmAction.caseNumber} is waiting for Medical Records approval.`,
+=======
+        title: "Request Submitted",
+        message: `${confirmAction.caseNumber} was sent to Medical Records for review.`,
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
         action: "Chart Request Submitted",
         audit: true,
         caseNumber: confirmAction.caseNumber,
         patientName: confirmAction.patientName,
+        targetPath: `/chart-requests?search=${encodeURIComponent(confirmAction.caseNumber)}`,
       });
       setConfirmAction(null);
     } catch (error) {
@@ -222,14 +295,19 @@ export default function ChartRequests() {
     const { request, status } = confirmAction;
     const now = new Date().toISOString();
     const timeKey = {
+      reviewing: "reviewedAt",
       preparing: "preparedAt",
       accepted: "acceptedAt",
       for_pickup: "forPickupAt",
       ready: "readyAt",
       received: "receivedAt",
+<<<<<<< HEAD
       borrowed: "borrowedAt",
       for_return: "returnRequestedAt",
+=======
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
       returned: "returnedAt",
+      returnReceived: "returnReceivedAt",
       completed: "completedAt",
       canceled: "canceledAt",
     }[status];
@@ -237,16 +315,18 @@ export default function ChartRequests() {
     try {
       await updateChartRequest(request.id, {
         status,
+        remarks: statusRemarks[status] || "",
         ...(timeKey ? { [timeKey]: now } : {}),
       });
       setToast({
         type: "success",
         title: "Request Updated",
-        message: `${request.caseNumber} is now ${status}.`,
+        message: `${request.caseNumber} is now ${statusLabel(status)}.`,
         action: "Chart Request Updated",
         audit: true,
         caseNumber: request.caseNumber,
         patientName: request.patientName,
+        targetPath: `/chart-requests?search=${encodeURIComponent(request.caseNumber || "")}`,
       });
       setConfirmAction(null);
     } catch (error) {
@@ -254,7 +334,11 @@ export default function ChartRequests() {
     }
   };
 
+<<<<<<< HEAD
   const statusFilters = ["active", "all", "pending", "accepted", "preparing", "for_pickup", "received", "for_return", "returned", "canceled"];
+=======
+  const statusFilters = ["active", "all", "pending", "reviewing", "preparing", "ready", "received", "returned", "returnReceived", "completed", "canceled"];
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
 
   return (
     <DashboardLayout>
@@ -267,8 +351,13 @@ export default function ChartRequests() {
             </h1>
             <p className="mt-1 text-xs font-semibold text-slate-500">
               {isRecordsUser
+<<<<<<< HEAD
                 ? "Approve clinical chart requests, confirm physical returns, and track each handoff."
                 : `Request charts for the ${roleLabel(userRole)} workspace; Medical Records must approve and confirm returns.`}
+=======
+                ? "Review requests, prepare charts, and lock folders only when they are ready for pickup."
+                : `Request physical charts for the ${roleLabel(userRole)} workspace and return them when done.`}
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -323,8 +412,13 @@ export default function ChartRequests() {
                   disabled={isSaving}
                   className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-black uppercase disabled:opacity-60"
                 >
+<<<<<<< HEAD
                   <Send size={16} />
                   {isSaving ? "Requesting" : "Request"}
+=======
+                  {isSaving ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
+                  {isSaving ? "Submitting" : "Submit"}
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
                 </button>
               </div>
             </form>
@@ -347,8 +441,8 @@ export default function ChartRequests() {
                     className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
                   />
                 </div>
-                <div className="max-h-52 overflow-x-auto overflow-y-auto rounded-lg border border-slate-200">
-                  <table className="w-full min-w-[820px] table-fixed text-left">
+                <div className="max-h-52 overflow-x-hidden overflow-y-auto rounded-lg border border-slate-200">
+                  <table className="w-full table-fixed text-left">
                     <thead className="sticky top-0 z-10">
                       <tr className="mrs-section-band border-b border-slate-200">
                         <th className="w-[32%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
@@ -435,7 +529,11 @@ export default function ChartRequests() {
                       : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:bg-green-50 hover:text-green-700"
                   }`}
                 >
+<<<<<<< HEAD
                   {displayStatusFilter(filter)}
+=======
+                  {filter === "all" || filter === "active" ? filter : statusLabel(filter)}
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
                 </button>
               ))}
             </div>
@@ -443,34 +541,41 @@ export default function ChartRequests() {
         </div>
 
         <div className="mrs-panel min-h-0 flex-1 overflow-hidden rounded-xl">
-          <div className="h-full overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[980px] table-fixed text-left">
+          <div className="h-full overflow-x-hidden overflow-y-auto">
+            <table className="w-full table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="mrs-section-band border-b border-slate-200">
-                  <th className="w-[25%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
-                  <th className="w-[22%] p-3 text-[10px] font-black uppercase text-slate-400">Requester</th>
-                  <th className="w-[21%] p-3 text-[10px] font-black uppercase text-slate-400">Purpose</th>
-                  <th className="w-[14%] p-3 text-[10px] font-black uppercase text-slate-400">Status</th>
-                  <th className="w-[18%] p-3 text-right text-[10px] font-black uppercase text-slate-400">Actions</th>
+                  <th className="w-[17%] p-3 text-[10px] font-black uppercase text-slate-400">Patient / Case</th>
+                  <th className="w-[15%] p-3 text-[10px] font-black uppercase text-slate-400">Requester</th>
+                  <th className="w-[16%] p-3 text-[10px] font-black uppercase text-slate-400">Unit / Physician</th>
+                  <th className="w-[14%] p-3 text-[10px] font-black uppercase text-slate-400">Purpose</th>
+                  <th className="w-[12%] p-3 text-[10px] font-black uppercase text-slate-400">Status</th>
+                  <th className="w-[14%] p-3 text-[10px] font-black uppercase text-slate-400">Transaction Dates</th>
+                  <th className="w-[12%] p-3 text-right text-[10px] font-black uppercase text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visibleRequests.map((request) => {
                   const meta = statusMeta[request.status] || statusMeta.pending;
                   const StatusIcon = meta.icon;
-                  const requesterUnit = request.requestedByClinic || request.requestedByDepartment || "No assignment";
+                  const requesterUnit = requesterUnitLabel(request);
+                  const requesterPhysician = requesterPhysicianLabel(request);
+                  const dateRows = requestDateRows(request);
 
                   return (
                     <tr key={request.id} className="mrs-table-row">
                       <td className="p-3">
                         <PatientCaseCell patientName={request.patientName} caseNumber={request.caseNumber} />
-                        <p className="mt-1 text-[10px] font-black uppercase text-slate-400">
-                          Requested {formatDisplayDate(request.createdAt)}
-                        </p>
                       </td>
                       <td className="p-3">
                         <p className="break-words text-xs font-black uppercase text-slate-800">{requesterDisplayName(request)}</p>
-                        <p className="mt-1 break-words text-[10px] font-bold uppercase text-slate-400">{requesterUnit}</p>
+                        <p className="mt-1 break-words text-[10px] font-bold uppercase text-slate-400">{request.requestedByRole || "requester"}</p>
+                      </td>
+                      <td className="p-3">
+                        <p className="break-words text-xs font-black uppercase text-slate-700">{requesterUnit}</p>
+                        {requesterPhysician && (
+                          <p className="mt-1 break-words text-[10px] font-bold uppercase text-slate-400">Physician: {requesterPhysician}</p>
+                        )}
                       </td>
                       <td className="p-3">
                         <p className="break-words text-xs font-bold text-slate-700">{request.purpose}</p>
@@ -490,15 +595,36 @@ export default function ChartRequests() {
                         )}
                       </td>
                       <td className="p-3">
+                        <button
+                          type="button"
+                          onClick={() => setTransactionRequest(request)}
+                          className="mrs-soft-button inline-flex min-h-9 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase"
+                        >
+                          <Eye size={14} />
+                          View Dates
+                          {dateRows.length > 0 && (
+                            <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] text-green-800">{dateRows.length}</span>
+                          )}
+                        </button>
+                      </td>
+                      <td className="p-3">
                         <div className="flex justify-end gap-1.5">
                           {isRecordsUser ? (
                             <>
                               {request.status === "pending" && (
+<<<<<<< HEAD
                                 <button type="button" onClick={() => setRequestStatus(request, "accepted")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
                                   Accept
                                 </button>
                               )}
                               {request.status === "accepted" && (
+=======
+                                <button type="button" onClick={() => setRequestStatus(request, "reviewing")} className="mrs-soft-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  Review
+                                </button>
+                              )}
+                              {request.status === "reviewing" && (
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
                                 <button type="button" onClick={() => setRequestStatus(request, "preparing")} className="mrs-soft-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
                                   Prepare
                                 </button>
@@ -508,12 +634,26 @@ export default function ChartRequests() {
                                   For Pick-Up
                                 </button>
                               )}
+<<<<<<< HEAD
                               {request.status === "for_return" && (
                                 <button type="button" onClick={() => setRequestStatus(request, "returned")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
                                   Confirm Return
                                 </button>
                               )}
                               {!["received", "for_return", "returned", "completed", "canceled"].includes(request.status) && (
+=======
+                              {request.status === "returned" && (
+                                <button type="button" onClick={() => setRequestStatus(request, "returnReceived")} className="mrs-blue-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  Receive
+                                </button>
+                              )}
+                              {request.status === "returnReceived" && (
+                                <button type="button" onClick={() => setRequestStatus(request, "completed")} className="mrs-blue-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  Complete
+                                </button>
+                              )}
+                              {!["ready", "received", "returned", "returnReceived", "completed", "canceled"].includes(request.status) && (
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
                                 <button type="button" onClick={() => setRequestStatus(request, "canceled")} className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-black uppercase text-red-600">
                                   Cancel
                                 </button>
@@ -527,8 +667,13 @@ export default function ChartRequests() {
                                 </button>
                               )}
                               {request.status === "received" && (
+<<<<<<< HEAD
                                 <button type="button" onClick={() => setRequestStatus(request, "for_return")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
                                   For Return
+=======
+                                <button type="button" onClick={() => setRequestStatus(request, "returned")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  Return
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
                                 </button>
                               )}
                               {request.status === "pending" && (
@@ -536,7 +681,11 @@ export default function ChartRequests() {
                                   Cancel
                                 </button>
                               )}
+<<<<<<< HEAD
                               {!["pending", "for_pickup", "ready", "received"].includes(request.status) && (
+=======
+                              {!["pending", "ready", "received"].includes(request.status) && (
+>>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
                                 <span className="text-[10px] font-black uppercase text-slate-400">No action</span>
                               )}
                             </>
@@ -549,11 +698,11 @@ export default function ChartRequests() {
 
                 {visibleRequests.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="p-10 text-center">
+                    <td colSpan="7" className="p-10 text-center">
                       <ClipboardList size={40} className="mx-auto mb-3 text-slate-300" />
                       <p className="font-black uppercase text-slate-700">No chart requests found</p>
                       <p className="mt-1 text-sm font-semibold text-slate-400">
-                        {isRecordsUser ? "New clinical borrow requests will appear here." : "Borrow a physical chart when it is needed."}
+                        {isRecordsUser ? "New clinical chart requests will appear here." : "Request a physical chart when it is needed."}
                       </p>
                     </td>
                   </tr>
@@ -565,6 +714,54 @@ export default function ChartRequests() {
       </div>
 
       <FloatingToast toast={toast} onClose={() => setToast(null)} />
+      {transactionRequest && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            aria-label="Close transaction dates"
+            onClick={() => setTransactionRequest(null)}
+          />
+          <div className="mrs-panel relative w-full max-w-lg overflow-hidden rounded-2xl">
+            <div className="mrs-section-band flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Transaction Dates</p>
+                <p className="mt-1 break-words text-lg font-black uppercase text-slate-900">{transactionRequest.patientName || "No patient name"}</p>
+                <p className="mt-1 font-mono text-xs font-black uppercase text-green-700">{transactionRequest.caseNumber}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTransactionRequest(null)}
+                className="mrs-soft-button inline-flex size-9 shrink-0 items-center justify-center rounded-lg"
+                aria-label="Close transaction dates"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="max-h-[65dvh] overflow-y-auto p-5">
+              <div className="space-y-2">
+                {requestDateRows(transactionRequest).map(([label, value, colorClass]) => (
+                  <div key={label} className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-green-100 bg-green-50 text-green-700">
+                        <CalendarDays size={15} />
+                      </span>
+                      <p className={`text-xs font-black uppercase ${colorClass}`}>{label}</p>
+                    </div>
+                    <p className="shrink-0 text-right text-xs font-black uppercase text-slate-700">{formatDisplayDate(value)}</p>
+                  </div>
+                ))}
+                {requestDateRows(transactionRequest).length === 0 && (
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-6 text-center">
+                    <CalendarDays size={30} className="mx-auto mb-2 text-slate-300" />
+                    <p className="text-sm font-black uppercase text-slate-700">No dates recorded yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <ChartRequestConfirmModal
         action={confirmAction}
         isSaving={isSaving}

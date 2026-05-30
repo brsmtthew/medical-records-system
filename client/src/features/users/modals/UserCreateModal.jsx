@@ -1,4 +1,4 @@
-import { UserPlus, X } from "lucide-react";
+import { LoaderCircle, UserPlus, X } from "lucide-react";
 
 import {
   defaultDoctorClinics,
@@ -181,8 +181,9 @@ export default function UserCreateModal({
           <button
             type="submit"
             disabled={isCreating}
-            className="mrs-primary-button rounded-xl px-4 py-3 text-xs font-black uppercase disabled:opacity-60"
+            className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase disabled:opacity-60"
           >
+            {isCreating && <LoaderCircle size={16} className="animate-spin" />}
             {isCreating ? "Creating..." : "Create Account"}
           </button>
         </div>

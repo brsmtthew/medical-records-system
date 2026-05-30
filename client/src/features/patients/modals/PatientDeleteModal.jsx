@@ -1,5 +1,5 @@
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, Trash2, X } from "lucide-react";
+import { AlertTriangle, LoaderCircle, Trash2, X } from "lucide-react";
 
 export default function PatientDeleteModal({
   canDeletePatients,
@@ -56,7 +56,7 @@ export default function PatientDeleteModal({
                   Cancel
                 </button>
                 <button onClick={() => onConfirm(patient.caseNumber)} disabled={isDeleting} className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-xs font-black uppercase text-white shadow-lg shadow-red-600/20 transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70">
-                  <Trash2 size={17} />
+                  {isDeleting ? <LoaderCircle size={17} className="animate-spin" /> : <Trash2 size={17} />}
                   {isDeleting ? "Deleting..." : "Delete Record"}
                 </button>
               </div>

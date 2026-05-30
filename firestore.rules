@@ -10,25 +10,29 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function isActiveAccount(data) {
+      return !("accountStatus" in data) || data.accountStatus == "active";
+    }
+
     function isAdmin() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && userProfile().data.role == "admin"
-        && userProfile().data.accountStatus == "active";
+        && isActiveAccount(userProfile().data);
     }
 
     function isActiveStaff() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && userProfile().data.role in ["admin", "staff"]
-        && userProfile().data.accountStatus == "active";
+        && isActiveAccount(userProfile().data);
     }
 
     function isActiveClinicalUser() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && userProfile().data.role in ["doctor", "nurse"]
-        && userProfile().data.accountStatus == "active";
+        && isActiveAccount(userProfile().data);
     }
 
     function isActiveSystemUser() {
@@ -57,8 +61,8 @@ service cloud.firestore {
     }
 
     function validUserProfileShape() {
-      return validSystemRole(request.resource.data.role)
-        && validAccountStatus(request.resource.data.accountStatus)
+      return (!("role" in request.resource.data) || validSystemRole(request.resource.data.role))
+        && (!("accountStatus" in request.resource.data) || validAccountStatus(request.resource.data.accountStatus))
         && (!("fullName" in request.resource.data) || validShortString(request.resource.data.fullName, 160))
         && (!("email" in request.resource.data) || validShortString(request.resource.data.email, 254))
         && (!("phone" in request.resource.data) || validShortString(request.resource.data.phone, 40))
@@ -68,26 +72,45 @@ service cloud.firestore {
         && (!("specialty" in request.resource.data) || validShortString(request.resource.data.specialty, 120))
         && (!("licenseNumber" in request.resource.data) || validShortString(request.resource.data.licenseNumber, 80))
         && (!("restrictionReason" in request.resource.data) || validShortString(request.resource.data.restrictionReason, 300))
+        && (!("doctorDescription" in request.resource.data) || validShortString(request.resource.data.doctorDescription, 420))
+        && (!("clinicalDescription" in request.resource.data) || validShortString(request.resource.data.clinicalDescription, 420))
+        && (!("clinicalPortalSubtitle" in request.resource.data) || validShortString(request.resource.data.clinicalPortalSubtitle, 180))
         && (!("photoDataUrl" in request.resource.data) || validOptionalImageDataUrl(request.resource.data.photoDataUrl))
         && (!("clinicalCoverDataUrl" in request.resource.data) || validOptionalImageDataUrl(request.resource.data.clinicalCoverDataUrl));
     }
 
-    function validChartRequestTransition(currentStatus, nextStatus) {
-      return currentStatus == nextStatus
-        || (currentStatus == "pending" && nextStatus in ["accepted", "canceled"])
-        || (currentStatus == "accepted" && nextStatus in ["preparing", "canceled"])
-        || (currentStatus == "preparing" && nextStatus in ["for_pickup", "canceled"])
-        || (currentStatus == "for_pickup" && nextStatus in ["received", "canceled"])
-        || (currentStatus == "received" && nextStatus == "for_return")
-        || (currentStatus == "for_return" && nextStatus == "returned");
+    function preservesAccountStatus() {
+      return (
+          !("accountStatus" in resource.data)
+          && !("accountStatus" in request.resource.data)
+        )
+        || (
+          "accountStatus" in resource.data
+          && "accountStatus" in request.resource.data
+          && request.resource.data.accountStatus == resource.data.accountStatus
+        );
     }
 
-    function isOwnForPickupChartRequest(requestId, caseNumber) {
-      return requestId is string
-        && exists(/databases/$(database)/documents/chartRequests/$(requestId))
-        && get(/databases/$(database)/documents/chartRequests/$(requestId)).data.requestedById == request.auth.uid
-        && get(/databases/$(database)/documents/chartRequests/$(requestId)).data.caseNumber == caseNumber
-        && get(/databases/$(database)/documents/chartRequests/$(requestId)).data.status == "for_pickup";
+    function preservesRole() {
+      return (
+          !("role" in resource.data)
+          && !("role" in request.resource.data)
+        )
+        || (
+          "role" in resource.data
+          && "role" in request.resource.data
+          && request.resource.data.role == resource.data.role
+        );
+    }
+
+    function validChartRequestTransition(currentStatus, nextStatus) {
+      return currentStatus == nextStatus
+        || (currentStatus == "pending" && nextStatus in ["preparing", "borrowed", "canceled"])
+        || (currentStatus == "preparing" && nextStatus in ["ready", "canceled"])
+        || (currentStatus == "ready" && nextStatus in ["received", "canceled"])
+        || (currentStatus == "received" && nextStatus in ["completed", "canceled"])
+        || (currentStatus == "borrowed" && nextStatus == "returned")
+        || (currentStatus == "returned" && nextStatus == "completed");
     }
 
     function isTerminalReleaseStatus(status) {
@@ -119,7 +142,14 @@ service cloud.firestore {
           || isAdmin()
           || (isActiveStaff() && resource.data.role == "doctor")
         );
-      allow update: if (isAdmin() && validUserProfileShape())
+      allow update: if (
+          isAdmin()
+          && validUserProfileShape()
+          && (
+            request.auth.uid != userId
+            || (preservesRole() && preservesAccountStatus())
+          )
+        )
         || (
           signedIn()
           && request.auth.uid == userId
@@ -130,13 +160,17 @@ service cloud.firestore {
             "phone",
             "position",
             "department",
+            "clinic",
+            "doctorDescription",
+            "clinicalDescription",
+            "clinicalPortalSubtitle",
             "photoDataUrl",
             "clinicalCoverDataUrl",
             "updatedAt"
           ])
           && request.resource.data.role == resource.data.role
           && validSystemRole(request.resource.data.role)
-          && request.resource.data.accountStatus == resource.data.accountStatus
+          && preservesAccountStatus()
         );
       allow delete: if isAdmin() && request.auth.uid != userId;
     }
@@ -227,8 +261,8 @@ service cloud.firestore {
               && request.resource.data.status == "received"
             )
             || (
-              resource.data.status == "received"
-              && request.resource.data.status == "for_return"
+              resource.data.status == "borrowed"
+              && request.resource.data.status == "returned"
             )
           )
         );
@@ -278,7 +312,8 @@ service cloud.firestore {
     }
 
     match /auditLogs/{logId} {
-      allow create: if isActiveSystemUser() && request.resource.data.userId == request.auth.uid;
+      allow create: if isAdmin()
+        || (isActiveSystemUser() && request.resource.data.userId == request.auth.uid);
       allow read, delete: if isAdmin();
       allow update: if false;
     }

@@ -6,6 +6,7 @@ import {
   Eye,
   EyeOff,
   HeartPulse,
+  LoaderCircle,
   LockKeyhole,
   Mail,
   UserRound,
@@ -311,11 +312,6 @@ export default function Login() {
                           />
                           Keep signed in on this browser
                         </label>
-                        {!form.remember && (
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                            Safer for testing separate users in separate tabs.
-                          </p>
-                        )}
                       </div>
                       {!isCreateAccount && (
                         <button
@@ -341,7 +337,7 @@ export default function Login() {
                         : isCreateAccount
                           ? "Create Account"
                           : "Log In"}
-                      <ArrowRight size={18} />
+                      {isSubmitting ? <LoaderCircle size={18} className="animate-spin" /> : <ArrowRight size={18} />}
                     </Motion.button>
 
                     <div className="flex items-center gap-3 py-1">

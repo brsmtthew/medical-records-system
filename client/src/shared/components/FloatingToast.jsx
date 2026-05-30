@@ -74,6 +74,7 @@ export default function FloatingToast({ toast, onClose, duration = 3200 }) {
       userEmail: currentUser?.email || "",
       userId: currentUser?.uid || "",
       adminOnly: Boolean(toast.adminOnly),
+      targetPath: toast.targetPath || "",
     });
 
     try {

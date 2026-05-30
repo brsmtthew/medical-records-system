@@ -1,4 +1,4 @@
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, LoaderCircle } from "lucide-react";
 
 export default function ReportDeleteModal({
   isDeleting,
@@ -32,8 +32,9 @@ export default function ReportDeleteModal({
             type="button"
             onClick={onConfirm}
             disabled={isDeleting}
-            className="py-3 rounded-xl bg-red-600 text-white text-xs font-black uppercase shadow-lg shadow-red-600/20 disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-xs font-black uppercase text-white shadow-lg shadow-red-600/20 disabled:cursor-not-allowed disabled:opacity-70"
           >
+            {isDeleting && <LoaderCircle size={16} className="animate-spin" />}
             {isDeleting ? "Deleting..." : "Delete"}
           </button>
         </div>

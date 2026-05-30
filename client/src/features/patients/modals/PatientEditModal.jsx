@@ -1,5 +1,5 @@
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { CalendarDays, Edit, Hash, MapPin, Save, UserRound, X } from "lucide-react";
+import { CalendarDays, Edit, Hash, LoaderCircle, MapPin, Save, UserRound, X } from "lucide-react";
 import StatusBadge from "@shared/components/StatusBadge";
 import DoctorSelect from "@shared/components/DoctorSelect";
 import { buildAttendingDoctorFields, findDoctorById } from "@shared/utils/doctors";
@@ -229,7 +229,8 @@ export default function PatientEditModal({
                   Cancel
                 </button>
                 <button type="submit" disabled={pendingAction === "update"} className="mrs-blue-button flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase disabled:cursor-not-allowed disabled:opacity-70">
-                  <Save size={17} /> {pendingAction === "update" ? "Saving..." : "Save Changes"}
+                  {pendingAction === "update" ? <LoaderCircle size={17} className="animate-spin" /> : <Save size={17} />}
+                  {pendingAction === "update" ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </form>
