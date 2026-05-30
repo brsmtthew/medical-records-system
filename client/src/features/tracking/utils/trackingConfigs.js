@@ -78,8 +78,11 @@ export function optionLabel(options, value) {
 export function statusTextClass(status) {
   const classes = {
     active: "mrs-status-text-success",
+    accepted: "mrs-status-text-reviewed",
     borrowed: "mrs-status-text-borrowed",
     canceled: "mrs-status-text-warning",
+    for_pickup: "mrs-status-text-success",
+    for_return: "mrs-status-text-warning",
     forRelease: "mrs-status-text-borrowed",
     forReview: "mrs-status-text-borrowed",
     paid: "mrs-status-text-success",
@@ -96,8 +99,11 @@ export function statusTextClass(status) {
 export function statusBadgeClass(status) {
   const classes = {
     active: "mrs-status-success",
+    accepted: "mrs-status-info",
     borrowed: "mrs-status-borrowed",
     canceled: "mrs-status-warning",
+    for_pickup: "mrs-status-success",
+    for_return: "mrs-status-warning",
     forRelease: "mrs-status-info",
     forReview: "mrs-status-info",
     paid: "mrs-status-success",

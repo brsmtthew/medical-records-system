@@ -11,6 +11,7 @@ const Reports = lazy(() => import("../features/reports/pages/Reports"));
 const Settings = lazy(() => import("../features/settings/pages/Settings"));
 const ChartViewing = lazy(() => import("../features/charts/pages/ChartViewing"));
 const ChartRequests = lazy(() => import("../features/charts/pages/ChartRequests"));
+const ChartReturns = lazy(() => import("../features/charts/pages/ChartReturns"));
 const Users = lazy(() => import("../features/users/pages/Users"));
 const MedicalDocuments = lazy(() => import("../features/documents/pages/MedicalDocuments"));
 const LabResults = lazy(() => import("../features/documents/pages/LabResults"));
@@ -128,6 +129,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute roles={["admin", "staff", "nurse", "doctor"]}>
               <ChartRequests />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chart-return"
+          element={
+            <ProtectedRoute roles={["nurse", "doctor"]}>
+              <ChartReturns />
             </ProtectedRoute>
           }
         />

@@ -6,6 +6,7 @@ export {
   clearAuditLogs,
   deleteAuditLog,
   deleteChartLog,
+  deleteChartRequestReport,
   fallbackDepartments,
   subscribeToAuditLogs,
   subscribeToChartRequests,

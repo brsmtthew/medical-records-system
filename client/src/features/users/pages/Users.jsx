@@ -23,6 +23,7 @@ import {
   defaultDoctorClinics,
   defaultNurseDepartments,
   normalizeUserRole,
+  prefixedUserName,
   roleLabel,
   userRoles,
 } from "@shared/constants/userRoles";
@@ -284,6 +285,7 @@ export default function Users() {
         const isSelf = userId === currentUser?.uid;
         const isDisabled = user.accountStatus === "disabled";
         const role = normalizeUserRole(user.role);
+        const displayName = prefixedUserName(user.fullName || user.displayName || "Unnamed User", role);
         const assignment = role === userRoles.doctor
           ? user.clinic || "No clinic assigned"
           : user.department || "No department assigned";
@@ -301,7 +303,7 @@ export default function Users() {
                 </div>
                 <div className="min-w-0">
                   <p className="break-words text-sm font-black uppercase text-slate-800">
-                    {user.fullName || user.displayName || "Unnamed User"}
+                    {displayName}
                   </p>
                   <p className="mt-1 break-words text-[10px] font-bold text-slate-400">
                     {user.email || "No email saved"}

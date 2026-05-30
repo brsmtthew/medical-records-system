@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import {
   deleteChartLog,
+  deleteChartRequestReport,
   subscribeToChartLogs,
   subscribeToChartRequests,
 } from "../../charts/services/chartService";
@@ -25,7 +26,8 @@ import { statusBadgeClass, statusTextClass } from "@features/tracking/utils/trac
 
 const rowsPerPage = 25;
 const recordsFilters = ["all", "borrowed", "returned", "canceled"];
-const requestFilters = ["all", "pending", "preparing", "ready", "received", "completed", "canceled"];
+const requestFilters = ["all", "pending", "accepted", "preparing", "for_pickup", "received", "for_return", "returned", "canceled"];
+const deletableRequestStatuses = new Set(["returned", "completed", "canceled"]);
 
 function getLogActivityDate(log) {
   if (log.action === "canceled") {
@@ -41,8 +43,15 @@ function getLogActivityDate(log) {
 
 function getRequestActivityDate(request) {
   return request.completedAt
+    || request.returnConfirmedAt
+    || request.returnedAt
+    || request.returnRequestedAt
+    || request.borrowedAt
+    || request.approvedAt
     || request.receivedAt
+    || request.forPickupAt
     || request.readyAt
+    || request.acceptedAt
     || request.preparedAt
     || request.canceledAt
     || request.updatedAt
@@ -67,10 +76,15 @@ function normalizeStatus(value, fallback = "pending") {
   return String(value || fallback).toLowerCase();
 }
 
+function displayFilterLabel(value) {
+  return value.replace("_", " ");
+}
+
 export default function Reports() {
   const { currentUser, isAdmin, userRole } = useAuth();
   const isRecordsUser = isMedicalRecordsRole(userRole);
   const canManageReports = isRecordsUser && isAdmin;
+  const showDeleteColumn = canManageReports || !isRecordsUser;
   const [systemSettings] = useState(readSystemSettings);
   const [reportRows, setReportRows] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -108,7 +122,7 @@ export default function Reports() {
   const filterOptions = isRecordsUser ? recordsFilters : requestFilters;
   const actionLabel = isRecordsUser ? "Action" : "Status";
   const searchPlaceholder = isRecordsUser
-    ? "Search patient, case number, borrower, returner, or department"
+    ? "Search patient, case number, requester, borrower, returner, staff, or department"
     : "Search patient, case number, request purpose, clinic, department, or status";
 
   useEffect(() => {
@@ -124,7 +138,7 @@ export default function Reports() {
       const activityDate = toDateKey(isRecordsUser ? getLogActivityDate(row) : getRequestActivityDate(row));
       const matchesAction = actionFilter === "all" || status === actionFilter;
       const searchBlob = isRecordsUser
-        ? `${row.patientName || ""} ${row.caseNumber || ""} ${row.borrowedBy || ""} ${row.returnedBy || ""} ${row.department || ""} ${row.remarks || ""}`
+        ? `${row.patientName || ""} ${row.caseNumber || ""} ${row.borrowedBy || ""} ${row.returnedBy || ""} ${row.approvedBy || ""} ${row.returnConfirmedBy || ""} ${row.department || ""} ${row.remarks || ""}`
         : `${row.patientName || ""} ${row.caseNumber || ""} ${row.purpose || ""} ${row.requestedBy || ""} ${row.requestedByClinic || ""} ${row.department || ""} ${row.status || ""} ${row.remarks || ""}`;
       const matchesSearch = searchBlob.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStart = !startDate || activityDate >= startDate;
@@ -167,14 +181,14 @@ export default function Reports() {
           tone: "green",
         },
         {
-          label: "Ready For Pickup",
-          value: reportRows.filter((row) => normalizeStatus(row.status) === "ready").length,
+          label: "For Pick-Up",
+          value: reportRows.filter((row) => ["for_pickup", "ready"].includes(normalizeStatus(row.status))).length,
           icon: CheckCircle2,
           tone: "blue",
         },
         {
-          label: "Completed Transactions",
-          value: reportRows.filter((row) => normalizeStatus(row.status) === "completed").length,
+          label: "For Return",
+          value: reportRows.filter((row) => normalizeStatus(row.status) === "for_return").length,
           icon: RotateCcw,
           tone: "green",
         },
@@ -214,14 +228,25 @@ export default function Reports() {
     if (!deleteLog || isDeletingLog) return;
     try {
       setIsDeletingLog(true);
-      await deleteChartLog(deleteLog.id);
-      setSuccessMessage(`${deleteLog.caseNumber || "Report row"} was deleted.`);
-      setSuccessMeta({
-        patientName: deleteLog.patientName || "",
-        caseNumber: deleteLog.caseNumber || "",
-        action: "Report Row Deleted",
-        audit: true,
-      });
+      if (deleteLog.reportType === "request") {
+        await deleteChartRequestReport(deleteLog.id);
+        setSuccessMessage(`${deleteLog.caseNumber || "Report row"} was deleted.`);
+        setSuccessMeta({
+          patientName: deleteLog.patientName || "",
+          caseNumber: deleteLog.caseNumber || "",
+          action: "Report Row Deleted",
+          audit: true,
+        });
+      } else {
+        await deleteChartLog(deleteLog.id);
+        setSuccessMessage(`${deleteLog.caseNumber || "Report row"} was deleted.`);
+        setSuccessMeta({
+          patientName: deleteLog.patientName || "",
+          caseNumber: deleteLog.caseNumber || "",
+          action: "Report Row Deleted",
+          audit: true,
+        });
+      }
       setDeleteLog(null);
       setLoadError("");
     } catch (error) {
@@ -251,6 +276,11 @@ export default function Reports() {
         <p className="text-[10px] font-bold uppercase text-slate-400">
           {highlightSearch(log.department)}
         </p>
+        {(log.approvedBy || log.returnConfirmedBy) && (
+          <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">
+            Staff: {highlightSearch(log.returnConfirmedBy || log.approvedBy)}
+          </p>
+        )}
       </td>
       <td className="p-3">
         <span
@@ -314,26 +344,46 @@ export default function Reports() {
         </td>
         <td className="p-3">
           <span className={`mrs-status-badge ${statusBadgeClass(status)}`}>
-            {status}
+            {displayFilterLabel(status)}
           </span>
         </td>
         <td className="p-3">
           <p className="text-[10px] font-black uppercase leading-tight text-slate-500">
             Requested: {formatDateTime(request.createdAt)}
           </p>
+          {request.acceptedAt && (
+            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("reviewed")}`}>
+              Accepted: {formatDateTime(request.acceptedAt)}
+            </p>
+          )}
           {request.preparedAt && (
             <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("borrowed")}`}>
               Prepared: {formatDateTime(request.preparedAt)}
             </p>
           )}
-          {request.readyAt && (
+          {(request.forPickupAt || request.readyAt) && (
             <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("returned")}`}>
-              Ready: {formatDateTime(request.readyAt)}
+              For Pick-Up: {formatDateTime(request.forPickupAt || request.readyAt)}
             </p>
           )}
           {request.receivedAt && (
             <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("reviewed")}`}>
               Received: {formatDateTime(request.receivedAt)}
+            </p>
+          )}
+          {request.borrowedAt && (
+            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("borrowed")}`}>
+              Issued: {formatDateTime(request.borrowedAt)}
+            </p>
+          )}
+          {request.returnRequestedAt && (
+            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("canceled")}`}>
+              For Return: {formatDateTime(request.returnRequestedAt)}
+            </p>
+          )}
+          {request.returnConfirmedAt && (
+            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("returned")}`}>
+              Return Confirmed: {formatDateTime(request.returnConfirmedAt)}
             </p>
           )}
           {request.completedAt && (
@@ -350,6 +400,25 @@ export default function Reports() {
         <td className="p-3 text-[11px] font-semibold leading-snug text-slate-500 break-words">
           {highlightSearch(request.remarks || request.preparationNote || "N/A")}
         </td>
+        {showDeleteColumn && (
+          <td className="p-3">
+            <div className="flex justify-end">
+              {deletableRequestStatuses.has(status) ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteLog({ ...request, reportType: "request" })}
+                  className="rounded-xl border border-red-100 p-2 text-red-500 hover:border-red-300 hover:bg-red-50"
+                  aria-label={`Delete report row ${request.caseNumber}`}
+                  title="Delete report row"
+                >
+                  <Trash2 size={16} />
+                </button>
+              ) : (
+                <span className="text-[10px] font-black uppercase text-slate-400">Locked</span>
+              )}
+            </div>
+          </td>
+        )}
       </tr>
     );
   });
@@ -470,7 +539,7 @@ export default function Reports() {
                             : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:text-green-700"
                         }`}
                       >
-                        {filter}
+                        {displayFilterLabel(filter)}
                       </button>
                     ))}
                   </div>
@@ -497,7 +566,7 @@ export default function Reports() {
                     <th className="w-[14%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       Remarks
                     </th>
-                    {canManageReports && (
+                    {showDeleteColumn && (
                       <th className="w-[9%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Actions
                       </th>
@@ -509,7 +578,7 @@ export default function Reports() {
 
                   {filteredRows.length === 0 && (
                     <tr>
-                      <td colSpan={canManageReports ? 6 : 5} className="p-10 text-center">
+                      <td colSpan={showDeleteColumn ? 6 : 5} className="p-10 text-center">
                         <FileText size={38} className="mx-auto text-slate-300 mb-3" />
                         <p className="font-black text-slate-700 uppercase">
                           {isLoading ? "Loading reports..." : "No records found"}
@@ -558,7 +627,7 @@ export default function Reports() {
         </div>
       </div>
 
-      {canManageReports && (
+      {showDeleteColumn && (
         <ReportDeleteModal
           isDeleting={isDeletingLog}
           log={deleteLog}

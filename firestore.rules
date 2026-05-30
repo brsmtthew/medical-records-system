@@ -74,12 +74,20 @@ service cloud.firestore {
 
     function validChartRequestTransition(currentStatus, nextStatus) {
       return currentStatus == nextStatus
-        || (currentStatus == "pending" && nextStatus in ["preparing", "borrowed", "canceled"])
-        || (currentStatus == "preparing" && nextStatus in ["ready", "canceled"])
-        || (currentStatus == "ready" && nextStatus in ["received", "canceled"])
-        || (currentStatus == "received" && nextStatus in ["completed", "canceled"])
-        || (currentStatus == "borrowed" && nextStatus == "returned")
-        || (currentStatus == "returned" && nextStatus == "completed");
+        || (currentStatus == "pending" && nextStatus in ["accepted", "canceled"])
+        || (currentStatus == "accepted" && nextStatus in ["preparing", "canceled"])
+        || (currentStatus == "preparing" && nextStatus in ["for_pickup", "canceled"])
+        || (currentStatus == "for_pickup" && nextStatus in ["received", "canceled"])
+        || (currentStatus == "received" && nextStatus == "for_return")
+        || (currentStatus == "for_return" && nextStatus == "returned");
+    }
+
+    function isOwnForPickupChartRequest(requestId, caseNumber) {
+      return requestId is string
+        && exists(/databases/$(database)/documents/chartRequests/$(requestId))
+        && get(/databases/$(database)/documents/chartRequests/$(requestId)).data.requestedById == request.auth.uid
+        && get(/databases/$(database)/documents/chartRequests/$(requestId)).data.caseNumber == caseNumber
+        && get(/databases/$(database)/documents/chartRequests/$(requestId)).data.status == "for_pickup";
     }
 
     function isTerminalReleaseStatus(status) {
@@ -151,45 +159,40 @@ service cloud.firestore {
       allow update: if isActiveClinicalUser()
         && request.resource.data.caseNumber == caseNumber
         && isValidCaseNumber(request.resource.data.caseNumber)
-        && (
-          (
-            resource.data.status == "available"
-            && request.resource.data.status == "borrowed"
-            && request.resource.data.borrowerId == request.auth.uid
-            && request.resource.data.borrower is string
-            && request.resource.data.borrower.size() > 0
-            && request.resource.data.department is string
-            && request.resource.data.department.size() > 0
-            && request.resource.data.activeLogId is string
-            && request.resource.data.activeLogId.size() > 0
-            && request.resource.data.borrowedAt is string
-            && request.resource.data.borrowedAt.size() > 0
-          )
-          || (
-            resource.data.status == "borrowed"
-            && resource.data.borrowerId == request.auth.uid
-            && request.resource.data.status == "available"
-            && request.resource.data.borrower == ""
-            && request.resource.data.borrowerId == ""
-            && request.resource.data.department == ""
-            && request.resource.data.borrowedAt == ""
-            && request.resource.data.activeLogId == ""
-          )
-        );
+        && resource.data.status == "available"
+        && request.resource.data.status == "borrowed"
+        && request.resource.data.borrowerId == request.auth.uid
+        && request.resource.data.borrower is string
+        && request.resource.data.borrower.size() > 0
+        && request.resource.data.department is string
+        && request.resource.data.department.size() > 0
+        && request.resource.data.activeLogId is string
+        && request.resource.data.activeLogId.size() > 0
+        && request.resource.data.activeRequestId is string
+        && isOwnForPickupChartRequest(request.resource.data.activeRequestId, caseNumber)
+        && request.resource.data.borrowedAt is string
+        && request.resource.data.borrowedAt.size() > 0;
       allow delete: if isAdmin() || isSelfRenameDelete("charts", caseNumber);
     }
 
     match /chartLogs/{logId} {
       allow read: if isActiveStaff()
         || (isActiveClinicalUser() && resource.data.requestedById == request.auth.uid);
-      allow create, update: if isActiveStaff()
+      allow create: if isActiveStaff()
         || (
           isActiveClinicalUser()
           && request.resource.data.requestedById == request.auth.uid
-          && request.resource.data.action in ["borrowed", "returned"]
+          && request.resource.data.requestId is string
+          && isOwnForPickupChartRequest(request.resource.data.requestId, request.resource.data.caseNumber)
+          && request.resource.data.action == "borrowed"
           && isValidCaseNumber(request.resource.data.caseNumber)
         );
-      allow delete: if isAdmin();
+      allow update: if isActiveStaff();
+      allow delete: if isAdmin()
+        || (
+          isActiveClinicalUser()
+          && resource.data.requestedById == request.auth.uid
+        );
     }
 
     match /chartRequests/{requestId} {
@@ -197,7 +200,7 @@ service cloud.firestore {
         || (isActiveClinicalUser() && resource.data.requestedById == request.auth.uid);
       allow create: if isActiveSystemUser()
         && request.resource.data.requestedById == request.auth.uid
-        && request.resource.data.status in ["pending", "borrowed"]
+        && request.resource.data.status == "pending"
         && isValidCaseNumber(request.resource.data.caseNumber)
         && request.resource.data.patientName is string;
       allow update: if (
@@ -206,7 +209,7 @@ service cloud.firestore {
           && request.resource.data.caseNumber == resource.data.caseNumber
           && request.resource.data.patientName == resource.data.patientName
           && validChartRequestTransition(resource.data.status, request.resource.data.status)
-          && request.resource.data.status != "received"
+          && !(request.resource.data.status in ["received", "for_return"])
         )
         || (
           isActiveClinicalUser()
@@ -220,16 +223,20 @@ service cloud.firestore {
               && request.resource.data.status == "canceled"
             )
             || (
-              resource.data.status == "ready"
+              resource.data.status == "for_pickup"
               && request.resource.data.status == "received"
             )
             || (
-              resource.data.status == "borrowed"
-              && request.resource.data.status == "returned"
+              resource.data.status == "received"
+              && request.resource.data.status == "for_return"
             )
           )
         );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin()
+        || (
+          isActiveClinicalUser()
+          && resource.data.requestedById == request.auth.uid
+        );
     }
 
     match /userNotifications/{notificationId} {

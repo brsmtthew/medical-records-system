@@ -16,7 +16,7 @@ import PatientCaseCell from "@shared/components/PatientCaseCell";
 import ChartRequestConfirmModal from "../modals/ChartRequestConfirmModal";
 import { addChartRequest, subscribeToChartRequests, subscribeToCharts, updateChartRequest } from "@features/charts/services/chartService";
 import { useAuth } from "@features/auth/context/useAuth";
-import { isMedicalRecordsRole, roleLabel } from "@shared/constants/userRoles";
+import { isMedicalRecordsRole, prefixedUserName, roleLabel } from "@shared/constants/userRoles";
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { sanitizeText } from "@shared/utils/security";
 
@@ -29,10 +29,14 @@ const initialForm = {
 
 const statusMeta = {
   pending: { label: "Pending", badge: "mrs-status-warning", icon: Clock },
+  accepted: { label: "Accepted", badge: "mrs-status-info", icon: CheckCircle2 },
   preparing: { label: "Preparing", badge: "mrs-status-info", icon: FileText },
-  ready: { label: "Ready", badge: "mrs-status-success", icon: CheckCircle2 },
+  for_pickup: { label: "For Pick-Up", badge: "mrs-status-success", icon: ClipboardList },
+  ready: { label: "For Pick-Up", badge: "mrs-status-success", icon: CheckCircle2 },
   received: { label: "Received", badge: "mrs-status-info", icon: ClipboardList },
-  borrowed: { label: "Borrowed", badge: "mrs-status-info", icon: FileText },
+  borrowed: { label: "Received", badge: "mrs-status-info", icon: FileText },
+  for_return: { label: "For Return", badge: "mrs-status-warning", icon: RotateCcw },
+  return_pending: { label: "For Return", badge: "mrs-status-warning", icon: RotateCcw },
   returned: { label: "Returned", badge: "mrs-status-success", icon: RotateCcw },
   completed: { label: "Completed", badge: "mrs-status-success", icon: CheckCircle2 },
   canceled: { label: "Canceled", badge: "mrs-status-danger", icon: XCircle },
@@ -47,11 +51,11 @@ function searchable(value) {
 }
 
 function requesterDisplayName(request) {
-  const name = request.requestedBy || "Unknown requester";
-  if (request.requestedByRole === "doctor" && !name.toUpperCase().startsWith("DR.")) {
-    return `DR. ${name}`;
-  }
-  return name;
+  return prefixedUserName(request.requestedBy || "Unknown requester", request.requestedByRole);
+}
+
+function displayStatusFilter(filter) {
+  return filter.replace("_", " ");
 }
 
 export default function ChartRequests() {
@@ -114,8 +118,8 @@ export default function ChartRequests() {
 
     return [
       { label: "Active", value: scopedRequests.filter((request) => !["completed", "canceled"].includes(request.status)).length, icon: ClipboardList },
-      { label: "Borrowed", value: scopedRequests.filter((request) => request.status === "borrowed").length, icon: FileText },
-      { label: "Returned", value: scopedRequests.filter((request) => request.status === "returned").length, icon: RotateCcw },
+      { label: "For Pick-Up", value: scopedRequests.filter((request) => ["for_pickup", "ready"].includes(request.status)).length, icon: FileText },
+      { label: "For Return", value: scopedRequests.filter((request) => request.status === "for_return").length, icon: RotateCcw },
     ];
   }, [currentUser?.uid, isRecordsUser, requests]);
 
@@ -187,9 +191,9 @@ export default function ChartRequests() {
       setForm(initialForm);
       setToast({
         type: "success",
-        title: "Chart Borrowed",
-        message: `${confirmAction.caseNumber} was borrowed by your unit.`,
-        action: "Chart Request Borrowed",
+        title: "Chart Requested",
+        message: `${confirmAction.caseNumber} is waiting for Medical Records approval.`,
+        action: "Chart Request Submitted",
         audit: true,
         caseNumber: confirmAction.caseNumber,
         patientName: confirmAction.patientName,
@@ -219,9 +223,12 @@ export default function ChartRequests() {
     const now = new Date().toISOString();
     const timeKey = {
       preparing: "preparedAt",
+      accepted: "acceptedAt",
+      for_pickup: "forPickupAt",
       ready: "readyAt",
       received: "receivedAt",
       borrowed: "borrowedAt",
+      for_return: "returnRequestedAt",
       returned: "returnedAt",
       completed: "completedAt",
       canceled: "canceledAt",
@@ -247,7 +254,7 @@ export default function ChartRequests() {
     }
   };
 
-  const statusFilters = ["active", "all", "borrowed", "returned", "pending", "preparing", "ready", "received", "completed", "canceled"];
+  const statusFilters = ["active", "all", "pending", "accepted", "preparing", "for_pickup", "received", "for_return", "returned", "canceled"];
 
   return (
     <DashboardLayout>
@@ -260,8 +267,8 @@ export default function ChartRequests() {
             </h1>
             <p className="mt-1 text-xs font-semibold text-slate-500">
               {isRecordsUser
-                ? "Monitor clinical chart borrowing and close returned requests."
-                : `Borrow physical charts for the ${roleLabel(userRole)} workspace and return them when done.`}
+                ? "Approve clinical chart requests, confirm physical returns, and track each handoff."
+                : `Request charts for the ${roleLabel(userRole)} workspace; Medical Records must approve and confirm returns.`}
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -308,7 +315,7 @@ export default function ChartRequests() {
                 <input
                   value={form.purpose}
                   onChange={(event) => updateForm("purpose", event.target.value)}
-                  placeholder="Borrowing purpose / remarks"
+                  placeholder="Request purpose / remarks"
                   className="mrs-field rounded-lg px-3 py-2 text-xs font-bold"
                 />
                 <button
@@ -317,7 +324,7 @@ export default function ChartRequests() {
                   className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-black uppercase disabled:opacity-60"
                 >
                   <Send size={16} />
-                  {isSaving ? "Borrowing" : "Borrow"}
+                  {isSaving ? "Requesting" : "Request"}
                 </button>
               </div>
             </form>
@@ -326,7 +333,7 @@ export default function ChartRequests() {
               <div className="mrs-section-band flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2">
                 <div>
                   <p className="text-xs font-black uppercase text-slate-800">Available Charts</p>
-                  <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">Click a row to fill the borrowing form.</p>
+                  <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">Click a row to fill the request form.</p>
                 </div>
                 <span className="mrs-status-badge mrs-status-success">{availableCharts.length} available</span>
               </div>
@@ -428,7 +435,7 @@ export default function ChartRequests() {
                       : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:bg-green-50 hover:text-green-700"
                   }`}
                 >
-                  {filter}
+                  {displayStatusFilter(filter)}
                 </button>
               ))}
             </div>
@@ -476,8 +483,10 @@ export default function ChartRequests() {
                           <StatusIcon size={13} />
                           {meta.label}
                         </span>
-                        {request.preparedBy && (
-                          <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">By {request.preparedBy}</p>
+                        {(request.returnConfirmedBy || request.approvedBy || request.preparedBy) && (
+                          <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">
+                            By {request.returnConfirmedBy || request.approvedBy || request.preparedBy}
+                          </p>
                         )}
                       </td>
                       <td className="p-3">
@@ -485,26 +494,26 @@ export default function ChartRequests() {
                           {isRecordsUser ? (
                             <>
                               {request.status === "pending" && (
+                                <button type="button" onClick={() => setRequestStatus(request, "accepted")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  Accept
+                                </button>
+                              )}
+                              {request.status === "accepted" && (
                                 <button type="button" onClick={() => setRequestStatus(request, "preparing")} className="mrs-soft-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
                                   Prepare
                                 </button>
                               )}
                               {request.status === "preparing" && (
-                                <button type="button" onClick={() => setRequestStatus(request, "ready")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
-                                  Ready
+                                <button type="button" onClick={() => setRequestStatus(request, "for_pickup")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  For Pick-Up
                                 </button>
                               )}
-                              {request.status === "received" && (
-                                <button type="button" onClick={() => setRequestStatus(request, "completed")} className="mrs-blue-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
-                                  Complete
+                              {request.status === "for_return" && (
+                                <button type="button" onClick={() => setRequestStatus(request, "returned")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  Confirm Return
                                 </button>
                               )}
-                              {request.status === "returned" && (
-                                <button type="button" onClick={() => setRequestStatus(request, "completed")} className="mrs-blue-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
-                                  Complete
-                                </button>
-                              )}
-                              {!["borrowed", "returned", "completed", "canceled"].includes(request.status) && (
+                              {!["received", "for_return", "returned", "completed", "canceled"].includes(request.status) && (
                                 <button type="button" onClick={() => setRequestStatus(request, "canceled")} className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-black uppercase text-red-600">
                                   Cancel
                                 </button>
@@ -512,14 +521,14 @@ export default function ChartRequests() {
                             </>
                           ) : (
                             <>
-                              {request.status === "ready" && (
+                              {["for_pickup", "ready"].includes(request.status) && (
                                 <button type="button" onClick={() => setRequestStatus(request, "received")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
                                   Received
                                 </button>
                               )}
-                              {request.status === "borrowed" && (
-                                <button type="button" onClick={() => setRequestStatus(request, "returned")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
-                                  Return
+                              {request.status === "received" && (
+                                <button type="button" onClick={() => setRequestStatus(request, "for_return")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
+                                  For Return
                                 </button>
                               )}
                               {request.status === "pending" && (
@@ -527,7 +536,7 @@ export default function ChartRequests() {
                                   Cancel
                                 </button>
                               )}
-                              {!["pending", "ready", "borrowed"].includes(request.status) && (
+                              {!["pending", "for_pickup", "ready", "received"].includes(request.status) && (
                                 <span className="text-[10px] font-black uppercase text-slate-400">No action</span>
                               )}
                             </>

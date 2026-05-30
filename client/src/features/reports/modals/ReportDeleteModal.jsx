@@ -17,7 +17,7 @@ export default function ReportDeleteModal({
         </div>
         <h2 className="text-2xl font-black text-slate-800 uppercase">Delete Report Row?</h2>
         <p className="text-sm font-semibold text-slate-500 mt-2 mb-7">
-          This removes the audit row for {log.caseNumber || "this chart"}.
+          This removes the report row for {log.caseNumber || "this chart"} and any linked chart movement log.
         </p>
         <div className="grid grid-cols-2 gap-3">
           <button

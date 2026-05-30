@@ -17,6 +17,13 @@ export const roleLabels = {
   [userRoles.doctor]: "Doctor",
 };
 
+export const roleNamePrefixes = {
+  [userRoles.admin]: "AD.",
+  [userRoles.staff]: "ST.",
+  [userRoles.nurse]: "RN.",
+  [userRoles.doctor]: "DR.",
+};
+
 export const defaultNurseDepartments = [
   "Emergency Room",
   "Nursing Station",
@@ -45,4 +52,15 @@ export function roleLabel(role) {
 
 export function isMedicalRecordsRole(role) {
   return medicalRecordsRoles.includes(normalizeUserRole(role));
+}
+
+export function roleNamePrefix(role) {
+  return roleNamePrefixes[normalizeUserRole(role)] || "";
+}
+
+export function prefixedUserName(name, role) {
+  const safeName = String(name || "").trim();
+  const prefix = roleNamePrefix(role);
+  if (!safeName || !prefix) return safeName;
+  return safeName.toUpperCase().startsWith(prefix) ? safeName : `${prefix} ${safeName}`;
 }
