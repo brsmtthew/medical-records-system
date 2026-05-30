@@ -22,6 +22,8 @@ export function normalizeNotification(notification) {
     userEmail: notification.userEmail || "",
     userId: notification.userId || "",
     adminOnly: Boolean(notification.adminOnly),
+    targetPath: notification.targetPath || "",
+    readAt: notification.readAt || "",
   };
 }
 

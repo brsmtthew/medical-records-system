@@ -44,7 +44,7 @@ import {
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { applySystemTheme, readSystemSettings, saveSystemSettings } from "@shared/utils/systemSettings";
 import { isStrongPassword, normalizeEmail } from "@shared/utils/security";
-import { roleLabel } from "@shared/constants/userRoles";
+import { roleLabel, userRoles } from "@shared/constants/userRoles";
 import { subscribeToUserNotifications } from "@features/charts/services/chartService";
 
 // Builds the compact initials fallback for accounts without an uploaded photo.
@@ -90,6 +90,50 @@ function mergeNotifications(firstList, secondList) {
     .slice(0, maxNotificationLogItems);
 }
 
+function notificationSearchPath(path, notification) {
+  if (!notification.caseNumber || path.includes("?")) return path;
+  return `${path}?search=${encodeURIComponent(notification.caseNumber)}`;
+}
+
+function getNotificationTargetPath(notification) {
+  if (notification.targetPath) return notification.targetPath;
+
+  const intent = [
+    notification.action,
+    notification.title,
+    notification.message,
+  ].join(" ").toLowerCase();
+
+  if (intent.includes("chart request") || intent.includes("chart received")) {
+    return notificationSearchPath("/chart-requests", notification);
+  }
+  if (intent.includes("chart borrowed") || intent.includes("chart returned") || intent.includes("checkout") || intent.includes("return")) {
+    return notificationSearchPath("/charts", notification);
+  }
+  if (intent.includes("patient")) return notificationSearchPath("/patients", notification);
+  if (intent.includes("report")) return notificationSearchPath("/reports", notification);
+  if (intent.includes("medical document") || intent.includes("laboratory") || intent.includes("certificate")) return "/tracking-reports";
+  if (intent.includes("user") || intent.includes("account")) return "/users";
+  if (intent.includes("setting") || intent.includes("notification log")) return "/settings";
+
+  return "/dashboard";
+}
+
+function applyStoredReadState(storedNotifications, legacyUnreadCount) {
+  const normalizedNotifications = storedNotifications.map(normalizeNotification);
+  if (!normalizedNotifications.length || normalizedNotifications.some((notification) => notification.readAt)) {
+    return normalizedNotifications;
+  }
+
+  const readAt = new Date().toISOString();
+  const unreadCount = Math.max(0, Number(legacyUnreadCount) || 0);
+  return normalizedNotifications.map((notification, index) => (
+    index < unreadCount
+      ? notification
+      : { ...notification, readAt }
+  ));
+}
+
 export default function Navbar({ onMenuClick }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -100,14 +144,15 @@ export default function Navbar({ onMenuClick }) {
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [showClearNotificationsConfirm, setShowClearNotificationsConfirm] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [, setUnreadNotifications] = useState(0);
   const [accountProfile, setAccountProfile] = useState(null);
   const [accountForm, setAccountForm] = useState({
     fullName: "",
     email: "",
     phone: "",
     position: "",
-    department: "Medical Records",
+    department: "",
+    clinic: "",
     photoDataUrl: "",
     currentPassword: "",
     newPassword: "",
@@ -120,9 +165,7 @@ export default function Navbar({ onMenuClick }) {
   const remoteNotificationIdsRef = useRef(new Set());
   const hasLoadedRemoteNotificationsRef = useRef(false);
   const visibleNotifications = notifications;
-  const visibleUnreadNotifications = visibleNotifications.length
-    ? Math.min(unreadNotifications, visibleNotifications.length)
-    : 0;
+  const visibleUnreadNotifications = visibleNotifications.filter((notification) => !notification.readAt).length;
 
   useEffect(() => {
     if (!currentUser || !db) return undefined;
@@ -135,7 +178,8 @@ export default function Navbar({ onMenuClick }) {
         email: currentUser.email || profile.email || "",
         phone: profile.phone || "",
         position: profile.position || "",
-        department: profile.department || "Medical Records",
+        department: profile.department || "",
+        clinic: profile.clinic || "",
         photoDataUrl: profile.photoDataUrl || "",
         currentPassword: "",
         newPassword: "",
@@ -151,8 +195,8 @@ export default function Navbar({ onMenuClick }) {
 
   useEffect(() => {
     if (!currentUser?.uid) return;
-    writeStoredUnreadNotifications(unreadNotifications, currentUser.uid);
-  }, [currentUser?.uid, unreadNotifications]);
+    writeStoredUnreadNotifications(visibleUnreadNotifications, currentUser.uid);
+  }, [currentUser?.uid, visibleUnreadNotifications]);
 
   useEffect(() => {
     let isActive = true;
@@ -166,8 +210,9 @@ export default function Navbar({ onMenuClick }) {
         return;
       }
 
-      setNotifications(readStoredBellNotifications(userId));
-      setUnreadNotifications(readStoredUnreadNotifications(userId));
+      const storedUnreadCount = readStoredUnreadNotifications(userId);
+      setNotifications(applyStoredReadState(readStoredBellNotifications(userId), storedUnreadCount));
+      setUnreadNotifications(storedUnreadCount);
     });
 
     return () => {
@@ -183,7 +228,7 @@ export default function Navbar({ onMenuClick }) {
 
     return subscribeToUserNotifications(
       (rows) => {
-        const remoteNotifications = rows.map((row) => normalizeNotification({
+        let remoteNotifications = rows.map((row) => normalizeNotification({
           id: row.id,
           type: row.type || "info",
           title: row.title || "",
@@ -194,14 +239,18 @@ export default function Navbar({ onMenuClick }) {
           action: row.action || "",
           userName: row.sourceUserName || "",
           userId: row.sourceUserId || "",
+          targetPath: row.targetPath || "",
         }));
+        if (!hasLoadedRemoteNotificationsRef.current) {
+          const readAt = new Date().toISOString();
+          remoteNotifications = remoteNotifications.map((notification) => ({ ...notification, readAt }));
+        }
         const nextIds = new Set(remoteNotifications.map((notification) => notification.id));
 
         if (hasLoadedRemoteNotificationsRef.current) {
           const newNotifications = remoteNotifications.filter((notification) => !remoteNotificationIdsRef.current.has(notification.id));
           const newCount = newNotifications.length;
           if (newCount > 0) {
-            setUnreadNotifications((current) => current + newCount);
             const latestNotification = newNotifications[0];
             setIncomingNotificationToast({
               type: latestNotification.type || "info",
@@ -244,7 +293,6 @@ export default function Navbar({ onMenuClick }) {
       if (!currentUser?.uid || notification.userId !== currentUser.uid) return;
 
       setNotifications((current) => [notification, ...current].slice(0, maxNotificationLogItems));
-      setUnreadNotifications((current) => current + 1);
     };
     const handleNotificationsCleared = () => {
       setNotifications([]);
@@ -275,6 +323,29 @@ export default function Navbar({ onMenuClick }) {
     setUnreadNotifications(0);
     setShowClearNotificationsConfirm(false);
     setShowNotifications(false);
+  };
+
+  const markAllNotificationsRead = () => {
+    const readAt = new Date().toISOString();
+    setNotifications((current) => current.map((notification) => (
+      notification.readAt ? notification : { ...notification, readAt }
+    )));
+    setUnreadNotifications(0);
+  };
+
+  const markNotificationRead = (notificationId) => {
+    const readAt = new Date().toISOString();
+    setNotifications((current) => current.map((notification) => (
+      notification.id === notificationId && !notification.readAt
+        ? { ...notification, readAt }
+        : notification
+    )));
+  };
+
+  const handleNotificationSelect = (notification) => {
+    markNotificationRead(notification.id);
+    setShowNotifications(false);
+    navigate(getNotificationTargetPath(notification));
   };
 
   // Switches between saved light and dark display modes.
@@ -364,7 +435,9 @@ export default function Navbar({ onMenuClick }) {
           email: nextEmail || currentUser.email || "",
           phone: accountForm.phone.trim(),
           position: accountForm.position.trim(),
-          department: accountForm.department.trim() || "Medical Records",
+          ...(userRole === userRoles.doctor
+            ? { clinic: accountForm.clinic.trim() }
+            : { department: accountForm.department.trim() }),
           photoDataUrl: accountForm.photoDataUrl,
           updatedAt: serverTimestamp(),
         },
@@ -409,6 +482,7 @@ export default function Navbar({ onMenuClick }) {
     "/tracking-reports": "Medical Reports",
     "/print-reports": "Print Reports",
     "/settings": "Settings",
+    "/clinical-settings": "Clinical Settings",
     "/users": "Users",
   };
   const pageTitle = pageTitles[location.pathname] || "Medical Records";
@@ -444,11 +518,7 @@ export default function Navbar({ onMenuClick }) {
         <div className="mrs-topbar-chip hidden h-8 items-center gap-2 px-2.5 xl:flex">
           <Calendar size={14} />
           <span className="text-xs font-bold uppercase tracking-wider">
-            {new Date().toLocaleDateString("en-US", {
-            month: "short",
-              day: "numeric",
-              year: "numeric",
-            }).toUpperCase()}
+            {formatDisplayDate(new Date())}
           </span>
         </div>
 
@@ -458,7 +528,6 @@ export default function Navbar({ onMenuClick }) {
             onClick={() => {
               setShowNotifications((value) => !value);
               setShowProfile(false);
-              setUnreadNotifications(0);
             }}
           className="mrs-topbar-action relative flex size-8 items-center justify-center rounded-xl border text-slate-700 transition-colors"
             aria-label="Open notifications"
@@ -487,13 +556,24 @@ export default function Navbar({ onMenuClick }) {
                     </p>
                   </div>
                   {visibleNotifications.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowClearNotificationsConfirm(true)}
-                      className="rounded-lg px-2 py-1 text-[10px] font-black uppercase text-slate-500 hover:bg-white"
-                    >
-                      Clear
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {visibleUnreadNotifications > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllNotificationsRead}
+                          className="rounded-lg px-2 py-1 text-[10px] font-black uppercase text-green-700 hover:bg-white"
+                        >
+                          Mark read
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowClearNotificationsConfirm(true)}
+                        className="rounded-lg px-2 py-1 text-[10px] font-black uppercase text-slate-500 hover:bg-white"
+                      >
+                        Clear
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -514,9 +594,15 @@ export default function Navbar({ onMenuClick }) {
                         : notification.type === "error"
                           ? "bg-red-50 text-red-700 border-red-200"
                           : "bg-slate-50 text-slate-700 border-slate-200";
+                      const isUnread = !notification.readAt;
 
                       return (
-                        <div key={notification.id} className="flex items-start gap-3 p-3.5">
+                        <button
+                          key={notification.id}
+                          type="button"
+                          onClick={() => handleNotificationSelect(notification)}
+                          className={`mrs-notification-row flex w-full items-start gap-3 p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-green-500 ${isUnread ? "mrs-notification-row-unread" : ""}`}
+                        >
                           <div className={`shrink-0 rounded-xl border p-2 ${iconClass}`}>
                             <Icon size={17} />
                           </div>
@@ -529,6 +615,9 @@ export default function Navbar({ onMenuClick }) {
                                 {formatNotificationTime(notification.createdAt)}
                               </span>
                             </div>
+                            <span className={`mt-1 inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase ${isUnread ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400"}`}>
+                              {isUnread ? "Unread" : "Read"}
+                            </span>
                             <p className="mt-1 break-words text-xs font-semibold leading-relaxed text-slate-500">
                               {notification.message}
                             </p>
@@ -538,7 +627,7 @@ export default function Navbar({ onMenuClick }) {
                               </p>
                             )}
                           </div>
-                        </div>
+                        </button>
                       );
                     })
                   )}
@@ -753,15 +842,29 @@ export default function Navbar({ onMenuClick }) {
                           autoComplete="tel"
                         />
                       </label>
-                      <label className="space-y-1 sm:col-span-2">
-                        <span className="text-[10px] font-black uppercase text-slate-400">Department</span>
-                        <input
-                          value={accountForm.department}
-                          onChange={(event) => setAccountForm({ ...accountForm, department: event.target.value })}
-                          className="mrs-field w-full rounded-xl p-2.5 font-bold"
-                          autoComplete="organization"
-                        />
-                      </label>
+                      {userRole === userRoles.doctor ? (
+                        <label className="space-y-1 sm:col-span-2">
+                          <span className="text-[10px] font-black uppercase text-slate-400">Clinic Room</span>
+                          <input
+                            value={accountForm.clinic}
+                            onChange={(event) => setAccountForm({ ...accountForm, clinic: event.target.value })}
+                            placeholder="Clinic room"
+                            className="mrs-field w-full rounded-xl p-2.5 font-bold"
+                            autoComplete="organization"
+                          />
+                        </label>
+                      ) : (
+                        <label className="space-y-1 sm:col-span-2">
+                          <span className="text-[10px] font-black uppercase text-slate-400">Department</span>
+                          <input
+                            value={accountForm.department}
+                            onChange={(event) => setAccountForm({ ...accountForm, department: event.target.value })}
+                            placeholder="Department"
+                            className="mrs-field w-full rounded-xl p-2.5 font-bold"
+                            autoComplete="organization"
+                          />
+                        </label>
+                      )}
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">

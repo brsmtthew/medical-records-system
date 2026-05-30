@@ -107,14 +107,7 @@ function stackDateTimeText(value) {
 
 function formatReportDateTime(value) {
   const time = recordTimeValue(value);
-  if (!time) return "N/A";
-
-  const date = new Date(time);
-  const timePart = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `${formatDisplayDate(time)} ${timePart}`;
+  return time ? formatDisplayDate(time) : "N/A";
 }
 
 function receiverLabel(row) {
@@ -442,7 +435,7 @@ export default function TrackingReports() {
               <div className="mt-2">
                 <h2 className="text-xl font-black uppercase text-slate-900">{activeConfig.pluralLabel} Report</h2>
                 <p className="text-xs font-semibold text-slate-500">
-                  Generated {new Date().toLocaleString()}
+                  Generated {formatDisplayDate(new Date())}
                 </p>
               </div>
               <p className="mt-1 text-xs font-black uppercase text-slate-500">

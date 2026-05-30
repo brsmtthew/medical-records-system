@@ -1,6 +1,6 @@
 import { recordTimeValue } from "./recordSorting";
 
-// Converts supported record timestamp shapes into the display date used across tables and dashboard labels.
+// Converts supported record timestamp shapes into the display timestamp used across tables and dashboard labels.
 export function formatDisplayDate(value) {
   const time = recordTimeValue(value);
   if (!time) return "N/A";
@@ -9,6 +9,9 @@ export function formatDisplayDate(value) {
     month: "long",
     day: "numeric",
     year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   }).format(new Date(time)).toUpperCase();
 }
 

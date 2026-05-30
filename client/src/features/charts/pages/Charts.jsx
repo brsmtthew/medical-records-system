@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import DashboardLayout from "../../../layouts/DashboardLayout";
 import FloatingToast from "@shared/components/FloatingToast";
 import PatientCaseCell from "@shared/components/PatientCaseCell";
@@ -107,6 +108,7 @@ const softButtonClass =
   "mrs-soft-button inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase";
 
 export default function Charts() {
+  const location = useLocation();
   const [charts, setCharts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [borrowCaseNumber, setBorrowCaseNumber] = useState("");
@@ -123,6 +125,15 @@ export default function Charts() {
   const [notice, setNotice] = useState(null);
   const [transactionToast, setTransactionToast] = useState(null);
   const [isSavingTransaction, setIsSavingTransaction] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const routeSearchQuery = params.get("search") || "";
+    if (!routeSearchQuery) return;
+
+    setSearchQuery(routeSearchQuery);
+    setStatusFilter("all");
+  }, [location.search]);
 
   // Shows an inline toast-style notice for transaction validation.
   const setTransactionNotice = (type, message) => {
@@ -327,6 +338,7 @@ export default function Charts() {
         patientName: chart.patientName,
         caseNumber,
         action: "Chart Borrowed",
+        targetPath: `/charts?search=${encodeURIComponent(caseNumber)}`,
       });
     } catch (error) {
       setTransactionNotice("error", error.message || "Unable to update chart in Firebase.");
@@ -391,6 +403,7 @@ export default function Charts() {
         patientName: chart.patientName,
         caseNumber,
         action: "Chart Returned",
+        targetPath: `/charts?search=${encodeURIComponent(caseNumber)}`,
       });
     } catch (error) {
       setTransactionNotice("error", error.message || "Unable to update chart in Firebase.");

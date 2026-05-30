@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import DashboardLayout from "../../../layouts/DashboardLayout";
 import FloatingToast from "@shared/components/FloatingToast";
 import PatientCaseCell from "@shared/components/PatientCaseCell";
@@ -25,7 +26,7 @@ import { statusBadgeClass, statusTextClass } from "@features/tracking/utils/trac
 
 const rowsPerPage = 25;
 const recordsFilters = ["all", "borrowed", "returned", "canceled"];
-const requestFilters = ["all", "pending", "preparing", "ready", "received", "completed", "canceled"];
+const requestFilters = ["all", "pending", "reviewing", "preparing", "ready", "received", "returned", "returnReceived", "completed", "canceled"];
 
 function getLogActivityDate(log) {
   if (log.action === "canceled") {
@@ -41,9 +42,12 @@ function getLogActivityDate(log) {
 
 function getRequestActivityDate(request) {
   return request.completedAt
+    || request.returnReceivedAt
+    || request.returnedAt
     || request.receivedAt
     || request.readyAt
     || request.preparedAt
+    || request.reviewedAt
     || request.canceledAt
     || request.updatedAt
     || request.createdAt
@@ -67,7 +71,44 @@ function normalizeStatus(value, fallback = "pending") {
   return String(value || fallback).toLowerCase();
 }
 
+function requestStatusLabel(status) {
+  if (status === "returnReceived" || status === "returnreceived") return "return received";
+  return status;
+}
+
+function requesterName(request) {
+  const name = request.requestedBy || "Unknown requester";
+  if (request.requestedByRole === "doctor" && !name.toUpperCase().startsWith("DR.")) {
+    return `DR. ${name}`;
+  }
+  return name;
+}
+
+function requesterUnitLabel(request) {
+  return request.requestedByClinic || request.requestedByDepartment || request.department || "Clinic";
+}
+
+function requesterPhysicianLabel(request) {
+  if (request.requestedByRole === "doctor") return requesterName(request);
+  return request.attendingDoctorName || request.physicianName || "";
+}
+
+function requestDateRows(request) {
+  return [
+    ["Requested", request.createdAt, "text-slate-500"],
+    ["Reviewed", request.reviewedAt, statusTextClass("reviewed")],
+    ["Prepared", request.preparedAt, statusTextClass("preparing")],
+    ["Ready", request.readyAt, statusTextClass("ready")],
+    ["Received", request.receivedAt, statusTextClass("received")],
+    ["Returned", request.returnedAt, statusTextClass("returned")],
+    ["Return Received", request.returnReceivedAt, statusTextClass("returnReceived")],
+    ["Completed", request.completedAt, statusTextClass("completed")],
+    ["Canceled", request.canceledAt, statusTextClass("canceled")],
+  ].filter(([, value]) => Boolean(value));
+}
+
 export default function Reports() {
+  const location = useLocation();
   const { currentUser, isAdmin, userRole } = useAuth();
   const isRecordsUser = isMedicalRecordsRole(userRole);
   const canManageReports = isRecordsUser && isAdmin;
@@ -85,6 +126,18 @@ export default function Reports() {
   const [successMeta, setSuccessMeta] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isDeletingLog, setIsDeletingLog] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const routeSearchTerm = params.get("search") || "";
+    if (!routeSearchTerm) return;
+
+    setSearchTerm(routeSearchTerm);
+    setActionFilter("all");
+    setStartDate("");
+    setEndDate("");
+    setCurrentPage(1);
+  }, [location.search]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -221,6 +274,7 @@ export default function Reports() {
         caseNumber: deleteLog.caseNumber || "",
         action: "Report Row Deleted",
         audit: true,
+        targetPath: `/reports?search=${encodeURIComponent(deleteLog.caseNumber || "")}`,
       });
       setDeleteLog(null);
       setLoadError("");
@@ -295,6 +349,8 @@ export default function Reports() {
 
   const renderRequestRows = () => paginatedRows.map((request) => {
     const status = normalizeStatus(request.status);
+    const requesterPhysician = requesterPhysicianLabel(request);
+    const dateRows = requestDateRows(request);
 
     return (
       <tr key={request.id} className="mrs-table-row">
@@ -308,44 +364,29 @@ export default function Reports() {
           <p className="text-xs font-black uppercase text-slate-700">
             {highlightSearch(request.purpose || "Chart request")}
           </p>
-          <p className="text-[10px] font-bold uppercase text-slate-400">
-            {highlightSearch(request.requestedByClinic || request.department || "Clinic")}
+          <p className="mt-1 text-[10px] font-black uppercase text-slate-400">{highlightSearch(request.priority || "routine")}</p>
+        </td>
+        <td className="p-3">
+          <p className="break-words text-xs font-black uppercase text-slate-700">
+            {highlightSearch(requesterUnitLabel(request))}
           </p>
+          {requesterPhysician && (
+            <p className="mt-1 break-words text-[10px] font-bold uppercase text-slate-400">
+              Physician: {highlightSearch(requesterPhysician)}
+            </p>
+          )}
         </td>
         <td className="p-3">
           <span className={`mrs-status-badge ${statusBadgeClass(status)}`}>
-            {status}
+            {requestStatusLabel(status)}
           </span>
         </td>
         <td className="p-3">
-          <p className="text-[10px] font-black uppercase leading-tight text-slate-500">
-            Requested: {formatDateTime(request.createdAt)}
-          </p>
-          {request.preparedAt && (
-            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("borrowed")}`}>
-              Prepared: {formatDateTime(request.preparedAt)}
+          {dateRows.map(([label, value, colorClass]) => (
+            <p key={label} className={`text-[10px] font-black uppercase leading-tight ${colorClass}`}>
+              {label}: {formatDateTime(value)}
             </p>
-          )}
-          {request.readyAt && (
-            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("returned")}`}>
-              Ready: {formatDateTime(request.readyAt)}
-            </p>
-          )}
-          {request.receivedAt && (
-            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("reviewed")}`}>
-              Received: {formatDateTime(request.receivedAt)}
-            </p>
-          )}
-          {request.completedAt && (
-            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("returned")}`}>
-              Completed: {formatDateTime(request.completedAt)}
-            </p>
-          )}
-          {request.canceledAt && (
-            <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("canceled")}`}>
-              Canceled: {formatDateTime(request.canceledAt)}
-            </p>
-          )}
+          ))}
         </td>
         <td className="p-3 text-[11px] font-semibold leading-snug text-slate-500 break-words">
           {highlightSearch(request.remarks || request.preparationNote || "N/A")}
@@ -479,22 +520,27 @@ export default function Reports() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
-              <table className="w-full min-w-[900px] table-fixed text-left">
+              <table className={`w-full table-fixed text-left ${isRecordsUser ? "min-w-[900px]" : "min-w-[1080px]"}`}>
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-slate-100 bg-white">
-                    <th className="w-[19%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className={`${isRecordsUser ? "w-[19%]" : "w-[18%]"} whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400`}>
                       Patient / Case
                     </th>
-                    <th className="w-[22%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      {isRecordsUser ? "Borrow / Return" : "Purpose / Unit"}
+                    <th className={`${isRecordsUser ? "w-[22%]" : "w-[18%]"} whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400`}>
+                      {isRecordsUser ? "Borrow / Return" : "Purpose"}
                     </th>
-                    <th className="w-[12%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {!isRecordsUser && (
+                      <th className="w-[18%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Unit / Physician
+                      </th>
+                    )}
+                    <th className={`${isRecordsUser ? "w-[12%]" : "w-[12%]"} whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400`}>
                       Status
                     </th>
-                    <th className="w-[24%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className={`${isRecordsUser ? "w-[24%]" : "w-[20%]"} whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400`}>
                       {isRecordsUser ? "Movement Dates" : "Transaction Dates"}
                     </th>
-                    <th className="w-[14%] whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className={`${isRecordsUser ? "w-[14%]" : "w-[14%]"} whitespace-normal p-3 text-[10px] font-black uppercase tracking-widest text-slate-400`}>
                       Remarks
                     </th>
                     {canManageReports && (
@@ -509,7 +555,7 @@ export default function Reports() {
 
                   {filteredRows.length === 0 && (
                     <tr>
-                      <td colSpan={canManageReports ? 6 : 5} className="p-10 text-center">
+                      <td colSpan={isRecordsUser ? (canManageReports ? 6 : 5) : 6} className="p-10 text-center">
                         <FileText size={38} className="mx-auto text-slate-300 mb-3" />
                         <p className="font-black text-slate-700 uppercase">
                           {isLoading ? "Loading reports..." : "No records found"}

@@ -1214,7 +1214,7 @@ export default function TrackingPage({ config }) {
             : infoMessage
               ? { type: "info", message: infoMessage }
               : successMessage
-                ? { type: "success", title: config.singleLabel, message: successMessage, audit: true, action: `${config.singleLabel} Updated` }
+                ? { type: "success", title: config.singleLabel, message: successMessage, audit: true, action: `${config.singleLabel} Updated`, targetPath: "/tracking-reports" }
                 : null
         }
         onClose={() => {

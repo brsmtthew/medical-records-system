@@ -511,7 +511,7 @@ export default function PrintReports() {
               <div className="mt-2">
                 <h2 className="text-xl font-black uppercase text-slate-900">{activeConfig.pluralLabel} Report</h2>
                 <p className="text-xs font-semibold text-slate-500">
-                  Generated {new Date().toLocaleString()}
+                  Generated {formatDisplayDate(new Date())}
                 </p>
               </div>
               <div className="mt-1">

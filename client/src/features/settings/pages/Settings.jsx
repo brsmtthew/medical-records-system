@@ -1513,11 +1513,11 @@ export default function Settings({ initialTab = "rules" }) {
                   : clearLogsMessage
                     ? { type: "success", title: "Audit Logs", message: clearLogsMessage }
                   : savedMessage
-                    ? { type: "success", title: "Settings Updated", message: savedMessage, action: "Settings Updated", audit: true, adminOnly: isAdmin }
+                    ? { type: "success", title: "Settings Updated", message: savedMessage, action: "Settings Updated", audit: true, adminOnly: isAdmin, targetPath: "/settings" }
                     : accessMessage
-                      ? { type: "success", title: "Access Control", message: accessMessage, action: "Access Control Updated", audit: true, adminOnly: true }
+                      ? { type: "success", title: "Access Control", message: accessMessage, action: "Access Control Updated", audit: true, adminOnly: true, targetPath: "/settings" }
                       : successMessage
-                        ? { type: "success", title: "List Updated", message: successMessage, action: "Settings List Updated", audit: true, adminOnly: isAdmin }
+                        ? { type: "success", title: "List Updated", message: successMessage, action: "Settings List Updated", audit: true, adminOnly: isAdmin, targetPath: "/settings" }
                     : null
         }
         onClose={() => {

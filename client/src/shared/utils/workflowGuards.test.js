@@ -9,14 +9,15 @@ import {
 } from "./workflowGuards.js";
 
 test("assertChartRequestTransition allows expected chart request flow", () => {
-  assert.equal(assertChartRequestTransition("pending", "preparing"), "preparing");
+  assert.equal(assertChartRequestTransition("pending", "reviewing"), "reviewing");
+  assert.equal(assertChartRequestTransition("reviewing", "preparing"), "preparing");
   assert.equal(assertChartRequestTransition("preparing", "ready"), "ready");
   assert.equal(assertChartRequestTransition("ready", "received"), "received");
-  assert.equal(assertChartRequestTransition("received", "completed"), "completed");
-  assert.equal(assertChartRequestTransition("pending", "borrowed"), "borrowed");
-  assert.equal(assertChartRequestTransition("borrowed", "returned"), "returned");
+  assert.equal(assertChartRequestTransition("received", "returned"), "returned");
   assert.equal(assertChartRequestTransition("returned", "completed"), "completed");
   assert.equal(assertChartRequestTransition("pending", "canceled"), "canceled");
+  assert.equal(assertChartRequestTransition("reviewing", "canceled"), "canceled");
+  assert.equal(assertChartRequestTransition("preparing", "canceled"), "canceled");
 });
 
 test("assertChartRequestTransition blocks completed or backward request changes", () => {
@@ -33,11 +34,15 @@ test("assertChartRequestTransition blocks completed or backward request changes"
     /Invalid chart request transition/,
   );
   assert.throws(
-    () => assertChartRequestTransition("pending", "ready"),
+    () => assertChartRequestTransition("pending", "preparing"),
     /Invalid chart request transition/,
   );
   assert.throws(
-    () => assertChartRequestTransition("borrowed", "canceled"),
+    () => assertChartRequestTransition("ready", "canceled"),
+    /Invalid chart request transition/,
+  );
+  assert.throws(
+    () => assertChartRequestTransition("received", "completed"),
     /Invalid chart request transition/,
   );
 });

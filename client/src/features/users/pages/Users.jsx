@@ -570,7 +570,7 @@ export default function Users() {
           accessError
             ? { type: "error", message: accessError }
             : accessMessage
-              ? { type: "success", title: "User Access", message: accessMessage, action: "User Access Updated", audit: true, adminOnly: true }
+              ? { type: "success", title: "User Access", message: accessMessage, action: "User Access Updated", audit: true, adminOnly: true, targetPath: "/users" }
               : null
         }
         onClose={() => {

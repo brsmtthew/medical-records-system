@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import DashboardLayout from "../../../layouts/DashboardLayout";
 import FloatingToast from "@shared/components/FloatingToast";
 import PatientCaseCell from "@shared/components/PatientCaseCell";
@@ -175,6 +176,7 @@ function hasOverlappingPatientStay(patientRows, candidate, ignoredPatientId = ""
 }
 
 export default function Patients() {
+  const location = useLocation();
   const { isAdmin, isStaff } = useAuth();
   const canManagePatients = isAdmin || isStaff;
   const canDeletePatients = isAdmin;
@@ -202,6 +204,17 @@ export default function Patients() {
   const [confirmPatient, setConfirmPatient] = useState(null);
   const [isAddPatientOpen, setIsAddPatientOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const routeSearchTerm = params.get("search") || "";
+    if (!routeSearchTerm) return;
+
+    setSearchTerm(routeSearchTerm);
+    setTypeFilter("all");
+    setAdmissionDateFilter("");
+    setDischargeDateFilter("");
+  }, [location.search]);
 
   const formNameMatchesExistingPatient = patients.some(
     (p) => normalizePatientName(p.name) === normalizePatientName(form.name),
@@ -332,6 +345,7 @@ export default function Patients() {
         caseNumber: confirmPatient.caseNumber,
         action: "Patient Created",
         audit: true,
+        targetPath: `/patients?search=${encodeURIComponent(confirmPatient.caseNumber)}`,
       });
       setIsAddPatientOpen(false);
       setConfirmPatient(null);
@@ -404,6 +418,7 @@ export default function Patients() {
         caseNumber,
         action: "Patient Updated",
         audit: true,
+        targetPath: `/patients?search=${encodeURIComponent(caseNumber)}`,
       });
     } catch (error) {
       setEditError(error.message || "Unable to update patient in Firebase.");
@@ -426,6 +441,7 @@ export default function Patients() {
         caseNumber,
         action: "Patient Deleted",
         audit: true,
+        targetPath: `/patients?search=${encodeURIComponent(caseNumber)}`,
       });
     } catch (error) {
       setFormError(error.message || "Unable to delete patient from Firebase.");

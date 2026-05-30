@@ -2,11 +2,12 @@ import { motion as Motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, ClipboardList, RotateCcw, Send, XCircle } from "lucide-react";
 
 const statusLabels = {
+  reviewing: "Review",
   preparing: "Prepare",
   ready: "Ready",
   received: "Received",
-  borrowed: "Borrowed",
   returned: "Return",
+  returnReceived: "Receive Return",
   completed: "Complete",
   canceled: "Cancel",
 };
@@ -56,7 +57,7 @@ export default function ChartRequestConfirmModal({
               </div>
               <div>
                 <h3 className="text-lg font-black uppercase text-slate-900">
-                  {action.type === "submit" ? "Borrow This Chart?" : `${statusLabels[action.status] || "Update"} Request?`}
+                  {action.type === "submit" ? "Submit Chart Request?" : `${statusLabels[action.status] || "Update"} Request?`}
                 </h3>
                 <p className="text-xs font-bold uppercase text-slate-400">
                   Review request details before saving
