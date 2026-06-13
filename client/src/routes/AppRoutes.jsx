@@ -14,9 +14,9 @@ const ClinicalSettings = lazy(() => import("../features/settings/pages/ClinicalS
 const ChartViewing = lazy(() => import("../features/charts/pages/ChartViewing"));
 const ChartRequests = lazy(() => import("../features/charts/pages/ChartRequests"));
 const Users = lazy(() => import("../features/users/pages/Users"));
-const MedicalDocuments = lazy(() => import("../features/documents/pages/MedicalDocuments"));
-const LabResults = lazy(() => import("../features/documents/pages/LabResults"));
-const VitalCertificates = lazy(() => import("../features/documents/pages/VitalCertificates"));
+const MedicalDocuments = lazy(() => import("../features/tracking/pages/MedicalDocuments"));
+const LabResults = lazy(() => import("../features/tracking/pages/LabResults"));
+const VitalCertificates = lazy(() => import("../features/tracking/pages/VitalCertificates"));
 const TrackingReports = lazy(() => import("../features/tracking/pages/TrackingReports"));
 const PrintReports = lazy(() => import("../features/reports/pages/PrintReports"));
 
@@ -146,14 +146,6 @@ export default function AppRoutes() {
         />
         <Route
           path="/chart-viewing"
-          element={
-            <ProtectedRoute roles={["admin", "staff"]}>
-              <ChartViewing />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/chartviewing"
           element={
             <ProtectedRoute roles={["admin", "staff"]}>
               <ChartViewing />

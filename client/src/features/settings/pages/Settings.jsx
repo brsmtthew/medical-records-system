@@ -1301,7 +1301,7 @@ export default function Settings({ initialTab = "rules" }) {
                       </button>
                     </div>
 
-                    <div className="mrs-panel min-h-0 flex-1 overflow-x-hidden overflow-y-auto rounded-xl">
+                    <div className="mrs-panel min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl">
                       <table className="w-full table-fixed text-left">
                         <thead className="sticky top-0 z-10 bg-slate-50">
                           <tr className="border-b border-slate-100">

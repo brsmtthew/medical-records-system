@@ -159,7 +159,7 @@ export default function Login() {
   };
 
   return (
-    <div className="relative h-dvh overflow-hidden bg-[#edf4f6] font-sans text-slate-950">
+    <div className="relative h-dvh overflow-hidden bg-sky-50 font-sans text-slate-950">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(14,116,144,0.10),transparent_24rem),radial-gradient(circle_at_90%_80%,rgba(22,163,74,0.08),transparent_22rem)]" />
 
       <main className="relative flex h-dvh items-center px-5 py-5 sm:px-8 lg:px-10">
@@ -192,7 +192,7 @@ export default function Login() {
 
           <aside className="login-form-side login-auth-area relative flex min-h-0 items-center justify-center overflow-hidden p-6 sm:p-10">
             <div className={`login-auth-panel mx-auto flex max-h-full w-full max-w-[25.5rem] flex-col bg-white px-1 text-slate-950 ${isCreateAccount ? "overflow-y-auto" : "overflow-hidden"}`}>
-              <div className={`${isCreateAccount ? "mb-3" : "mb-6"} flex justify-center transition-all duration-300`}>
+              <div className={`login-logo-block ${isCreateAccount ? "mb-3" : "mb-6"} flex justify-center transition-all duration-300`}>
                 <Motion.img
                   src={logo}
                   initial={{ opacity: 0, scale: 0.92 }}
@@ -203,11 +203,11 @@ export default function Login() {
                 />
               </div>
 
-              <div className="mb-6 rounded-full bg-[#4b99bd] px-4 py-3 text-center text-xs font-black uppercase text-white shadow-sm">
+              <div className="login-mode-pill mb-6 rounded-full bg-cyan-600 px-4 py-3 text-center text-xs font-black uppercase text-white shadow-sm">
                 Sign In
               </div>
 
-              <div className={`${isCreateAccount ? "mb-3" : "mb-5"} text-center transition-all duration-300`}>
+              <div className={`login-title-block ${isCreateAccount ? "mb-3" : "mb-5"} text-center transition-all duration-300`}>
                 <div>
                   <h2 className={`${isCreateAccount ? "text-3xl" : "text-4xl"} font-black uppercase tracking-tight text-slate-950 transition-all duration-300`}>
                     {isCreateAccount ? "Create Account" : "Login"}
@@ -218,7 +218,7 @@ export default function Login() {
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="min-h-0">
+              <form onSubmit={handleSubmit} className="login-form-stack min-h-0">
                 <AnimatePresence mode="wait" initial={false}>
                   <Motion.div
                     key={authMode}
@@ -361,7 +361,7 @@ export default function Login() {
                   </Motion.div>
                 </AnimatePresence>
 
-                <div className={`${isCreateAccount ? "mt-2" : "mt-4"} rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-300`}>
+                <div className={`login-status-card ${isCreateAccount ? "mt-2" : "mt-4"} rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-300`}>
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-700">
                       <HeartPulse size={19} />

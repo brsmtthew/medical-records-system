@@ -17,6 +17,6 @@ export const env = {
   refreshTokenTtl: process.env.REFRESH_TOKEN_TTL || "7d",
 };
 
-if ((!env.jwtSecret || !env.refreshTokenSecret) && env.nodeEnv === "production") {
-  throw new Error("JWT_SECRET and REFRESH_TOKEN_SECRET are required in production.");
+if (!env.jwtSecret || !env.refreshTokenSecret) {
+  throw new Error("JWT_SECRET and REFRESH_TOKEN_SECRET environment variables are required.");
 }

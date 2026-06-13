@@ -20,6 +20,15 @@
     text-transform: uppercase;
   }
 
+  .mrs-label {
+    font-size: 0.625rem;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    color: rgb(148 163 184);
+  }
+
   .mrs-icon-button {
     align-items: center;
     border: 1px solid rgb(203 213 225);
@@ -35,6 +44,12 @@
 
   .mrs-icon-button:hover {
     transform: translateY(-1px);
+  }
+
+  .mrs-icon-button:focus-visible {
+    outline: none;
+    border-color: rgb(147 197 253);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.24);
   }
 
   .mrs-mobile-menu-button {

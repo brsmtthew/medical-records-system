@@ -118,7 +118,7 @@ export async function signInWithEmail({ email, password, remember }) {
     );
   }
 
-  addAuditLog({
+  await addAuditLog({
     type: "auth",
     title: "User Signed In",
     message: "User signed in successfully.",
@@ -126,47 +126,7 @@ export async function signInWithEmail({ email, password, remember }) {
     userName: userCredential.user.displayName || email,
     userEmail: email,
     userId: userCredential.user.uid,
-  }).catch(console.error);
-
-  return userCredential;
-}
-
-export async function createStaffAccount({ email, password, fullName, remember }) {
-  await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
-  savePersistentSignIn(remember);
-  let userCredential;
-  try {
-    userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  } catch (error) {
-    savePersistentSignIn(false);
-    throw error;
-  }
-
-  await updateProfile(userCredential.user, {
-    displayName: fullName,
-  });
-  await setDoc(doc(db, "users", userCredential.user.uid), {
-    uid: userCredential.user.uid,
-    fullName,
-    email,
-    role: "staff",
-    accountStatus: "active",
-    department: "Medical Records",
-    lastLoginDevice: currentLoginDevice(),
-    lastLoginAt: serverTimestamp(),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  addAuditLog({
-    type: "auth",
-    title: "Staff Account Created",
-    message: "A new staff account was created.",
-    action: "Account Created",
-    userName: fullName,
-    userEmail: email,
-    userId: userCredential.user.uid,
-  }).catch(console.error);
+  }).catch((error) => console.error("Audit log write failed:", error));
 
   return userCredential;
 }
@@ -238,7 +198,7 @@ export async function createManagedUserAccount({ email, password, fullName, role
       updatedAt: serverTimestamp(),
     });
 
-    addAuditLog({
+    await addAuditLog({
       type: "user",
       title: "Managed Account Created",
       message: `${roleLabel(safeProfile.role)} account was created by admin.`,
@@ -246,7 +206,7 @@ export async function createManagedUserAccount({ email, password, fullName, role
       userName: safeProfile.fullName,
       userEmail: safeProfile.email,
       userId: userCredential.user.uid,
-    }).catch(console.error);
+    }).catch((error) => console.error("Audit log write failed:", error));
 
     return userCredential.user.uid;
   } finally {

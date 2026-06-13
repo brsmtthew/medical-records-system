@@ -19,13 +19,8 @@ import UserAccessConfirmModal from "../modals/UserAccessConfirmModal";
 import UserCreateModal from "../modals/UserCreateModal";
 import { createManagedUserAccount, deleteUserProfile, subscribeToUsers, updateUserAccess } from "@features/users/services/userService";
 import { useAuth } from "@features/auth/context/useAuth";
-import {
-  defaultDoctorClinics,
-  defaultNurseDepartments,
-  normalizeUserRole,
-  roleLabel,
-  userRoles,
-} from "@shared/constants/userRoles";
+import { normalizeUserRole, roleLabel, userRoles } from "@shared/constants/userRoles";
+import { defaultDoctorClinics, defaultNurseDepartments } from "@shared/constants/defaultOptions";
 import { isStrongPassword, normalizeEmail, sanitizeText } from "@shared/utils/security";
 
 function getInitials(name = "") {
@@ -427,7 +422,7 @@ export default function Users() {
         </div>
         <span className="mrs-status-badge mrs-status-neutral">{rows.length} shown</span>
       </div>
-      <div className="overflow-hidden">
+      <div className="overflow-x-auto">
         <table className="w-full table-fixed text-left">
           <thead>
             <tr className="mrs-section-band border-b border-slate-100">

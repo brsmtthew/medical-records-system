@@ -78,7 +78,7 @@ function requireDb() {
   return db;
 }
 
-async function requireActiveRole({ adminOnly = false, roles = medicalRecordsRoles } = {}) {
+export async function requireActiveRole({ adminOnly = false, roles = medicalRecordsRoles } = {}) {
   const database = requireDb();
   const user = auth?.currentUser;
   if (!user) {
@@ -302,7 +302,7 @@ function patientStayOverlaps(firstPatient, secondPatient) {
 
   if (!firstAdmission || !firstDischarge || !secondAdmission || !secondDischarge) return false;
 
-  return firstAdmission < secondDischarge && secondAdmission < firstDischarge;
+  return firstAdmission <= secondDischarge && secondAdmission <= firstDischarge;
 }
 
 // Prevents new or edited readmission dates from predating the first known record.

@@ -13,10 +13,10 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { auth, db } from "@/firebaseClient";
+import { db } from "@/firebaseClient";
 import { sortNewestFirst } from "@shared/utils/recordSorting";
 import { sanitizeRecordPayload } from "@shared/utils/security";
-import { getActiveUserProfile, recordsUnavailableMessage } from "@services/recordsService";
+import { recordsUnavailableMessage, requireActiveRole } from "@services/recordsService";
 import {
   assertCanReleaseTrackingRow,
   assertCanReviewTrackingRow,
@@ -37,30 +37,6 @@ function requireTrackingDb(collectionName) {
     throw new Error(recordsUnavailableMessage);
   }
   return db;
-}
-
-async function requireActiveTrackingRole({ adminOnly = false } = {}) {
-  const database = requireTrackingDb("medicalDocumentRequests");
-  const user = auth?.currentUser;
-  if (!user) {
-    throw new Error("Sign in again before making this change.");
-  }
-
-  let profile = getActiveUserProfile(user.uid);
-  if (!profile) {
-    const profileSnapshot = await getDoc(doc(database, "users", user.uid));
-    profile = profileSnapshot.exists() ? { uid: user.uid, ...profileSnapshot.data() } : {};
-  }
-  const role = profile.role === "admin" ? "admin" : "staff";
-
-  if (["disabled", "deleted", "missing"].includes(profile.accountStatus || "active")) {
-    throw new Error("This account is not active.");
-  }
-  if (adminOnly && role !== "admin") {
-    throw new Error("Administrator access is required for this action.");
-  }
-
-  return { user, profile, role };
 }
 
 function snapshotRows(snapshot) {
@@ -195,7 +171,7 @@ export function subscribeToTrackingRows(collectionName, onRows, onError) {
 
 export async function addTrackingRow(collectionName, payload) {
   const database = requireTrackingDb(collectionName);
-  const { user, profile } = await requireActiveTrackingRole();
+  const { user, profile } = await requireActiveRole();
   const normalizedPayload = normalizeTrackingPayload(collectionName, payload);
   await addDoc(collection(database, collectionName), {
     ...sanitizeTrackingPayload(normalizedPayload),
@@ -211,7 +187,7 @@ export async function addTrackingRow(collectionName, payload) {
 
 export async function updateTrackingRow(collectionName, id, payload) {
   const database = requireTrackingDb(collectionName);
-  await requireActiveTrackingRole();
+  await requireActiveRole();
   const rowRef = doc(database, collectionName, id);
   const rowSnapshot = await getDoc(rowRef);
   const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
@@ -229,13 +205,13 @@ export async function updateTrackingRow(collectionName, id, payload) {
 
 export async function deleteTrackingRow(collectionName, id) {
   const database = requireTrackingDb(collectionName);
-  await requireActiveTrackingRole({ adminOnly: true });
+  await requireActiveRole({ adminOnly: true });
   await deleteDoc(doc(database, collectionName, id));
 }
 
 export async function cancelTrackingRow(collectionName, id, sourceLabel = "tracking page") {
   const database = requireTrackingDb(collectionName);
-  await requireActiveTrackingRole({ adminOnly: true });
+  await requireActiveRole({ adminOnly: true });
   const rowRef = doc(database, collectionName, id);
   const rowSnapshot = await getDoc(rowRef);
   const targetRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
@@ -274,7 +250,7 @@ export async function cancelTrackingRow(collectionName, id, sourceLabel = "track
 
 export async function deleteTrackingRowType(collectionName, id, type) {
   const database = requireTrackingDb(collectionName);
-  await requireActiveTrackingRole({ adminOnly: true });
+  await requireActiveRole({ adminOnly: true });
   const rowRef = doc(database, collectionName, id);
   const rowSnapshot = await getDoc(rowRef);
   const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
@@ -297,7 +273,7 @@ export async function deleteTrackingRowType(collectionName, id, type) {
 
 export async function markTrackingRowReviewed(collectionName, id, payload = {}) {
   const database = requireTrackingDb(collectionName);
-  const { user, profile } = await requireActiveTrackingRole();
+  const { user, profile } = await requireActiveRole();
   const rowSnapshot = await getDoc(doc(database, collectionName, id));
   const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};
   assertCanReviewTrackingRow(currentRow);
@@ -324,7 +300,7 @@ export async function markTrackingRowReviewed(collectionName, id, payload = {}) 
 
 export async function releaseTrackingRow(collectionName, id, payload) {
   const database = requireTrackingDb(collectionName);
-  const { user, profile } = await requireActiveTrackingRole();
+  const { user, profile } = await requireActiveRole();
   const rowRef = doc(database, collectionName, id);
   const rowSnapshot = await getDoc(rowRef);
   const currentRow = rowSnapshot.exists() ? rowSnapshot.data() : {};

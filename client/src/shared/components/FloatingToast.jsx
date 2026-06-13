@@ -107,7 +107,7 @@ export default function FloatingToast({ toast, onClose, duration = 3200 }) {
           aria-live="polite"
         >
           <div className="flex items-start gap-2.5">
-            <div className={`shrink-0 rounded-lg border p-1.5 ${config.iconClass}`}>
+            <div aria-hidden="true" className={`shrink-0 rounded-xl border p-1.5 ${config.iconClass}`}>
               <Icon className="size-4" />
             </div>
             <div className="min-w-0 flex-1">
@@ -124,7 +124,7 @@ export default function FloatingToast({ toast, onClose, duration = 3200 }) {
             <button
               type="button"
               onClick={onClose}
-              className="-mr-1 -mt-1 flex size-7 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-black"
+              className="-mr-1 -mt-1 flex size-7 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-black"
               aria-label="Dismiss notification"
             >
               <X size={16} />

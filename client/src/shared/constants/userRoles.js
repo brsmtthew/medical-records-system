@@ -17,26 +17,8 @@ export const roleLabels = {
   [userRoles.doctor]: "Doctor",
 };
 
-export const defaultNurseDepartments = [
-  "Emergency Room",
-  "Nursing Station",
-  "NICU",
-  "MICU",
-  "Ward",
-  "OPD",
-];
-
-export const defaultDoctorClinics = [
-  "Internal Medicine",
-  "Surgery",
-  "Pediatrics",
-  "OB-GYN",
-  "Emergency Medicine",
-  "Outpatient Clinic",
-];
-
 export function normalizeUserRole(role) {
-  return allUserRoles.includes(role) ? role : userRoles.staff;
+  return allUserRoles.includes(role) ? role : "unknown";
 }
 
 export function roleLabel(role) {

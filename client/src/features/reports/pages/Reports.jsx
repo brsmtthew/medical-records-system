@@ -564,7 +564,7 @@ export default function Reports() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
               <table className="w-full table-fixed text-left">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-slate-100 bg-white">
@@ -664,7 +664,7 @@ export default function Reports() {
       {timelineRequest && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-4">
           <div className="absolute inset-0 bg-slate-950/50" onClick={() => setTimelineRequest(null)} />
-          <div className="mrs-panel relative w-full max-w-md rounded-2xl p-5">
+          <div role="dialog" aria-modal="true" aria-labelledby="timeline-title" className="mrs-panel relative w-full max-w-md rounded-2xl p-5">
             <button
               type="button"
               onClick={() => setTimelineRequest(null)}
@@ -675,7 +675,7 @@ export default function Reports() {
             </button>
             <div className="pr-12">
               <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Transaction Timeline</p>
-              <h2 className="mt-1 break-words text-lg font-black uppercase text-slate-900">
+              <h2 id="timeline-title" className="mt-1 break-words text-lg font-black uppercase text-slate-900">
                 {timelineRequest.patientName || "Chart Request"}
               </h2>
               <p className="mt-1 font-mono text-xs font-black uppercase text-green-800">{timelineRequest.caseNumber}</p>

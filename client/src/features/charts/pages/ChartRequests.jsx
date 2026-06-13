@@ -24,6 +24,7 @@ import { useAuth } from "@features/auth/context/useAuth";
 import { isMedicalRecordsRole, roleLabel } from "@shared/constants/userRoles";
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { sanitizeText } from "@shared/utils/security";
+import { normalizeCaseNumber, searchable } from "@shared/utils/recordSorting";
 
 const initialForm = {
   caseNumber: "",
@@ -54,14 +55,6 @@ const statusRemarks = {
   completed: "Chart request transaction completed.",
   canceled: "Chart request was canceled.",
 };
-
-function normalizeCaseNumber(value) {
-  return value.trim().toUpperCase();
-}
-
-function searchable(value) {
-  return String(value || "").toLowerCase();
-}
 
 function requesterDisplayName(request) {
   const name = request.requestedBy || "Unknown requester";
@@ -415,7 +408,11 @@ export default function ChartRequests() {
                         <tr
                           key={chart.caseNumber}
                           className="mrs-table-row cursor-pointer"
+                          role="button"
+                          tabIndex={0}
                           onClick={() => selectAvailableChart(chart)}
+                          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && selectAvailableChart(chart)}
+                          aria-label={`Select chart for ${chart.patientName}, case ${chart.caseNumber}`}
                         >
                           <td className="p-3">
                             <PatientCaseCell patientName={chart.patientName} caseNumber={chart.caseNumber} />
@@ -495,7 +492,7 @@ export default function ChartRequests() {
         </div>
 
         <div className="mrs-panel min-h-0 flex-1 overflow-hidden rounded-xl">
-          <div className="h-full overflow-x-hidden overflow-y-auto">
+          <div className="h-full overflow-x-auto overflow-y-auto">
             <table className="w-full table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="mrs-section-band border-b border-slate-200">
@@ -648,11 +645,11 @@ export default function ChartRequests() {
             aria-label="Close transaction dates"
             onClick={() => setTransactionRequest(null)}
           />
-          <div className="mrs-panel relative w-full max-w-lg overflow-hidden rounded-2xl">
+          <div role="dialog" aria-modal="true" aria-labelledby="transaction-dates-title" className="mrs-panel relative w-full max-w-lg overflow-hidden rounded-2xl">
             <div className="mrs-section-band flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Transaction Dates</p>
-                <p className="mt-1 break-words text-lg font-black uppercase text-slate-900">{transactionRequest.patientName || "No patient name"}</p>
+                <p id="transaction-dates-title" className="mt-1 break-words text-lg font-black uppercase text-slate-900">{transactionRequest.patientName || "No patient name"}</p>
                 <p className="mt-1 font-mono text-xs font-black uppercase text-green-700">{transactionRequest.caseNumber}</p>
               </div>
               <button

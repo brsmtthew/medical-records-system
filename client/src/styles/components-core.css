@@ -18,7 +18,7 @@
   .mrs-panel {
     border: 1px solid #dbe5ef;
     background: #ffffff;
-    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.055);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
   }
@@ -26,7 +26,7 @@
   .mrs-card {
     border: 1px solid #dbe5ef;
     background: #ffffff;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.045);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
   }
 
   .mrs-field {
@@ -120,6 +120,13 @@
     box-shadow: 0 16px 28px rgba(14, 116, 144, 0.24);
   }
 
+  .login-submit-button:focus-visible {
+    outline: none;
+    box-shadow:
+      0 14px 26px rgba(14, 116, 144, 0.20),
+      0 0 0 3px rgba(14, 116, 144, 0.40);
+  }
+
   .login-google-button {
     border: 1px solid #d6e1eb;
     background: #ffffff;
@@ -148,6 +155,12 @@
     transform: translateY(-1px);
   }
 
+  .mrs-soft-button:focus-visible {
+    outline: none;
+    border-color: rgb(147 197 253);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.28);
+  }
+
   .mrs-primary-button {
     background: linear-gradient(135deg, #0f766e, #0e7490);
     color: white;
@@ -159,6 +172,13 @@
     background: linear-gradient(135deg, #0d9488, #0284c7);
     box-shadow: 0 14px 24px rgba(14, 116, 144, 0.24);
     transform: translateY(-1px);
+  }
+
+  .mrs-primary-button:focus-visible {
+    outline: none;
+    box-shadow:
+      0 10px 20px rgba(14, 116, 144, 0.18),
+      0 0 0 3px rgba(14, 116, 144, 0.40);
   }
 
   .mrs-table-row {
@@ -200,6 +220,13 @@
     background: rgb(29 78 216);
     box-shadow: 0 14px 24px rgba(37, 99, 235, 0.22);
     transform: translateY(-1px);
+  }
+
+  .mrs-blue-button:focus-visible {
+    outline: none;
+    box-shadow:
+      0 10px 20px rgba(37, 99, 235, 0.16),
+      0 0 0 3px rgba(37, 99, 235, 0.36);
   }
 
   .mrs-filter-strip {
@@ -340,6 +367,14 @@
     color: rgb(219 234 254);
   }
 
+  .mrs-sidebar-link:focus-visible {
+    outline: none;
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(125, 211, 252, 0.50);
+    box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.30);
+    color: rgb(241 245 249);
+  }
+
   .mrs-sidebar-link-active {
     background: linear-gradient(135deg, rgba(22, 163, 74, 0.22), rgba(13, 148, 136, 0.13));
     border-color: rgba(34, 197, 94, 0.36);
@@ -414,6 +449,11 @@
     background: rgb(226 232 240);
     color: rgb(71 85 105);
     opacity: 1;
+  }
+
+  .mrs-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .mrs-panel :is(table) {
