@@ -313,9 +313,29 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    function validAuditLogShape() {
+      return request.resource.data.createdAt == request.time
+        && (!("userId" in request.resource.data) || validShortString(request.resource.data.userId, 128))
+        && (!("type" in request.resource.data) || validShortString(request.resource.data.type, 30))
+        && (!("title" in request.resource.data) || validShortString(request.resource.data.title, 120))
+        && (!("message" in request.resource.data) || validShortString(request.resource.data.message, 500))
+        && (!("action" in request.resource.data) || validShortString(request.resource.data.action, 120))
+        && (!("patientName" in request.resource.data) || validShortString(request.resource.data.patientName, 160))
+        && (!("caseNumber" in request.resource.data) || validShortString(request.resource.data.caseNumber, 60))
+        && (!("userName" in request.resource.data) || validShortString(request.resource.data.userName, 160))
+        && (!("userEmail" in request.resource.data) || validShortString(request.resource.data.userEmail, 254));
+    }
+
     match /auditLogs/{logId} {
-      allow create: if isAdmin()
-        || (isActiveSystemUser() && request.resource.data.userId == request.auth.uid);
+      // createdAt must equal request.time, so entries cannot be backdated or
+      // post-dated, and content fields are length-capped to block oversized writes.
+      // Admins may attribute a log to another user (e.g. logging a newly created
+      // account); non-admin staff can only write entries for their own uid.
+      allow create: if validAuditLogShape()
+        && (
+          isAdmin()
+          || (isActiveSystemUser() && request.resource.data.userId == request.auth.uid)
+        );
       allow read, delete: if isAdmin();
       allow update: if false;
     }

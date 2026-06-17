@@ -4,7 +4,7 @@ import { signOut } from "firebase/auth";
 import { LoaderCircle } from "lucide-react";
 import { useAuth } from "@features/auth/context/useAuth";
 import { auth } from "@/firebaseClient";
-import { cancelAutoLogout, clearPersistentSignIn, readPersistentSignIn, scheduleAutoLogout } from "@services/sessionService";
+import { cancelAutoLogout, clearPersistentSignIn, scheduleAutoLogout } from "@services/sessionService";
 import { readSystemSettings } from "@shared/utils/systemSettings";
 
 export default function ProtectedRoute({ children, requireAdmin = false, roles = [] }) {
@@ -23,10 +23,10 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
 
   useEffect(() => {
     // Locks inactive protected routes using the workstation timeout from Settings.
+    // The idle lock is enforced even when "Keep signed in" is on: that option only
+    // persists the credential across browser restarts, it must not leave patient
+    // data exposed on an unattended shared workstation.
     if (!isAuthenticated || !auth) return undefined;
-    if (readPersistentSignIn()) {
-      return undefined;
-    }
 
     const settings = readSystemSettings();
     const timeoutMinutes = Math.min(60, Math.max(5, Number(settings.sessionTimeoutMinutes) || 10));
