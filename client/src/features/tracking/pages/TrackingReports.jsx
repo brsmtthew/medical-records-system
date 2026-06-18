@@ -304,6 +304,7 @@ export default function TrackingReports() {
   const [selectedType, setSelectedType] = useState(trackingReportConfigs[0].typeOptions?.[0]?.value || "");
   const [loadError, setLoadError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [successMeta, setSuccessMeta] = useState(null);
   const [pendingAction, setPendingAction] = useState("");
   const [confirmation, setConfirmation] = useState(null);
   const activeConfig = trackingReportConfigs.find((config) => config.collection === activeCollection) || trackingReportConfigs[0];
@@ -358,12 +359,23 @@ export default function TrackingReports() {
 
     try {
       setPendingAction(`delete-${row.id}`);
+      let outcome = "deleted";
       if (["medicalDocumentRequests", "vitalCertificateRequests"].includes(activeConfig.collection) && Array.isArray(row.typeList) && row.typeList.length > 1) {
         await deleteTrackingRowType(activeConfig.collection, row.id, selectedType);
       } else {
-        await deleteTrackingRow(activeConfig.collection, row.id);
+        outcome = await deleteTrackingRow(activeConfig.collection, row.id);
       }
-      setSuccessMessage("Report record was deleted.");
+      setSuccessMessage(outcome === "voided"
+        ? "Released record was voided and kept in this report."
+        : "Report record was deleted.");
+      setSuccessMeta({
+        action: outcome === "voided" ? "Medical Record Voided" : "Medical Record Deleted",
+        patientName: row.patientName || "",
+        caseNumber: row.caseNumber || "",
+        audit: true,
+        adminOnly: true,
+        targetPath: "/tracking-reports",
+      });
       setConfirmation(null);
       setLoadError("");
     } catch (error) {
@@ -415,9 +427,10 @@ export default function TrackingReports() {
                   setEndDate("");
                   setSelectedType(config.typeOptions?.[0]?.value || "");
                 }}
-                className={`mrs-dashboard-stat-fill rounded-xl border p-2 text-left transition-colors ${
+                aria-pressed={activeConfig.collection === config.collection}
+                className={`mrs-clickable-card mrs-dashboard-stat-fill rounded-xl border p-2 text-left ${
                   activeConfig.collection === config.collection
-                    ? "border-green-300 bg-green-50"
+                    ? "border-green-500 bg-green-50 ring-2 ring-green-200"
                     : "mrs-surface"
                 }`}
               >
@@ -611,12 +624,13 @@ export default function TrackingReports() {
           loadError
             ? { type: "error", message: loadError }
             : successMessage
-              ? { type: "success", title: "Medical Reports", message: successMessage }
+              ? { type: "success", title: "Medical Reports", message: successMessage, ...successMeta }
               : null
         }
         onClose={() => {
           setLoadError("");
           setSuccessMessage("");
+          setSuccessMeta(null);
         }}
       />
       <ConfirmationModal

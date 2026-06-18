@@ -182,32 +182,27 @@ export default function Settings({ initialTab = "rules" }) {
   const [pendingDepartmentAction, setPendingDepartmentAction] = useState(null);
   const [isDepartmentActionSaving, setIsDepartmentActionSaving] = useState(false);
   const visibleTabs = useMemo(
-    () => (isAdmin ? tabs : tabs.filter((tab) => ["rules", "about"].includes(tab.id))),
+    () => (isAdmin ? tabs : tabs.filter((tab) => ["rules", "departmentEditor", "about"].includes(tab.id))),
     [isAdmin],
   );
 
   useEffect(() => {
-    // Loads admin-only editable lists and audit/account data from Firestore.
-    const unsubscribeDepartments = isAdmin
-      ? subscribeToDepartments(
-          setDepartments,
-          (error) => setDepartmentError(error.message || "Unable to load departments from Firebase."),
-        )
-      : () => {};
+    // Department editor lists load for any Medical Records user (staff can add/edit,
+    // only admin can delete). Account and audit data stay admin-only.
+    const unsubscribeDepartments = subscribeToDepartments(
+      setDepartments,
+      (error) => setDepartmentError(error.message || "Unable to load departments from Firebase."),
+    );
 
-    const unsubscribeAdmissionLocations = isAdmin
-      ? subscribeToAdmissionLocations(
-          setAdmissionLocations,
-          (error) => setAdmissionLocationError(error.message || "Unable to load admission locations from Firebase."),
-        )
-      : () => {};
+    const unsubscribeAdmissionLocations = subscribeToAdmissionLocations(
+      setAdmissionLocations,
+      (error) => setAdmissionLocationError(error.message || "Unable to load admission locations from Firebase."),
+    );
 
-    const unsubscribeOutpatientDepartments = isAdmin
-      ? subscribeToOutpatientDepartments(
-          setOutpatientDepartments,
-          (error) => setOutpatientDepartmentError(error.message || "Unable to load outpatient departments from Firebase."),
-        )
-      : () => {};
+    const unsubscribeOutpatientDepartments = subscribeToOutpatientDepartments(
+      setOutpatientDepartments,
+      (error) => setOutpatientDepartmentError(error.message || "Unable to load outpatient departments from Firebase."),
+    );
 
     const unsubscribeUsers = isAdmin
       ? subscribeToUsers(
@@ -690,7 +685,7 @@ export default function Settings({ initialTab = "rules" }) {
             <p className="text-xs font-medium text-slate-500">
               {isAdmin
                 ? "Manage system defaults, department lists, report exports, and action logs."
-                : "Staff can access system settings only. Department lists, access control, and logs stay admin-only."}
+                : "Staff can manage system settings and department lists (add and edit). Deleting lists, access control, and logs stay admin-only."}
             </p>
           </div>
         </div>
@@ -975,14 +970,16 @@ export default function Settings({ initialTab = "rules" }) {
                                 >
                                   <Edit size={17} />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteDepartment(department.id)}
-                                  className="p-2 rounded-xl border-2 border-red-100 text-red-500 hover:border-red-300"
-                                  aria-label={`Delete ${department.name}`}
-                                >
-                                  <Trash2 size={17} />
-                                </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteDepartment(department.id)}
+                                    className="p-2 rounded-xl border-2 border-red-100 text-red-500 hover:border-red-300"
+                                    aria-label={`Delete ${department.name}`}
+                                  >
+                                    <Trash2 size={17} />
+                                  </button>
+                                )}
                               </div>
                             </>
                           )}
@@ -1056,14 +1053,16 @@ export default function Settings({ initialTab = "rules" }) {
                                 >
                                   <Edit size={17} />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteAdmissionLocation(location.id)}
-                                  className="p-2 rounded-xl border-2 border-red-100 text-red-500 hover:border-red-300"
-                                  aria-label={`Delete ${location.name}`}
-                                >
-                                  <Trash2 size={17} />
-                                </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteAdmissionLocation(location.id)}
+                                    className="p-2 rounded-xl border-2 border-red-100 text-red-500 hover:border-red-300"
+                                    aria-label={`Delete ${location.name}`}
+                                  >
+                                    <Trash2 size={17} />
+                                  </button>
+                                )}
                               </div>
                             </>
                           )}
@@ -1137,14 +1136,16 @@ export default function Settings({ initialTab = "rules" }) {
                                 >
                                   <Edit size={17} />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteOutpatientDepartment(department.id)}
-                                  className="p-2 rounded-xl border-2 border-red-100 text-red-500 hover:border-red-300"
-                                  aria-label={`Delete ${department.name}`}
-                                >
-                                  <Trash2 size={17} />
-                                </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteOutpatientDepartment(department.id)}
+                                    className="p-2 rounded-xl border-2 border-red-100 text-red-500 hover:border-red-300"
+                                    aria-label={`Delete ${department.name}`}
+                                  >
+                                    <Trash2 size={17} />
+                                  </button>
+                                )}
                               </div>
                             </>
                           )}
@@ -1301,7 +1302,7 @@ export default function Settings({ initialTab = "rules" }) {
                       </button>
                     </div>
 
-                    <div className="mrs-panel min-h-0 flex-1 overflow-x-hidden overflow-y-auto rounded-xl">
+                    <div className="mrs-panel min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-xl">
                       <table className="w-full table-fixed text-left">
                         <thead className="sticky top-0 z-10 bg-slate-50">
                           <tr className="border-b border-slate-100">

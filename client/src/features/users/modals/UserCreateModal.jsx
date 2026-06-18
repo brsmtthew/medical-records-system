@@ -1,12 +1,7 @@
 import { LoaderCircle, UserPlus, X } from "lucide-react";
 
-import {
-  defaultDoctorClinics,
-  defaultNurseDepartments,
-  managedUserRoles,
-  roleLabel,
-  userRoles,
-} from "@shared/constants/userRoles";
+import { managedUserRoles, roleLabel, userRoles } from "@shared/constants/userRoles";
+import { defaultDoctorClinics, defaultNurseDepartments } from "@shared/constants/defaultOptions";
 
 export default function UserCreateModal({
   form,

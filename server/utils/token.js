@@ -1,8 +1,8 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 
-const accessSecret = () => env.jwtSecret || "development-only-access-secret";
-const refreshSecret = () => env.refreshTokenSecret || "development-only-refresh-secret";
+const accessSecret = () => env.jwtSecret;
+const refreshSecret = () => env.refreshTokenSecret;
 
 export function signAccessToken(user) {
   return jwt.sign(

@@ -5,10 +5,10 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  HeartPulse,
   LoaderCircle,
   LockKeyhole,
   Mail,
+  ShieldCheck,
   UserRound,
 } from "lucide-react";
 import logo from "@assets/TGMCI_LOGO.png";
@@ -154,12 +154,8 @@ export default function Login() {
     }
   };
 
-  const handleGoogleContinue = () => {
-    setError("Google sign-in is not configured yet. Use your department email and password.");
-  };
-
   return (
-    <div className="relative h-dvh overflow-hidden bg-[#edf4f6] font-sans text-slate-950">
+    <div className="relative h-dvh overflow-hidden bg-sky-50 font-sans text-slate-950">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(14,116,144,0.10),transparent_24rem),radial-gradient(circle_at_90%_80%,rgba(22,163,74,0.08),transparent_22rem)]" />
 
       <main className="relative flex h-dvh items-center px-5 py-5 sm:px-8 lg:px-10">
@@ -191,34 +187,37 @@ export default function Login() {
           </section>
 
           <aside className="login-form-side login-auth-area relative flex min-h-0 items-center justify-center overflow-hidden p-6 sm:p-10">
-            <div className={`login-auth-panel mx-auto flex max-h-full w-full max-w-[25.5rem] flex-col bg-white px-1 text-slate-950 ${isCreateAccount ? "overflow-y-auto" : "overflow-hidden"}`}>
-              <div className={`${isCreateAccount ? "mb-3" : "mb-6"} flex justify-center transition-all duration-300`}>
-                <Motion.img
-                  src={logo}
-                  initial={{ opacity: 0, scale: 0.92 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                  className={`${isCreateAccount ? "h-20 w-40" : "h-32 w-52"} object-contain transition-all duration-300`}
-                  alt="TGMCI Logo"
-                />
-              </div>
-
-              <div className="mb-6 rounded-full bg-[#4b99bd] px-4 py-3 text-center text-xs font-black uppercase text-white shadow-sm">
-                Sign In
-              </div>
-
-              <div className={`${isCreateAccount ? "mb-3" : "mb-5"} text-center transition-all duration-300`}>
-                <div>
-                  <h2 className={`${isCreateAccount ? "text-3xl" : "text-4xl"} font-black uppercase tracking-tight text-slate-950 transition-all duration-300`}>
-                    {isCreateAccount ? "Create Account" : "Login"}
-                  </h2>
-                  <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {isCreateAccount ? "Register your staff account." : "Log in to your account."}
-                  </p>
+            <div className="login-auth-panel mx-auto flex max-h-full w-full max-w-[24rem] flex-col overflow-y-auto bg-white text-slate-950">
+              <div className="login-logo-block mb-6 overflow-hidden rounded-2xl shadow-lg shadow-cyan-900/10">
+                <div className="flex flex-col items-center gap-2.5 bg-gradient-to-br from-teal-700 via-cyan-700 to-emerald-600 px-6 py-5 text-center">
+                  <div className="rounded-xl bg-white px-4 py-2.5 shadow-md">
+                    <Motion.img
+                      src={logo}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                      className="h-14 w-auto object-contain"
+                      alt="TGMCI Logo"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black uppercase tracking-tight text-white">TGMCI Records</p>
+                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-50/90">Medical Records System</p>
+                  </div>
                 </div>
+                <div className="h-1 bg-[linear-gradient(90deg,#166534,#2563eb,#f59e0b)]" />
               </div>
 
-              <form onSubmit={handleSubmit} className="min-h-0">
+              <div className="login-title-block mb-5 text-center">
+                <h2 className="text-2xl font-black uppercase tracking-tight text-slate-900">
+                  {isCreateAccount ? "Create Account" : "Welcome Back"}
+                </h2>
+                <p className="mt-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                  {isCreateAccount ? "Register your staff account" : "Sign in to your account"}
+                </p>
+              </div>
+
+              <form onSubmit={handleSubmit} className="login-form-stack min-h-0">
                 <AnimatePresence mode="wait" initial={false}>
                   <Motion.div
                     key={authMode}
@@ -226,98 +225,108 @@ export default function Login() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -14, scale: 0.98 }}
                     transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                    className={isCreateAccount ? "space-y-2.5" : "space-y-3.5"}
+                    className={isCreateAccount ? "space-y-3" : "space-y-3.5"}
                   >
                     {isCreateAccount && (
-                      <div className="relative">
-                        <UserRound size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          placeholder="Juan Dela Cruz"
-                          aria-label="Full Name"
-                          className="login-field w-full rounded-xl py-3 pl-11 pr-4 font-bold"
-                          value={form.fullName}
-                          onChange={(e) => updateForm("fullName", e.target.value)}
-                        />
-                      </div>
+                      <label className="block">
+                        <span className="mb-1.5 ml-0.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Full Name</span>
+                        <div className="relative">
+                          <UserRound size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Juan Dela Cruz"
+                            aria-label="Full Name"
+                            className="login-field h-12 w-full rounded-xl pl-11 pr-4 text-sm font-bold"
+                            value={form.fullName}
+                            onChange={(e) => updateForm("fullName", e.target.value)}
+                          />
+                        </div>
+                      </label>
                     )}
 
-                    <div className="relative">
-                      <Mail size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="email"
-                        placeholder="name@hospital.com"
-                        aria-label="Department Email"
-                        className="login-field w-full rounded-xl py-3 pl-11 pr-4 font-bold"
-                        value={form.email}
-                        onChange={(e) => updateForm("email", e.target.value)}
-                        autoComplete="email"
-                      />
-                    </div>
-
-                    <div className="relative">
-                      <LockKeyhole size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Password"
-                        aria-label="Password"
-                        className="login-field h-12 w-full rounded-xl py-3 pl-11 pr-12 font-bold"
-                        value={form.password}
-                        onChange={(e) => updateForm("password", e.target.value)}
-                        autoComplete={isCreateAccount ? "new-password" : "current-password"}
-                      />
-                      <button
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => setShowPassword((value) => !value)}
-                        className="absolute inset-y-0 right-3 my-auto flex size-8 items-center justify-center rounded-md p-0 leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-950"
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <EyeOff className="block size-[17px]" /> : <Eye className="block size-[17px]" />}
-                      </button>
-                    </div>
-
-                    {isCreateAccount && (
+                    <label className="block">
+                      <span className="mb-1.5 ml-0.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Department Email</span>
                       <div className="relative">
-                        <LockKeyhole size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
-                          type={showConfirmPassword ? "text" : "password"}
-                          placeholder="Confirm password"
-                          aria-label="Confirm Password"
-                          className="login-field h-12 w-full rounded-xl py-3 pl-11 pr-12 font-bold"
-                          value={form.confirmPassword}
-                          onChange={(e) => updateForm("confirmPassword", e.target.value)}
-                          autoComplete="new-password"
+                          type="email"
+                          placeholder="name@hospital.com"
+                          aria-label="Department Email"
+                          className="login-field h-12 w-full rounded-xl pl-11 pr-4 text-sm font-bold"
+                          value={form.email}
+                          onChange={(e) => updateForm("email", e.target.value)}
+                          autoComplete="email"
+                        />
+                      </div>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1.5 ml-0.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Password</span>
+                      <div className="relative">
+                        <LockKeyhole size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Enter your password"
+                          aria-label="Password"
+                          className="login-field h-12 w-full rounded-xl pl-11 pr-12 text-sm font-bold"
+                          value={form.password}
+                          onChange={(e) => updateForm("password", e.target.value)}
+                          autoComplete={isCreateAccount ? "new-password" : "current-password"}
                         />
                         <button
                           type="button"
                           onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => setShowConfirmPassword((value) => !value)}
-                          className="absolute inset-y-0 right-3 my-auto flex size-8 items-center justify-center rounded-md p-0 leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-950"
-                          aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                          onClick={() => setShowPassword((value) => !value)}
+                          className="absolute inset-y-0 right-2 my-auto flex size-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
                         >
-                          {showConfirmPassword ? <EyeOff className="block size-[17px]" /> : <Eye className="block size-[17px]" />}
+                          {showPassword ? <EyeOff className="block size-[18px]" /> : <Eye className="block size-[18px]" />}
                         </button>
                       </div>
+                    </label>
+
+                    {isCreateAccount && (
+                      <label className="block">
+                        <span className="mb-1.5 ml-0.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Confirm Password</span>
+                        <div className="relative">
+                          <LockKeyhole size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type={showConfirmPassword ? "text" : "password"}
+                            placeholder="Re-enter your password"
+                            aria-label="Confirm Password"
+                            className="login-field h-12 w-full rounded-xl pl-11 pr-12 text-sm font-bold"
+                            value={form.confirmPassword}
+                            onChange={(e) => updateForm("confirmPassword", e.target.value)}
+                            autoComplete="new-password"
+                          />
+                          <button
+                            type="button"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => setShowConfirmPassword((value) => !value)}
+                            className="absolute inset-y-0 right-2 my-auto flex size-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                            aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                          >
+                            {showConfirmPassword ? <EyeOff className="block size-[18px]" /> : <Eye className="block size-[18px]" />}
+                          </button>
+                        </div>
+                      </label>
                     )}
 
-                    <div className="flex items-center justify-between gap-3 px-1 text-sm">
-                      <div>
-                        <label className="flex cursor-pointer items-center font-semibold text-slate-600">
-                          <input
-                            type="checkbox"
-                            checked={form.remember}
-                            onChange={(e) => updateForm("remember", e.target.checked)}
-                            className="mr-2 rounded border-black text-green-600 focus:ring-green-500"
-                          />
-                          Keep signed in on this browser
-                        </label>
-                      </div>
+                    <div className="flex items-center justify-between gap-3 pt-0.5">
+                      <label className="flex cursor-pointer select-none items-center gap-2 text-xs font-bold text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={form.remember}
+                          onChange={(e) => updateForm("remember", e.target.checked)}
+                          className="size-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                        />
+                        Keep me signed in
+                      </label>
                       {!isCreateAccount && (
                         <button
                           type="button"
                           onClick={handlePasswordReset}
-                          className="text-xs font-black uppercase text-blue-700 hover:text-blue-900"
+                          className="text-xs font-black uppercase text-cyan-700 transition-colors hover:text-cyan-900"
                         >
                           Forgot Password?
                         </button>
@@ -326,9 +335,9 @@ export default function Login() {
 
                     <Motion.button
                       whileHover={{ y: -1 }}
-                      whileTap={{ scale: 0.98 }}
+                      whileTap={{ scale: 0.985 }}
                       disabled={isSubmitting}
-                      className="login-submit-button flex w-full items-center justify-center gap-2 rounded-xl py-3.5 font-black uppercase transition-all disabled:cursor-not-allowed disabled:opacity-70"
+                      className="login-submit-button mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-black uppercase tracking-wide transition-all disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       {isSubmitting
                         ? isCreateAccount
@@ -340,43 +349,19 @@ export default function Login() {
                       {isSubmitting ? <LoaderCircle size={18} className="animate-spin" /> : <ArrowRight size={18} />}
                     </Motion.button>
 
-                    <div className="flex items-center gap-3 py-1">
-                      <div className="h-px flex-1 bg-slate-200" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">or</span>
-                      <div className="h-px flex-1 bg-slate-200" />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleGoogleContinue}
-                      className="login-google-button flex w-full items-center justify-center gap-3 rounded-xl py-3 text-xs font-black uppercase text-slate-700 transition-all"
-                    >
-                      <span className="flex size-5 items-center justify-center rounded-full bg-white text-sm font-black text-blue-600">G</span>
-                      Continue with Google
-                    </button>
-
-                    <p className="text-center text-xs font-semibold text-slate-500">
+                    <p className="pt-1 text-center text-[11px] font-semibold text-slate-500">
                       Need an account? Contact the system administrator.
                     </p>
                   </Motion.div>
                 </AnimatePresence>
-
-                <div className={`${isCreateAccount ? "mt-2" : "mt-4"} rounded-xl border border-slate-200 bg-slate-50 p-3 transition-all duration-300`}>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-700">
-                      <HeartPulse size={19} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</p>
-                      <p className="text-xs font-bold text-slate-600">
-                        {isCreateAccount
-                          ? "New accounts start as staff and can be reviewed later."
-                          : "Records department access is ready."}
-                      </p>
-                    </div>
-                  </div>
-                </div>
               </form>
+
+              <div className="login-status-card mt-6 flex items-center justify-center gap-2.5 rounded-xl border border-green-100 bg-green-50/70 px-4 py-3">
+                <ShieldCheck size={16} className="shrink-0 text-green-600" />
+                <p className="text-[10px] font-black uppercase tracking-wider text-green-700">
+                  {isCreateAccount ? "New accounts start as records staff" : "Secured records department access"}
+                </p>
+              </div>
             </div>
           </aside>
         </Motion.section>

@@ -1,5 +1,4 @@
 import fs from "fs/promises";
-import path from "path";
 import { env } from "../config/env.js";
 
 export async function writeAuditLog(action, req, metadata = {}) {
@@ -13,6 +12,5 @@ export async function writeAuditLog(action, req, metadata = {}) {
     timestamp: new Date().toISOString(),
   };
 
-  await fs.mkdir(path.dirname(env.auditLogPath), { recursive: true });
   await fs.appendFile(env.auditLogPath, `${JSON.stringify(entry)}\n`, "utf8");
 }

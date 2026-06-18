@@ -25,6 +25,7 @@ import {
   subscribeToDepartments,
 } from "@features/charts/services/chartService";
 import { buildReturnedChartLog, buildReturnedChartUpdate } from "@features/charts/utils/chartTransactions";
+import { normalizeCaseNumber, normalizePatientName, searchable } from "@shared/utils/recordSorting";
 
 const today = new Date();
 const transactionModes = [
@@ -43,21 +44,6 @@ const transactionModes = [
     tone: "green",
   },
 ];
-
-// Keeps manually typed or scanned case numbers in one searchable format.
-function normalizeCaseNumber(value) {
-  return value.trim().toUpperCase();
-}
-
-// Normalizes chart patient names before grouping records for read-only labels.
-function normalizePatientName(value = "") {
-  return value.trim().replace(/\s+/g, " ").toUpperCase();
-}
-
-// Converts nullable table fields into search-safe text.
-function searchable(value) {
-  return String(value || "").toLowerCase();
-}
 
 // Picks the oldest available timestamp for record-type calculations.
 function chartCreatedValue(chart) {
@@ -628,7 +614,7 @@ export default function Charts() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="mrs-panel mt-2 min-h-0 flex-1 overflow-hidden rounded-xl">
-            <div className="h-full overflow-x-hidden overflow-y-auto">
+            <div className="h-full overflow-x-auto overflow-y-auto">
             <table className="w-full table-fixed text-left">
               <thead className="sticky top-0 z-10">
                 <tr className="mrs-section-band border-b border-slate-200">

@@ -496,7 +496,7 @@ export default function Navbar({ onMenuClick }) {
 
   return (
     <>
-    <div className="mrs-navbar sticky top-0 z-50 flex h-16 w-full items-center justify-between gap-3 border-b px-3 py-2 backdrop-blur-xl sm:px-4 md:px-5">
+    <nav aria-label="Main navigation" className="mrs-navbar sticky top-0 z-50 flex h-16 w-full items-center justify-between gap-3 border-b px-3 py-2 backdrop-blur-xl sm:px-4 md:px-5">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 md:gap-4">
         <Motion.button
           whileHover={{ y: -1 }}
@@ -740,7 +740,7 @@ export default function Navbar({ onMenuClick }) {
         </div>
       </div>
 
-    </div>
+    </nav>
 
       <AnimatePresence>
         {showAccountSettings && (
@@ -756,7 +756,10 @@ export default function Navbar({ onMenuClick }) {
               initial={{ opacity: 0, y: 12, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.97 }}
-              className="mrs-account-modal mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-hidden rounded-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="account-settings-title"
+              className="mrs-account-modal mrs-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-hidden rounded-2xl 2xl:max-w-5xl"
             >
               <button
                 onClick={() => setShowAccountSettings(false)}
@@ -768,7 +771,7 @@ export default function Navbar({ onMenuClick }) {
 
               <div className="mrs-account-header p-5 pr-14">
                 <p className="text-[10px] font-black uppercase tracking-[0.26em] text-green-700">Profile Center</p>
-                <h2 className="mt-1 text-xl font-black text-slate-900 uppercase">Account Settings</h2>
+                <h2 id="account-settings-title" className="mt-1 text-xl font-black text-slate-900 uppercase">Account Settings</h2>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
                   Manage your identity, contact details, and password in one place.
                 </p>
@@ -953,12 +956,15 @@ export default function Navbar({ onMenuClick }) {
               initial={{ opacity: 0, y: 12, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.97 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="sign-out-title"
               className="mrs-panel relative w-full max-w-sm rounded-2xl p-6 text-center sm:p-7"
             >
-              <div className="mx-auto mb-5 w-16 h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
+              <div aria-hidden="true" className="mx-auto mb-5 w-16 h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
                 <LogOut size={30} />
               </div>
-              <h2 className="text-2xl font-black text-slate-800 uppercase">Sign Out?</h2>
+              <h2 id="sign-out-title" className="text-2xl font-black text-slate-800 uppercase">Sign Out?</h2>
               <p className="text-sm font-semibold text-slate-500 mt-2 mb-7">
                 You will return to the login screen.
               </p>
@@ -995,12 +1001,15 @@ export default function Navbar({ onMenuClick }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.97 }}
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="clear-notifications-title"
               className="mrs-panel relative w-full max-w-sm rounded-2xl p-6 text-center"
             >
-              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+              <div aria-hidden="true" className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
                 <Bell size={26} />
               </div>
-              <h2 className="text-xl font-black text-slate-800 uppercase">Clear Notifications?</h2>
+              <h2 id="clear-notifications-title" className="text-xl font-black text-slate-800 uppercase">Clear Notifications?</h2>
               <p className="mt-2 mb-6 text-sm font-semibold text-slate-500">
                 This will remove the current notification history.
               </p>

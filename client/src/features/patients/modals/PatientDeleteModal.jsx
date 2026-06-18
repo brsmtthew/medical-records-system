@@ -25,7 +25,7 @@ export default function PatientDeleteModal({
 
             <div className="border-b border-red-100 bg-red-50 p-5 pr-16">
               <div className="flex items-start gap-3">
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white text-red-600 shadow-sm">
+                <div aria-hidden="true" className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white text-red-600 shadow-sm">
                   <Trash2 size={24} />
                 </div>
                 <div>
@@ -45,7 +45,7 @@ export default function PatientDeleteModal({
               </div>
 
               <div className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-800">
-                <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                <AlertTriangle size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
                 <p className="text-xs font-bold leading-relaxed">
                   Deleting is permanent for this patient row. Use edit if you only need to correct a name, case number, or date.
                 </p>

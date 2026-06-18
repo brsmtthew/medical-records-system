@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import Sidebar from "./components/Sidebar";
-import Navbar from "./components/Navbar";
+import Sidebar from "./Sidebar";
+import Navbar from "./Navbar";
 
 export default function DashboardLayout({ children }) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -71,7 +71,7 @@ export default function DashboardLayout({ children }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            className="flex h-full min-h-0 flex-col overflow-hidden p-2.5 sm:p-3 md:p-4 2xl:p-5"
+            className="mrs-main-content flex h-full min-h-0 flex-col overflow-hidden p-2.5 sm:p-3 md:p-4 2xl:p-5"
           >
             <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
           </Motion.div>

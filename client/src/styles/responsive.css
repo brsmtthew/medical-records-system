@@ -13,7 +13,37 @@
     }
 
     .mrs-deploy-fit .mrs-navbar {
-      min-height: 3.75rem;
+      height: 3.4rem !important;
+      min-height: 3.4rem;
+      padding-bottom: 0.35rem;
+      padding-top: 0.35rem;
+    }
+
+    .mrs-deploy-fit .mrs-topbar-title p {
+      font-size: 0.62rem;
+      letter-spacing: 0.22em;
+      line-height: 1;
+    }
+
+    .mrs-deploy-fit .mrs-topbar-title h1 {
+      font-size: 1rem;
+      line-height: 1.05;
+    }
+
+    .mrs-deploy-fit .mrs-topbar-tray {
+      gap: 0.25rem;
+      padding: 0.2rem;
+    }
+
+    .mrs-deploy-fit .mrs-topbar-chip {
+      height: 2rem;
+      padding-left: 0.55rem;
+      padding-right: 0.55rem;
+    }
+
+    .mrs-deploy-fit .mrs-profile-button {
+      gap: 0.35rem;
+      padding: 0.2rem 0.45rem 0.2rem 0.2rem;
     }
 
     .mrs-deploy-fit .mrs-surface,
@@ -99,6 +129,21 @@
 
     .mrs-deploy-fit .mrs-sidebar-link {
       border-radius: 0.75rem;
+      padding-bottom: 0.42rem;
+      padding-top: 0.42rem;
+    }
+
+    .mrs-deploy-fit .mrs-sidebar-section-header {
+      padding-bottom: 0.1rem;
+      padding-top: 0.1rem;
+    }
+
+    .mrs-deploy-fit .mrs-sidebar-nav {
+      gap: 0.25rem;
+    }
+
+    .mrs-deploy-fit .mrs-main-content {
+      padding: 0.65rem;
     }
 
     .mrs-deploy-fit .rounded-2xl {
@@ -107,6 +152,147 @@
 
     .mrs-deploy-fit .rounded-xl {
       border-radius: 0.7rem;
+    }
+  }
+
+  @media (max-height: 720px) and (min-width: 1024px) {
+    .login-shell-panel {
+      border-radius: 1.1rem !important;
+      height: calc(100dvh - 1rem) !important;
+      max-width: 60rem !important;
+    }
+
+    .login-form-side {
+      padding: 0.8rem 2rem !important;
+    }
+
+    .login-auth-panel {
+      max-width: 23rem !important;
+      overflow-y: auto !important;
+      padding-bottom: 0.25rem;
+      padding-top: 0.25rem;
+    }
+
+    .login-logo-block {
+      margin-bottom: 0.45rem !important;
+    }
+
+    .login-logo-block img {
+      height: 5.3rem !important;
+      width: 8.8rem !important;
+    }
+
+    .login-mode-pill {
+      margin-bottom: 0.85rem !important;
+      padding-bottom: 0.62rem !important;
+      padding-top: 0.62rem !important;
+    }
+
+    .login-title-block {
+      margin-bottom: 0.85rem !important;
+    }
+
+    .login-title-block h2 {
+      font-size: 1.65rem !important;
+      line-height: 1 !important;
+    }
+
+    .login-title-block p {
+      margin-top: 0.35rem !important;
+    }
+
+    .login-form-stack [class*="space-y-3.5"] > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 0.55rem !important;
+    }
+
+    .login-field {
+      min-height: 2.35rem !important;
+      padding-bottom: 0.55rem !important;
+      padding-top: 0.55rem !important;
+    }
+
+    .login-form-stack label,
+    .login-form-stack p,
+    .login-form-stack button {
+      line-height: 1.15;
+    }
+
+    .login-submit-button,
+    .login-google-button {
+      padding-bottom: 0.65rem !important;
+      padding-top: 0.65rem !important;
+    }
+
+    .login-status-card {
+      margin-top: 0.65rem !important;
+      padding: 0.65rem !important;
+    }
+
+    .mrs-deploy-fit main {
+      overflow-y: auto;
+    }
+
+    .mrs-deploy-fit .mrs-main-content,
+    .mrs-deploy-fit .mrs-main-content > div {
+      min-height: max-content;
+      overflow: visible;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-page {
+      min-height: 35rem;
+      overflow: visible;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-grid {
+      grid-template-rows: minmax(13rem, 1fr) minmax(8.6rem, 0.45fr) !important;
+      min-height: 22rem;
+      overflow: visible;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-chart,
+    .mrs-deploy-fit .mrs-dashboard-analytics,
+    .mrs-deploy-fit .mrs-dashboard-recent,
+    .mrs-deploy-fit .mrs-dashboard-status {
+      min-height: 0;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-recent,
+    .mrs-deploy-fit .mrs-dashboard-status {
+      min-height: 8.6rem;
+    }
+  }
+
+  /* On short but wide screens (laptops/projectors) the fit-to-viewport layout still
+     has room, so restore it for every page: each page's own panels scroll internally
+     instead of the whole window scrolling. This stops pages like the dashboard (ALL
+     period) and chart viewing (after loading a folder) from stretching into a window
+     scrollbar. The narrower short-screen fallback below 1280px keeps its scroll
+     because stacked single-column content genuinely needs it. */
+  @media (max-height: 720px) and (min-width: 1280px) {
+    .mrs-deploy-fit main {
+      overflow: hidden;
+    }
+
+    .mrs-deploy-fit .mrs-main-content,
+    .mrs-deploy-fit .mrs-main-content > div {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-page {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-grid {
+      grid-template-rows: minmax(0, 1fr) minmax(0, 0.52fr) !important;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-recent,
+    .mrs-deploy-fit .mrs-dashboard-status {
+      min-height: 0;
     }
   }
 

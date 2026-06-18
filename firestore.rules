@@ -105,16 +105,32 @@ service cloud.firestore {
 
     function validChartRequestTransition(currentStatus, nextStatus) {
       return currentStatus == nextStatus
-        || (currentStatus == "pending" && nextStatus in ["preparing", "borrowed", "canceled"])
+        || (currentStatus == "pending" && nextStatus in ["preparing", "canceled"])
+        || (currentStatus == "reviewing" && nextStatus in ["preparing", "canceled"])
         || (currentStatus == "preparing" && nextStatus in ["ready", "canceled"])
-        || (currentStatus == "ready" && nextStatus in ["received", "canceled"])
-        || (currentStatus == "received" && nextStatus in ["completed", "canceled"])
-        || (currentStatus == "borrowed" && nextStatus == "returned")
-        || (currentStatus == "returned" && nextStatus == "completed");
+        || (currentStatus == "ready" && nextStatus == "received")
+        || (currentStatus == "received" && nextStatus == "returned")
+        || (currentStatus == "returned" && nextStatus == "returnReceived")
+        || (currentStatus == "returnReceived" && nextStatus == "completed");
     }
 
     function isTerminalReleaseStatus(status) {
       return status in ["released", "canceled", "voided"];
+    }
+
+    // A released (done) transaction is never edited again, except to be voided
+    // when its source record is deleted from a tracking section. Reports keep the
+    // voided row as a permanent audit trail.
+    function isVoidingReleasedRecord() {
+      return resource.data.releaseStatus == "released"
+        && request.resource.data.releaseStatus == "voided";
+    }
+
+    // When a patient is renamed, Medical Records syncs the new case number and name
+    // into every linked record so the workflow stays connected. Only these identity
+    // fields may change, so terminal/locked records keep their status untouched.
+    function isPatientIdentitySync() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["caseNumber", "patientName", "updatedAt"]);
     }
 
     function isValidCaseNumber(caseNumber) {
@@ -193,40 +209,45 @@ service cloud.firestore {
       allow update: if isActiveClinicalUser()
         && request.resource.data.caseNumber == caseNumber
         && isValidCaseNumber(request.resource.data.caseNumber)
-        && resource.data.status == "available"
-        && request.resource.data.status == "borrowed"
-        && request.resource.data.borrowerId == request.auth.uid
-        && request.resource.data.borrower is string
-        && request.resource.data.borrower.size() > 0
-        && request.resource.data.department is string
-        && request.resource.data.department.size() > 0
-        && request.resource.data.activeLogId is string
-        && request.resource.data.activeLogId.size() > 0
-        && request.resource.data.activeRequestId is string
-        && isOwnForPickupChartRequest(request.resource.data.activeRequestId, caseNumber)
-        && request.resource.data.borrowedAt is string
-        && request.resource.data.borrowedAt.size() > 0;
+        && (
+          (
+            resource.data.status == "available"
+            && request.resource.data.status == "borrowed"
+            && request.resource.data.borrowerId == request.auth.uid
+            && request.resource.data.borrower is string
+            && request.resource.data.borrower.size() > 0
+            && request.resource.data.department is string
+            && request.resource.data.department.size() > 0
+            && request.resource.data.activeLogId is string
+            && request.resource.data.activeLogId.size() > 0
+            && request.resource.data.borrowedAt is string
+            && request.resource.data.borrowedAt.size() > 0
+          )
+          || (
+            resource.data.status == "borrowed"
+            && resource.data.borrowerId == request.auth.uid
+            && request.resource.data.status == "available"
+            && request.resource.data.borrower == ""
+            && request.resource.data.borrowerId == ""
+            && request.resource.data.department == ""
+            && request.resource.data.borrowedAt == ""
+            && request.resource.data.activeLogId == ""
+          )
+        );
       allow delete: if isAdmin() || isSelfRenameDelete("charts", caseNumber);
     }
 
     match /chartLogs/{logId} {
       allow read: if isActiveStaff()
         || (isActiveClinicalUser() && resource.data.requestedById == request.auth.uid);
-      allow create: if isActiveStaff()
+      allow create, update: if isActiveStaff()
         || (
           isActiveClinicalUser()
           && request.resource.data.requestedById == request.auth.uid
-          && request.resource.data.requestId is string
-          && isOwnForPickupChartRequest(request.resource.data.requestId, request.resource.data.caseNumber)
-          && request.resource.data.action == "borrowed"
+          && request.resource.data.action in ["borrowed", "returned"]
           && isValidCaseNumber(request.resource.data.caseNumber)
         );
-      allow update: if isActiveStaff();
-      allow delete: if isAdmin()
-        || (
-          isActiveClinicalUser()
-          && resource.data.requestedById == request.auth.uid
-        );
+      allow delete: if isAdmin();
     }
 
     match /chartRequests/{requestId} {
@@ -243,7 +264,13 @@ service cloud.firestore {
           && request.resource.data.caseNumber == resource.data.caseNumber
           && request.resource.data.patientName == resource.data.patientName
           && validChartRequestTransition(resource.data.status, request.resource.data.status)
-          && !(request.resource.data.status in ["received", "for_return"])
+          && request.resource.data.status != "received"
+        )
+        || (
+          isActiveStaff()
+          && request.resource.data.requestedById == resource.data.requestedById
+          && request.resource.data.status == resource.data.status
+          && isPatientIdentitySync()
         )
         || (
           isActiveClinicalUser()
@@ -257,20 +284,16 @@ service cloud.firestore {
               && request.resource.data.status == "canceled"
             )
             || (
-              resource.data.status == "for_pickup"
+              resource.data.status == "ready"
               && request.resource.data.status == "received"
             )
             || (
-              resource.data.status == "borrowed"
+              resource.data.status == "received"
               && request.resource.data.status == "returned"
             )
           )
         );
-      allow delete: if isAdmin()
-        || (
-          isActiveClinicalUser()
-          && resource.data.requestedById == request.auth.uid
-        );
+      allow delete: if isAdmin();
     }
 
     match /userNotifications/{notificationId} {
@@ -290,30 +313,54 @@ service cloud.firestore {
 
     match /departments/{departmentId} {
       allow read: if isActiveStaff();
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isActiveStaff();
+      allow delete: if isAdmin();
     }
 
     match /medicalDocumentRequests/{requestId} {
       allow read, create: if isActiveStaff();
-      allow update: if isActiveStaff() && !isTerminalReleaseStatus(resource.data.releaseStatus);
+      allow update: if isActiveStaff()
+        && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isVoidingReleasedRecord() || isPatientIdentitySync());
       allow delete: if isAdmin();
     }
 
     match /labResultRequests/{requestId} {
       allow read, create: if isActiveStaff();
-      allow update: if isActiveStaff() && !isTerminalReleaseStatus(resource.data.releaseStatus);
+      allow update: if isActiveStaff()
+        && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isVoidingReleasedRecord() || isPatientIdentitySync());
       allow delete: if isAdmin();
     }
 
     match /vitalCertificateRequests/{requestId} {
       allow read, create: if isActiveStaff();
-      allow update: if isActiveStaff() && !isTerminalReleaseStatus(resource.data.releaseStatus);
+      allow update: if isActiveStaff()
+        && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isVoidingReleasedRecord() || isPatientIdentitySync());
       allow delete: if isAdmin();
     }
 
+    function validAuditLogShape() {
+      return request.resource.data.createdAt == request.time
+        && (!("userId" in request.resource.data) || validShortString(request.resource.data.userId, 128))
+        && (!("type" in request.resource.data) || validShortString(request.resource.data.type, 30))
+        && (!("title" in request.resource.data) || validShortString(request.resource.data.title, 120))
+        && (!("message" in request.resource.data) || validShortString(request.resource.data.message, 500))
+        && (!("action" in request.resource.data) || validShortString(request.resource.data.action, 120))
+        && (!("patientName" in request.resource.data) || validShortString(request.resource.data.patientName, 160))
+        && (!("caseNumber" in request.resource.data) || validShortString(request.resource.data.caseNumber, 60))
+        && (!("userName" in request.resource.data) || validShortString(request.resource.data.userName, 160))
+        && (!("userEmail" in request.resource.data) || validShortString(request.resource.data.userEmail, 254));
+    }
+
     match /auditLogs/{logId} {
-      allow create: if isAdmin()
-        || (isActiveSystemUser() && request.resource.data.userId == request.auth.uid);
+      // createdAt must equal request.time, so entries cannot be backdated or
+      // post-dated, and content fields are length-capped to block oversized writes.
+      // Admins may attribute a log to another user (e.g. logging a newly created
+      // account); non-admin staff can only write entries for their own uid.
+      allow create: if validAuditLogShape()
+        && (
+          isAdmin()
+          || (isActiveSystemUser() && request.resource.data.userId == request.auth.uid)
+        );
       allow read, delete: if isAdmin();
       allow update: if false;
     }

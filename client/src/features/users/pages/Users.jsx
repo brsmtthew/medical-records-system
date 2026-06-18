@@ -19,14 +19,8 @@ import UserAccessConfirmModal from "../modals/UserAccessConfirmModal";
 import UserCreateModal from "../modals/UserCreateModal";
 import { createManagedUserAccount, deleteUserProfile, subscribeToUsers, updateUserAccess } from "@features/users/services/userService";
 import { useAuth } from "@features/auth/context/useAuth";
-import {
-  defaultDoctorClinics,
-  defaultNurseDepartments,
-  normalizeUserRole,
-  prefixedUserName,
-  roleLabel,
-  userRoles,
-} from "@shared/constants/userRoles";
+import { normalizeUserRole, roleLabel, userRoles } from "@shared/constants/userRoles";
+import { defaultDoctorClinics, defaultNurseDepartments } from "@shared/constants/defaultOptions";
 import { isStrongPassword, normalizeEmail, sanitizeText } from "@shared/utils/security";
 
 function getInitials(name = "") {
@@ -52,7 +46,7 @@ const initialCreateForm = {
 export default function Users() {
   const { currentUser } = useAuth();
   const [users, setUsers] = useState([]);
-  const [restrictionReasons, setRestrictionReasons] = useState({});
+  const [blockReason, setBlockReason] = useState("");
   const [accessError, setAccessError] = useState("");
   const [accessMessage, setAccessMessage] = useState("");
   const [pendingAccessAction, setPendingAccessAction] = useState(null);
@@ -182,14 +176,9 @@ export default function Users() {
       return;
     }
 
-    const reason = (restrictionReasons[userId] || "").trim();
-    if (!reason) {
-      setAccessError("Enter a reason before blocking this account.");
-      return;
-    }
-
     setAccessError("");
-    setPendingAccessAction({ type: "block", user, reason });
+    setBlockReason("");
+    setPendingAccessAction({ type: "block", user });
   };
 
   const handleActivateUser = (user) => {
@@ -211,9 +200,15 @@ export default function Users() {
   const confirmAccessAction = async () => {
     if (!pendingAccessAction) return;
 
-    const { type, user, reason = "" } = pendingAccessAction;
+    const { type, user } = pendingAccessAction;
     const userId = user.uid || user.id;
     const userName = user.fullName || user.email || "User";
+    const reason = blockReason.trim();
+
+    if (type === "block" && !reason) {
+      setAccessError("Enter a reason before blocking this account.");
+      return;
+    }
 
     try {
       if (type === "delete") {
@@ -239,6 +234,7 @@ export default function Users() {
           : `${userName} was ${type === "delete" ? "deleted" : type === "block" ? "blocked" : "activated"}.`,
       );
       setPendingAccessAction(null);
+      setBlockReason("");
     } catch (error) {
       setAccessError(error.message || `Unable to ${type} user.`);
       setPendingAccessAction(null);
@@ -293,7 +289,6 @@ export default function Users() {
         const isSelf = userId === currentUser?.uid;
         const isDisabled = user.accountStatus === "disabled";
         const role = normalizeUserRole(user.role);
-        const displayName = prefixedUserName(user.fullName || user.displayName || "Unnamed User", role);
         const assignment = role === userRoles.doctor
           ? user.clinic || "No clinic assigned"
           : user.department || "No department assigned";
@@ -302,7 +297,9 @@ export default function Users() {
           <tr key={userId} className="mrs-table-row">
             <td className="p-3">
               <div className="flex items-center gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-green-50 text-xs font-black text-green-700">
+                <div className={`flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg text-xs font-black ring-2 ${
+                  isDisabled ? "bg-red-50 text-red-700 ring-red-100" : "bg-green-50 text-green-700 ring-green-100"
+                }`}>
                   {user.photoDataUrl ? (
                     <img src={user.photoDataUrl} alt="" className="h-full w-full object-cover" />
                   ) : (
@@ -311,7 +308,7 @@ export default function Users() {
                 </div>
                 <div className="min-w-0">
                   <p className="break-words text-sm font-black uppercase text-slate-800">
-                    {displayName}
+                    {user.fullName || user.displayName || "Unnamed User"}
                   </p>
                   <p className="mt-1 break-words text-[10px] font-bold text-slate-400">
                     {user.email || "No email saved"}
@@ -339,35 +336,26 @@ export default function Users() {
               </select>
             </td>
             <td className="p-3">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-[10px] font-black uppercase text-slate-500">
-                  {role === userRoles.doctor ? "Clinic" : "Department"}
-                </p>
-                <p className="mt-1 break-words text-xs font-black uppercase text-slate-800">{assignment}</p>
-                {user.specialty && (
-                  <p className="mt-1 break-words text-[10px] font-bold uppercase text-violet-700">{user.specialty}</p>
-                )}
-                {user.licenseNumber && (
-                  <p className="mt-1 break-words text-[10px] font-mono font-bold text-slate-500">{user.licenseNumber}</p>
-                )}
-              </div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                {role === userRoles.doctor ? "Clinic" : "Department"}
+              </p>
+              <p className="mt-0.5 break-words text-xs font-black uppercase text-slate-800">{assignment}</p>
+              {user.specialty && (
+                <p className="mt-1 break-words text-[10px] font-bold uppercase text-violet-700">{user.specialty}</p>
+              )}
+              {user.licenseNumber && (
+                <p className="mt-0.5 break-words font-mono text-[10px] font-bold text-slate-400">{user.licenseNumber}</p>
+              )}
             </td>
             <td className="p-3">
               <span className={`mrs-status-badge ${isDisabled ? "mrs-status-danger" : "mrs-status-success"}`}>
                 {isDisabled ? "Blocked" : "Active"}
               </span>
-            </td>
-            <td className="p-3">
-              <input
-                value={restrictionReasons[userId] ?? user.restrictionReason ?? ""}
-                onChange={(event) => setRestrictionReasons((current) => ({
-                  ...current,
-                  [userId]: event.target.value,
-                }))}
-                placeholder="Required before blocking"
-                className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-bold"
-                disabled={isSelf}
-              />
+              {isDisabled && user.restrictionReason && (
+                <p className="mt-1.5 break-words text-[10px] font-bold uppercase leading-tight text-red-600">
+                  {user.restrictionReason}
+                </p>
+              )}
             </td>
             <td className="p-3">
               <div className="flex justify-end gap-2">
@@ -410,7 +398,7 @@ export default function Users() {
 
       {rows.length === 0 && (
         <tr>
-          <td colSpan="6" className="p-8 text-center">
+          <td colSpan="5" className="p-8 text-center">
             <ShieldCheck size={34} className="mx-auto mb-3 text-slate-300" />
             <p className="font-black uppercase text-slate-700">{emptyTitle}</p>
             <p className="mt-1 text-sm font-semibold text-slate-400">{emptyDescription}</p>
@@ -420,24 +408,30 @@ export default function Users() {
     </tbody>
   );
 
-  const renderUsersTable = ({ title, description, rows, emptyTitle, emptyDescription }) => (
+  const renderUsersTable = ({ title, description, rows, emptyTitle, emptyDescription, icon, iconClass }) => {
+    const SectionIcon = icon;
+    return (
     <section className="mrs-panel min-h-0 overflow-hidden rounded-xl">
-      <div className="mrs-section-band flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2">
-        <div>
-          <h2 className="text-sm font-black uppercase text-slate-800">{title}</h2>
-          <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">{description}</p>
+      <div className="mrs-section-band flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg border ${iconClass}`}>
+            <SectionIcon size={17} />
+          </div>
+          <div>
+            <h2 className="text-sm font-black uppercase text-slate-800">{title}</h2>
+            <p className="mt-0.5 text-[10px] font-bold uppercase text-slate-400">{description}</p>
+          </div>
         </div>
         <span className="mrs-status-badge mrs-status-neutral">{rows.length} shown</span>
       </div>
-      <div className="overflow-hidden">
+      <div className="overflow-x-auto">
         <table className="w-full table-fixed text-left">
           <thead>
             <tr className="mrs-section-band border-b border-slate-100">
-              <th className="w-[23%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
-              <th className="w-[15%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Role</th>
-              <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Assignment</th>
-              <th className="w-[10%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
-              <th className="w-[18%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Block Reason</th>
+              <th className="w-[28%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
+              <th className="w-[16%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Role</th>
+              <th className="w-[24%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Assignment</th>
+              <th className="w-[16%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
               <th className="w-[16%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</th>
             </tr>
           </thead>
@@ -445,7 +439,8 @@ export default function Users() {
         </table>
       </div>
     </section>
-  );
+    );
+  };
 
   return (
     <DashboardLayout>
@@ -471,32 +466,36 @@ export default function Users() {
               </button>
             </div>
           </div>
-          <div className="grid shrink-0 grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-7">
-            {userNavItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setUserFilter(item.id)}
-                className={`mrs-mini-stat mrs-card rounded-xl p-2.5 pl-3 text-left transition-colors ${item.tone} ${
-                  userFilter === item.id ? "border-green-400 bg-green-50 shadow-sm" : "hover:border-green-200 hover:bg-slate-50"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-[10px] font-black uppercase text-slate-500">{item.label}</p>
-                    <p className="mt-1 text-lg font-black leading-none text-slate-800">{item.value}</p>
-                  </div>
-                  <div className={`shrink-0 rounded-xl border p-1.5 ${item.iconClass}`}>
-                    <item.icon size={16} />
-                  </div>
-                </div>
-              </button>
-            ))}
+          <div className="flex shrink-0 flex-wrap gap-1.5">
+            {userNavItems.map((item) => {
+              const isActive = userFilter === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setUserFilter(item.id)}
+                  aria-pressed={isActive}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase transition-colors ${
+                    isActive
+                      ? "border-green-600 bg-green-600 text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:text-green-700"
+                  }`}
+                >
+                  <item.icon size={13} className={isActive ? "text-white" : ""} />
+                  {item.label}
+                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${
+                    isActive ? "bg-white/25 text-white" : "bg-slate-100 text-slate-600"
+                  }`}>
+                    {item.value}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <div className="mrs-panel mrs-filter-strip shrink-0 rounded-xl p-2">
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_14rem]">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -506,18 +505,6 @@ export default function Users() {
                 className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
               />
             </div>
-            <select
-              value={userFilter}
-              onChange={(event) => setUserFilter(event.target.value)}
-              className="mrs-field rounded-lg px-3 py-2 text-xs font-black uppercase"
-              aria-label="Filter users"
-            >
-              {userNavItems.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label} ({item.value})
-                </option>
-              ))}
-            </select>
             <label className="flex items-center gap-2">
               <ArrowUpDown size={16} className="text-slate-400" />
               <select
@@ -540,6 +527,8 @@ export default function Users() {
             title: "Admin And Medical Records Staff",
             description: "System administrators and daily records workspace accounts.",
             rows: recordsUsers,
+            icon: UserCog,
+            iconClass: "border-green-200 bg-green-50 text-green-700",
             emptyTitle: users.length === 0 ? "No user profiles yet" : "No admin or staff accounts match this view",
             emptyDescription: users.length === 0
               ? "Profiles appear after users sign in or create an account."
@@ -549,6 +538,8 @@ export default function Users() {
             title: "Doctors And Nurses",
             description: "Clinical accounts for chart requests and clinical workspace access.",
             rows: clinicalUsers,
+            icon: Stethoscope,
+            iconClass: "border-violet-200 bg-violet-50 text-violet-700",
             emptyTitle: users.length === 0 ? "No user profiles yet" : "No doctor or nurse accounts match this view",
             emptyDescription: users.length === 0
               ? "Profiles appear after users sign in or create an account."
@@ -559,8 +550,13 @@ export default function Users() {
 
       <UserAccessConfirmModal
         action={pendingAccessAction}
-        confirmLabel={pendingAccessAction?.type === "role" ? "Change Role" : "Confirm"}
-        onCancel={() => setPendingAccessAction(null)}
+        confirmLabel={pendingAccessAction?.type === "role" ? "Change Role" : pendingAccessAction?.type === "block" ? "Block Account" : "Confirm"}
+        reason={blockReason}
+        onReasonChange={setBlockReason}
+        onCancel={() => {
+          setPendingAccessAction(null);
+          setBlockReason("");
+        }}
         onConfirm={confirmAccessAction}
         successColor="darkGreen"
       />

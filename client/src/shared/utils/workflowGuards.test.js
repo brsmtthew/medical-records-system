@@ -9,22 +9,13 @@ import {
 } from "./workflowGuards.js";
 
 test("assertChartRequestTransition allows expected chart request flow", () => {
-<<<<<<< HEAD
-  assert.equal(assertChartRequestTransition("pending", "accepted"), "accepted");
-  assert.equal(assertChartRequestTransition("accepted", "preparing"), "preparing");
-  assert.equal(assertChartRequestTransition("preparing", "for_pickup"), "for_pickup");
-  assert.equal(assertChartRequestTransition("for_pickup", "received"), "received");
-  assert.equal(assertChartRequestTransition("received", "for_return"), "for_return");
-  assert.equal(assertChartRequestTransition("for_return", "returned"), "returned");
-=======
-  assert.equal(assertChartRequestTransition("pending", "reviewing"), "reviewing");
+  assert.equal(assertChartRequestTransition("pending", "preparing"), "preparing");
   assert.equal(assertChartRequestTransition("reviewing", "preparing"), "preparing");
   assert.equal(assertChartRequestTransition("preparing", "ready"), "ready");
   assert.equal(assertChartRequestTransition("ready", "received"), "received");
   assert.equal(assertChartRequestTransition("received", "returned"), "returned");
   assert.equal(assertChartRequestTransition("returned", "returnReceived"), "returnReceived");
   assert.equal(assertChartRequestTransition("returnReceived", "completed"), "completed");
->>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
   assert.equal(assertChartRequestTransition("pending", "canceled"), "canceled");
   assert.equal(assertChartRequestTransition("reviewing", "canceled"), "canceled");
   assert.equal(assertChartRequestTransition("preparing", "canceled"), "canceled");
@@ -36,26 +27,15 @@ test("assertChartRequestTransition blocks completed or backward request changes"
     /Invalid chart request transition/,
   );
   assert.throws(
-    () => assertChartRequestTransition("for_pickup", "preparing"),
+    () => assertChartRequestTransition("ready", "preparing"),
     /Invalid chart request transition/,
   );
   assert.throws(
-    () => assertChartRequestTransition("for_pickup", "returned"),
+    () => assertChartRequestTransition("ready", "completed"),
     /Invalid chart request transition/,
   );
   assert.throws(
-<<<<<<< HEAD
-    () => assertChartRequestTransition("pending", "for_pickup"),
-    /Invalid chart request transition/,
-  );
-  assert.throws(
-    () => assertChartRequestTransition("received", "returned"),
-    /Invalid chart request transition/,
-  );
-  assert.throws(
-    () => assertChartRequestTransition("received", "canceled"),
-=======
-    () => assertChartRequestTransition("pending", "preparing"),
+    () => assertChartRequestTransition("pending", "ready"),
     /Invalid chart request transition/,
   );
   assert.throws(
@@ -64,7 +44,6 @@ test("assertChartRequestTransition blocks completed or backward request changes"
   );
   assert.throws(
     () => assertChartRequestTransition("received", "completed"),
->>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
     /Invalid chart request transition/,
   );
 });

@@ -1,3 +1,5 @@
+import fs from "fs/promises";
+import path from "path";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -32,6 +34,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 await seedDefaultAdmin();
+await fs.mkdir(path.dirname(env.auditLogPath), { recursive: true });
 
 app.listen(env.port, () => {
   console.log(`API server listening on port ${env.port}`);

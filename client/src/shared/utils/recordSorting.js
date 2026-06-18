@@ -32,3 +32,18 @@ export function sortNewestFirst(rows) {
     return String(second.id || second.caseNumber || "").localeCompare(String(first.id || first.caseNumber || ""));
   });
 }
+
+// Normalizes case numbers for consistent comparison and search regardless of input casing.
+export function normalizeCaseNumber(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+// Normalizes patient names for duplicate detection and cross-record matching.
+export function normalizePatientName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+// Converts any field value into a lowercase string safe for substring search.
+export function searchable(value) {
+  return String(value || "").toLowerCase();
+}

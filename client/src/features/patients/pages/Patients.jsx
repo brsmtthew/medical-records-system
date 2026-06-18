@@ -34,23 +34,8 @@ import {
   updatePatient as updatePatientRecord,
 } from "@features/patients/services/patientService";
 import { useAuth } from "@features/auth/context/useAuth";
-import { recordTimeValue } from "@shared/utils/recordSorting";
+import { normalizeCaseNumber, normalizePatientName, recordTimeValue, searchable } from "@shared/utils/recordSorting";
 import { buildAttendingDoctorFields, findDoctorById } from "@shared/utils/doctors";
-
-// Keeps patient case numbers consistent whether typed manually or scanned.
-function normalizeCaseNumber(value) {
-  return String(value || "").trim().toUpperCase();
-}
-
-// Normalizes patient names before duplicate and readmission checks.
-function normalizePatientName(value) {
-  return String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
-}
-
-// Converts nullable patient fields into search-safe text.
-function searchable(value) {
-  return String(value || "").toLowerCase();
-}
 
 // Keeps outpatient discharge dates aligned with the admission date used by the form.
 function normalizePatientDates(patient) {
@@ -102,7 +87,7 @@ function patientStayOverlaps(firstPatient, secondPatient) {
     return false;
   }
 
-  return firstRange.admissionTime < secondRange.dischargeTime && secondRange.admissionTime < firstRange.dischargeTime;
+  return firstRange.admissionTime <= secondRange.dischargeTime && secondRange.admissionTime <= firstRange.dischargeTime;
 }
 
 // Falls back through record timestamps to find the earliest saved patient row.
@@ -631,7 +616,7 @@ export default function Patients() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto pr-1">
             <table className="w-full table-fixed border-separate border-spacing-y-1.5">
               <thead className="sticky top-0 z-10 bg-slate-50">
                 <tr className="text-left">
@@ -684,17 +669,17 @@ export default function Patients() {
                     </td>
                     <td className="px-3 py-2 rounded-r-xl border-y border-r border-slate-200 bg-white text-right group-hover:bg-slate-50">
                       <div className="flex justify-end gap-1">
-                        <button onClick={() => setViewPatient(p)} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-500 transition-colors hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700" title="View patient">
-                          <Eye size={16} />
+                        <button onClick={() => setViewPatient(p)} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-500 transition-colors hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700" aria-label={`View patient ${p.name}`}>
+                          <Eye size={16} aria-hidden="true" />
                         </button>
                         {canManagePatients && (
-                          <button onClick={() => { setEditPatient({ ...p, previousCaseNumber: p.caseNumber }); setEditError(""); }} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700" title="Edit patient">
-                            <Edit size={16} />
+                          <button onClick={() => { setEditPatient({ ...p, previousCaseNumber: p.caseNumber }); setEditError(""); }} className="rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700" aria-label={`Edit patient ${p.name}`}>
+                            <Edit size={16} aria-hidden="true" />
                           </button>
                         )}
                         {canDeletePatients && (
-                          <button onClick={() => setDeletePatient(p)} className="rounded-lg border border-red-100 bg-red-50 p-1.5 text-red-500 transition-colors hover:border-red-200 hover:bg-red-100 hover:text-red-700" title="Delete patient">
-                            <Trash2 size={16} />
+                          <button onClick={() => setDeletePatient(p)} className="rounded-lg border border-red-100 bg-red-50 p-1.5 text-red-500 transition-colors hover:border-red-200 hover:bg-red-100 hover:text-red-700" aria-label={`Delete patient ${p.name}`}>
+                            <Trash2 size={16} aria-hidden="true" />
                           </button>
                         )}
                       </div>

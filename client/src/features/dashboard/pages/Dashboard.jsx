@@ -430,7 +430,7 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="mrs-dashboard-page flex h-full min-h-0 flex-col overflow-hidden">
       <Motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -502,11 +502,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-1 gap-2 overflow-hidden xl:grid-cols-12 xl:grid-rows-[minmax(0,1fr)_minmax(0,0.52fr)]">
+      <div className="mrs-dashboard-grid grid flex-1 grid-cols-1 gap-2 overflow-hidden xl:grid-cols-12 xl:grid-rows-[minmax(0,1fr)_minmax(0,0.52fr)]">
         <Motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-7"
+          className="mrs-dashboard-chart mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-7"
         >
           <div className="flex flex-col justify-between gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
@@ -514,9 +514,9 @@ export default function Dashboard() {
                 <Archive size={16} />
               </div>
               <div>
-                <h3 className="text-sm font-black uppercase leading-none tracking-tight text-slate-800">
+                <h2 className="text-sm font-black uppercase leading-none tracking-tight text-slate-800">
                   Chart Movement
-                </h3>
+                </h2>
                 <p className="mt-1 text-[9px] font-black uppercase text-slate-400">By department</p>
               </div>
             </div>
@@ -558,7 +558,7 @@ export default function Dashboard() {
         <Motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-5"
+          className="mrs-dashboard-analytics mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-5"
         >
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-3 py-2">
             <div className="flex items-center gap-2">
@@ -566,9 +566,9 @@ export default function Dashboard() {
                 <Users size={16} />
               </div>
               <div>
-                <h3 className="text-sm font-black uppercase leading-none tracking-tight text-slate-800">
+                <h2 className="text-sm font-black uppercase leading-none tracking-tight text-slate-800">
                   Patient Analytics
-                </h3>
+                </h2>
                 <p className="mt-1 text-[9px] font-black uppercase text-slate-400">{periodLabel}</p>
               </div>
             </div>
@@ -617,7 +617,7 @@ export default function Dashboard() {
         <Motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-6"
+          className="mrs-dashboard-recent mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-6"
         >
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
             <div className="flex items-center gap-2">
@@ -625,7 +625,7 @@ export default function Dashboard() {
                 <ClipboardCheck size={16} />
               </div>
               <div>
-                <h3 className="font-black uppercase leading-none text-slate-800">Recent Activities</h3>
+                <h2 className="font-black uppercase leading-none text-slate-800">Recent Activities</h2>
                 <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">Latest chart movement</p>
               </div>
             </div>
@@ -675,7 +675,7 @@ export default function Dashboard() {
         <Motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-6"
+          className="mrs-dashboard-status mrs-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:col-span-6"
         >
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
             <div className="flex items-center gap-2">
@@ -683,7 +683,7 @@ export default function Dashboard() {
                 <ClipboardCheck size={16} />
               </div>
               <div>
-                <h3 className="font-black uppercase leading-none text-slate-800">Activity Status</h3>
+                <h2 className="font-black uppercase leading-none text-slate-800">Activity Status</h2>
                 <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">Current circulation snapshot</p>
               </div>
             </div>

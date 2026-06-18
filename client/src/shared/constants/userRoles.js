@@ -17,33 +17,8 @@ export const roleLabels = {
   [userRoles.doctor]: "Doctor",
 };
 
-export const roleNamePrefixes = {
-  [userRoles.admin]: "AD.",
-  [userRoles.staff]: "ST.",
-  [userRoles.nurse]: "RN.",
-  [userRoles.doctor]: "DR.",
-};
-
-export const defaultNurseDepartments = [
-  "Emergency Room",
-  "Nursing Station",
-  "NICU",
-  "MICU",
-  "Ward",
-  "OPD",
-];
-
-export const defaultDoctorClinics = [
-  "Internal Medicine",
-  "Surgery",
-  "Pediatrics",
-  "OB-GYN",
-  "Emergency Medicine",
-  "Outpatient Clinic",
-];
-
 export function normalizeUserRole(role) {
-  return allUserRoles.includes(role) ? role : userRoles.staff;
+  return allUserRoles.includes(role) ? role : "unknown";
 }
 
 export function roleLabel(role) {
@@ -52,15 +27,4 @@ export function roleLabel(role) {
 
 export function isMedicalRecordsRole(role) {
   return medicalRecordsRoles.includes(normalizeUserRole(role));
-}
-
-export function roleNamePrefix(role) {
-  return roleNamePrefixes[normalizeUserRole(role)] || "";
-}
-
-export function prefixedUserName(name, role) {
-  const safeName = String(name || "").trim();
-  const prefix = roleNamePrefix(role);
-  if (!safeName || !prefix) return safeName;
-  return safeName.toUpperCase().startsWith(prefix) ? safeName : `${prefix} ${safeName}`;
 }

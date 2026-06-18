@@ -5,7 +5,7 @@ import { requireRole } from "../middleware/authorizeRoles.js";
 import { loginRateLimiter, sensitiveApiRateLimiter } from "../middleware/rateLimiters.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { loginSchema, refreshSchema, registerSchema } from "../validation/authSchemas.js";
+import { loginSchema, registerSchema } from "../validation/authSchemas.js";
 
 const router = Router();
 
@@ -23,7 +23,7 @@ router.post(
   validateRequest(registerSchema),
   asyncHandler(register),
 );
-router.post("/refresh", validateRequest(refreshSchema), asyncHandler(refresh));
+router.post("/refresh", sensitiveApiRateLimiter, asyncHandler(refresh));
 router.post("/logout", requireAuth, asyncHandler(logout));
 router.get("/me", requireAuth, asyncHandler(me));
 

@@ -1,22 +1,14 @@
 const chartRequestTransitions = {
-<<<<<<< HEAD
-  pending: new Set(["accepted", "canceled"]),
-  accepted: new Set(["preparing", "canceled"]),
-  preparing: new Set(["for_pickup", "canceled"]),
-  for_pickup: new Set(["received", "canceled"]),
-  received: new Set(["for_return"]),
-  for_return: new Set(["returned"]),
-=======
-  pending: new Set(["reviewing", "canceled"]),
+  // The review step was removed: a submitted request goes straight to preparing.
+  pending: new Set(["preparing", "canceled"]),
+  // Kept only so any legacy request already in "reviewing" can still be resolved.
   reviewing: new Set(["preparing", "canceled"]),
   preparing: new Set(["ready", "canceled"]),
   ready: new Set(["received"]),
   received: new Set(["returned"]),
   returned: new Set(["returnReceived"]),
   returnReceived: new Set(["completed"]),
->>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
   completed: new Set([]),
-  returned: new Set([]),
   canceled: new Set([]),
 };
 
