@@ -150,7 +150,6 @@ export default function PatientEditModal({
                       });
                       setEditError("");
                     }}
-                    required
                   />
                 </Field>
 

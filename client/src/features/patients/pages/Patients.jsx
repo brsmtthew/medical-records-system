@@ -259,8 +259,8 @@ export default function Patients() {
   // Validates registration form fields and prepares a sanitized patient payload.
   const buildPatientFromForm = () => {
     const caseNumber = normalizeCaseNumber(form.caseNumber);
-    if (!form.name.trim() || !caseNumber || !form.department || !form.attendingDoctorId || !form.admissionDate) {
-      setFormError("Enter the patient name, case number, department/location, attending physician, and date.");
+    if (!form.name.trim() || !caseNumber || !form.department || !form.admissionDate) {
+      setFormError("Enter the patient name, case number, department/location, and date.");
       return null;
     }
     if (form.type === "inpatient" && !form.dischargeDate) {
@@ -349,8 +349,8 @@ export default function Patients() {
     if (pendingAction) return;
     const previousCaseNumber = editPatient.previousCaseNumber || editPatient.id;
     const caseNumber = normalizeCaseNumber(editPatient.caseNumber);
-    if (!editPatient.name.trim() || !caseNumber || !editPatient.department || !editPatient.attendingDoctorId || !editPatient.admissionDate) {
-      setEditError("Patient name, case number, department/location, attending physician, and date are required.");
+    if (!editPatient.name.trim() || !caseNumber || !editPatient.department || !editPatient.admissionDate) {
+      setEditError("Patient name, case number, department/location, and date are required.");
       return;
     }
     if (editPatient.type === "inpatient" && !editPatient.dischargeDate) {

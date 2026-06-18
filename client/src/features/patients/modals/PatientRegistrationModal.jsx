@@ -138,7 +138,6 @@ export default function PatientRegistrationModal({
                 });
                 setFormError("");
               }}
-              required
             />
           </div>
 

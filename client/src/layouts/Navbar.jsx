@@ -44,11 +44,7 @@ import {
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { applySystemTheme, readSystemSettings, saveSystemSettings } from "@shared/utils/systemSettings";
 import { isStrongPassword, normalizeEmail } from "@shared/utils/security";
-<<<<<<< HEAD
-import { prefixedUserName, roleLabel } from "@shared/constants/userRoles";
-=======
 import { roleLabel, userRoles } from "@shared/constants/userRoles";
->>>>>>> 165db78b63a3abe387c16703735aacea8b54ab82
 import { subscribeToUserNotifications } from "@features/charts/services/chartService";
 
 // Builds the compact initials fallback for accounts without an uploaded photo.
@@ -469,7 +465,6 @@ export default function Navbar({ onMenuClick }) {
   };
 
   const displayName = accountProfile?.fullName || currentUser?.displayName || "Administrator";
-  const prefixedDisplayName = prefixedUserName(displayName, accountProfile?.role || userProfile?.role || userRole);
   const displayEmail = currentUser?.email || "Medical Records";
   const accountRoleLabel = roleLabel(accountProfile?.role || userProfile?.role || userRole);
   const photoDataUrl = accountProfile?.photoDataUrl || accountForm.photoDataUrl;
@@ -481,7 +476,6 @@ export default function Navbar({ onMenuClick }) {
     "/chart-viewing": "Chart Viewing",
     "/chartviewing": "Chart Viewing",
     "/chart-requests": "Chart Requests",
-    "/chart-return": "Return Charts",
     "/reports": "Chart Reports",
     "/medical-documents": "Medical Documents",
     "/lab-results": "Laboratory Results",
@@ -673,7 +667,7 @@ export default function Navbar({ onMenuClick }) {
             <div className="hidden sm:flex flex-col text-left">
               <div className="flex items-center gap-1.5">
                 <span className="block max-w-28 truncate whitespace-nowrap text-[11px] font-black leading-tight text-slate-800 2xl:max-w-40">
-                  {prefixedDisplayName}
+                  {displayName}
                 </span>
                 <Circle size={8} className="fill-green-500 text-green-500" />
               </div>
@@ -705,7 +699,7 @@ export default function Navbar({ onMenuClick }) {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="break-words font-black text-slate-800">{prefixedDisplayName}</p>
+                      <p className="break-words font-black text-slate-800">{displayName}</p>
                       <p className="break-words text-xs font-bold text-slate-500">{displayEmail}</p>
                     </div>
                   </div>
