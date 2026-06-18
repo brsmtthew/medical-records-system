@@ -531,7 +531,7 @@ export function subscribeToAuditLogs(onRows, onError) {
 // Adds a chart borrowing department.
 export async function addDepartment(name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const departmentName = sanitizeDepartmentName(name);
   await addDoc(collection(database, "departments"), {
     name: departmentName,
@@ -544,7 +544,7 @@ export async function addDepartment(name) {
 // Renames a chart borrowing department.
 export async function updateDepartment(id, name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const departmentName = sanitizeDepartmentName(name);
   await updateDoc(doc(database, "departments", id), {
     name: departmentName,
@@ -562,7 +562,7 @@ export async function deleteDepartment(id) {
 // Adds an inpatient admission location.
 export async function addAdmissionLocation(name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const locationName = sanitizeDepartmentName(name);
   await addDoc(collection(database, "departments"), {
     name: locationName,
@@ -575,7 +575,7 @@ export async function addAdmissionLocation(name) {
 // Renames an inpatient admission location.
 export async function updateAdmissionLocation(id, name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const locationName = sanitizeDepartmentName(name);
   await updateDoc(doc(database, "departments", id), {
     name: locationName,
@@ -594,7 +594,7 @@ export async function deleteAdmissionLocation(id) {
 // Adds an outpatient department.
 export async function addOutpatientDepartment(name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const departmentName = sanitizeDepartmentName(name);
   await addDoc(collection(database, "departments"), {
     name: departmentName,
@@ -607,7 +607,7 @@ export async function addOutpatientDepartment(name) {
 // Renames an outpatient department.
 export async function updateOutpatientDepartment(id, name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const departmentName = sanitizeDepartmentName(name);
   await updateDoc(doc(database, "departments", id), {
     name: departmentName,
@@ -1440,11 +1440,29 @@ export async function updateChartRequest(id, updates) {
   }
 }
 
-// Deletes a chart audit log by id.
+// Deletes a chart audit log by id. A completed (returned) chart transaction is
+// never erased: it is flipped to "voided" so the chart report keeps a permanent
+// audit trail that the record was removed. Active or canceled logs that are not
+// completed transactions are removed outright.
 export async function deleteChartLog(id) {
   const database = requireDb();
   await requireActiveRole({ adminOnly: true });
-  await deleteDoc(doc(database, "chartLogs", id));
+  const logRef = doc(database, "chartLogs", id);
+  const logSnapshot = await getDoc(logRef);
+  const log = logSnapshot.exists() ? logSnapshot.data() : {};
+
+  if (log.action === "returned") {
+    await updateDoc(logRef, {
+      action: "voided",
+      voidedAt: new Date().toISOString(),
+      remarks: "Record was deleted.",
+      updatedAt: serverTimestamp(),
+    });
+    return "voided";
+  }
+
+  await deleteDoc(logRef);
+  return "deleted";
 }
 
 // Adds a centralized audit action for important CRUD and account events.

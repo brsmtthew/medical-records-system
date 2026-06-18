@@ -105,7 +105,7 @@ service cloud.firestore {
 
     function validChartRequestTransition(currentStatus, nextStatus) {
       return currentStatus == nextStatus
-        || (currentStatus == "pending" && nextStatus in ["reviewing", "canceled"])
+        || (currentStatus == "pending" && nextStatus in ["preparing", "canceled"])
         || (currentStatus == "reviewing" && nextStatus in ["preparing", "canceled"])
         || (currentStatus == "preparing" && nextStatus in ["ready", "canceled"])
         || (currentStatus == "ready" && nextStatus == "received")
@@ -116,6 +116,21 @@ service cloud.firestore {
 
     function isTerminalReleaseStatus(status) {
       return status in ["released", "canceled", "voided"];
+    }
+
+    // A released (done) transaction is never edited again, except to be voided
+    // when its source record is deleted from a tracking section. Reports keep the
+    // voided row as a permanent audit trail.
+    function isVoidingReleasedRecord() {
+      return resource.data.releaseStatus == "released"
+        && request.resource.data.releaseStatus == "voided";
+    }
+
+    // When a patient is renamed, Medical Records syncs the new case number and name
+    // into every linked record so the workflow stays connected. Only these identity
+    // fields may change, so terminal/locked records keep their status untouched.
+    function isPatientIdentitySync() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["caseNumber", "patientName", "updatedAt"]);
     }
 
     function isValidCaseNumber(caseNumber) {
@@ -252,6 +267,12 @@ service cloud.firestore {
           && request.resource.data.status != "received"
         )
         || (
+          isActiveStaff()
+          && request.resource.data.requestedById == resource.data.requestedById
+          && request.resource.data.status == resource.data.status
+          && isPatientIdentitySync()
+        )
+        || (
           isActiveClinicalUser()
           && resource.data.requestedById == request.auth.uid
           && request.resource.data.requestedById == resource.data.requestedById
@@ -292,24 +313,28 @@ service cloud.firestore {
 
     match /departments/{departmentId} {
       allow read: if isActiveStaff();
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isActiveStaff();
+      allow delete: if isAdmin();
     }
 
     match /medicalDocumentRequests/{requestId} {
       allow read, create: if isActiveStaff();
-      allow update: if isActiveStaff() && !isTerminalReleaseStatus(resource.data.releaseStatus);
+      allow update: if isActiveStaff()
+        && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isVoidingReleasedRecord() || isPatientIdentitySync());
       allow delete: if isAdmin();
     }
 
     match /labResultRequests/{requestId} {
       allow read, create: if isActiveStaff();
-      allow update: if isActiveStaff() && !isTerminalReleaseStatus(resource.data.releaseStatus);
+      allow update: if isActiveStaff()
+        && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isVoidingReleasedRecord() || isPatientIdentitySync());
       allow delete: if isAdmin();
     }
 
     match /vitalCertificateRequests/{requestId} {
       allow read, create: if isActiveStaff();
-      allow update: if isActiveStaff() && !isTerminalReleaseStatus(resource.data.releaseStatus);
+      allow update: if isActiveStaff()
+        && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isVoidingReleasedRecord() || isPatientIdentitySync());
       allow delete: if isAdmin();
     }
 

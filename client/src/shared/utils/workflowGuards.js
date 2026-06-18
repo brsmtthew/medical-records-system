@@ -1,5 +1,7 @@
 const chartRequestTransitions = {
-  pending: new Set(["reviewing", "canceled"]),
+  // The review step was removed: a submitted request goes straight to preparing.
+  pending: new Set(["preparing", "canceled"]),
+  // Kept only so any legacy request already in "reviewing" can still be resolved.
   reviewing: new Set(["preparing", "canceled"]),
   preparing: new Set(["ready", "canceled"]),
   ready: new Set(["received"]),

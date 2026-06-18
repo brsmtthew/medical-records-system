@@ -3,7 +3,7 @@ import DashboardLayout from "../../../layouts/DashboardLayout";
 import FloatingToast from "@shared/components/FloatingToast";
 import PatientCaseCell from "@shared/components/PatientCaseCell";
 import { Download, Eye, FileText, Printer, RotateCcw, Search, X } from "lucide-react";
-import { subscribeToChartLogs } from "../../charts/services/chartService";
+import { subscribeToChartLogs, subscribeToChartRequests } from "../../charts/services/chartService";
 import { subscribeToTrackingRows } from "../../tracking/services/trackingService";
 import {
   getTrackingColumns,
@@ -13,7 +13,7 @@ import {
   trackingReportConfigs,
 } from "@features/tracking/utils/trackingConfigs";
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
-import { recordTimeValue } from "@shared/utils/recordSorting";
+import { recordTimeValue, sortNewestFirst } from "@shared/utils/recordSorting";
 
 function escapeExcelValue(value) {
   return String(value ?? "")
@@ -163,6 +163,29 @@ const chartReportConfig = {
 };
 
 const printReportConfigs = [chartReportConfig, ...trackingReportConfigs];
+
+// Canceling a chart request never creates a chart log, so map canceled requests into
+// the chart-log shape used by the chart report — that way the print report still
+// records the canceled transaction. (A canceled request never reached "ready", so it
+// can never collide with an existing borrow/return log.)
+function canceledRequestToLogRow(request) {
+  return {
+    id: `request-${request.id}`,
+    action: "canceled",
+    patientName: request.patientName || "",
+    caseNumber: request.caseNumber || "",
+    borrowedBy: request.requestedBy || "Clinical requester",
+    returnedBy: "",
+    department: request.requestedByClinic || request.requestedByDepartment || "Clinic / Nurse Station",
+    borrowedAt: "",
+    returnedAt: "",
+    canceledAt: request.canceledAt || request.updatedAt || "",
+    timestamp: request.createdAt || "",
+    remarks: request.purpose
+      ? `Chart request canceled. Purpose: ${request.purpose}`
+      : "Chart request canceled.",
+  };
+}
 
 function cellClassName(column) {
   const base = column.compact
@@ -394,6 +417,7 @@ function ExcelPreviewModal({ columns, fileName, isOpen, onClose, onExport, rows,
 export default function PrintReports() {
   const [activeCollection, setActiveCollection] = useState(chartReportConfig.collection);
   const [chartRows, setChartRows] = useState([]);
+  const [canceledRequestRows, setCanceledRequestRows] = useState([]);
   const [rowsByCollection, setRowsByCollection] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -406,19 +430,29 @@ export default function PrintReports() {
   const activeColumns = activeConfig.collection === chartReportConfig.collection
     ? activeConfig.columns
     : getTrackingColumns(activeConfig, selectedType);
+  const chartReportRows = useMemo(
+    () => sortNewestFirst([...chartRows, ...canceledRequestRows]),
+    [chartRows, canceledRequestRows],
+  );
   const rows = useMemo(
     () => (
       activeConfig.collection === chartReportConfig.collection
-        ? chartRows
+        ? chartReportRows
         : rowsByCollection[activeConfig.collection] || []
     ),
-    [activeConfig.collection, chartRows, rowsByCollection],
+    [activeConfig.collection, chartReportRows, rowsByCollection],
   );
 
   useEffect(() => {
     const unsubscribeChartLogs = subscribeToChartLogs(
       setChartRows,
       (error) => setLoadError(error.message || "Unable to load chart report logs."),
+    );
+    const unsubscribeChartRequests = subscribeToChartRequests(
+      (requestRows) => setCanceledRequestRows(
+        requestRows.filter((request) => request.status === "canceled").map(canceledRequestToLogRow),
+      ),
+      (error) => setLoadError(error.message || "Unable to load chart requests."),
     );
     const unsubscribeTracking = trackingReportConfigs.map((config) => (
       subscribeToTrackingRows(
@@ -430,6 +464,7 @@ export default function PrintReports() {
 
     return () => {
       unsubscribeChartLogs();
+      unsubscribeChartRequests();
       unsubscribeTracking.forEach((unsubscribe) => unsubscribe());
     };
   }, []);
@@ -487,9 +522,10 @@ export default function PrintReports() {
                 key={config.collection}
                 type="button"
                 onClick={() => switchReport(config)}
-                className={`mrs-dashboard-stat-fill rounded-xl border p-2 text-left transition-colors ${
+                aria-pressed={activeConfig.collection === config.collection}
+                className={`mrs-clickable-card mrs-dashboard-stat-fill rounded-xl border p-2 text-left ${
                   activeConfig.collection === config.collection
-                    ? "border-green-300 bg-green-50"
+                    ? "border-green-500 bg-green-50 ring-2 ring-green-200"
                     : "mrs-surface"
                 }`}
               >

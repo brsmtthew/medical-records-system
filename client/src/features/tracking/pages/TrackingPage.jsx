@@ -894,8 +894,10 @@ export default function TrackingPage({ config }) {
         await deleteTrackingRowType(config.collection, row.id, selectedType);
         setSuccessMessage(`${config.singleLabel} type was deleted.`);
       } else {
-        await deleteTrackingRow(config.collection, row.id);
-        setSuccessMessage(`${config.singleLabel} was deleted.`);
+        const outcome = await deleteTrackingRow(config.collection, row.id);
+        setSuccessMessage(outcome === "voided"
+          ? `${config.singleLabel} was voided and kept in Medical Reports.`
+          : `${config.singleLabel} was deleted.`);
       }
       setConfirmation(null);
     } catch (error) {

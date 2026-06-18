@@ -5,11 +5,14 @@ export default function UserAccessConfirmModal({
   confirmLabel = "Confirm",
   onCancel,
   onConfirm,
+  reason = "",
+  onReasonChange,
   successColor = "green",
 }) {
   if (!action) return null;
 
   const isBlockAction = action.type === "block";
+  const blockReasonMissing = isBlockAction && !reason.trim();
   const isDeleteAction = action.type === "delete";
   const isRoleAction = action.type === "role";
   const successButtonClass = successColor === "green"
@@ -49,10 +52,20 @@ export default function UserAccessConfirmModal({
                 : `This will restore access for ${targetName}.`}
         </p>
         {isBlockAction && (
-          <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-red-500">Restriction Reason</p>
-            <p className="mt-1 text-sm font-bold text-red-700">{action.reason}</p>
-          </div>
+          <label className="mt-4 block">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restriction Reason</span>
+            <textarea
+              value={reason}
+              onChange={(event) => onReasonChange?.(event.target.value)}
+              rows={2}
+              autoFocus
+              placeholder="Why is this account being blocked?"
+              className="mrs-field mt-1 w-full resize-none rounded-xl px-3 py-2 text-sm font-bold"
+            />
+            {blockReasonMissing && (
+              <span className="mt-1 block text-[10px] font-black uppercase text-red-500">A reason is required to block.</span>
+            )}
+          </label>
         )}
         <div className="mt-6 grid grid-cols-2 gap-3">
           <button
@@ -65,7 +78,8 @@ export default function UserAccessConfirmModal({
           <button
             type="button"
             onClick={onConfirm}
-            className={`rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg ${
+            disabled={blockReasonMissing}
+            className={`rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-50 ${
               isBlockAction || isDeleteAction ? "bg-red-600 shadow-red-500/20" : successButtonClass
             }`}
           >

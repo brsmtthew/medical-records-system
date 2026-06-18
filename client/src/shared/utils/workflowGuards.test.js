@@ -9,7 +9,7 @@ import {
 } from "./workflowGuards.js";
 
 test("assertChartRequestTransition allows expected chart request flow", () => {
-  assert.equal(assertChartRequestTransition("pending", "reviewing"), "reviewing");
+  assert.equal(assertChartRequestTransition("pending", "preparing"), "preparing");
   assert.equal(assertChartRequestTransition("reviewing", "preparing"), "preparing");
   assert.equal(assertChartRequestTransition("preparing", "ready"), "ready");
   assert.equal(assertChartRequestTransition("ready", "received"), "received");
@@ -35,7 +35,7 @@ test("assertChartRequestTransition blocks completed or backward request changes"
     /Invalid chart request transition/,
   );
   assert.throws(
-    () => assertChartRequestTransition("pending", "preparing"),
+    () => assertChartRequestTransition("pending", "ready"),
     /Invalid chart request transition/,
   );
   assert.throws(

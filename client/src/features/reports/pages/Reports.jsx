@@ -24,14 +24,48 @@ import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { useAuth } from "@features/auth/context/useAuth";
 import { isMedicalRecordsRole } from "@shared/constants/userRoles";
 import { readSystemSettings } from "@shared/utils/systemSettings";
-import { recordTimeValue } from "@shared/utils/recordSorting";
+import { recordTimeValue, sortNewestFirst } from "@shared/utils/recordSorting";
 import { statusBadgeClass, statusTextClass } from "@features/tracking/utils/trackingConfigs";
 
 const rowsPerPage = 25;
 const recordsFilters = ["all", "borrowed", "returned", "canceled"];
-const requestFilters = ["all", "pending", "reviewing", "preparing", "ready", "received", "returned", "returnReceived", "completed", "canceled"];
+
+// Canceling a chart request never writes a chart log, so map canceled requests into
+// the chart-log shape used by the records report. They are read-only (no real log to
+// delete) and can never collide with a borrow/return log because a canceled request
+// never reached "ready".
+function canceledRequestToLogRow(request) {
+  return {
+    id: `request-${request.id}`,
+    _request: true,
+    action: "canceled",
+    patientName: request.patientName || "",
+    caseNumber: request.caseNumber || "",
+    borrowedBy: request.requestedBy || "Clinical requester",
+    returnedBy: "",
+    department: request.requestedByClinic || request.requestedByDepartment || "Clinic / Nurse Station",
+    borrowedAt: "",
+    returnedAt: "",
+    canceledAt: request.canceledAt || request.updatedAt || "",
+    timestamp: request.createdAt || "",
+    remarks: request.purpose
+      ? `Chart request canceled. Purpose: ${request.purpose}`
+      : "Chart request canceled.",
+  };
+}
+const requestFilters = ["all", "pending", "preparing", "ready", "received", "returned", "returnReceived", "completed", "canceled"];
+const recordsLegend = [
+  { value: "borrowed", label: "Borrowed" },
+  { value: "returned", label: "Returned" },
+  { value: "canceled", label: "Canceled" },
+  { value: "voided", label: "Voided" },
+];
 
 function getLogActivityDate(log) {
+  if (log.action === "voided") {
+    return log.voidedAt || log.updatedAt || log.returnedAt || log.timestamp || log.borrowedAt || "";
+  }
+
   if (log.action === "canceled") {
     return log.canceledAt || log.updatedAt || log.timestamp || log.borrowedAt || "";
   }
@@ -139,6 +173,20 @@ function requestReportRemark(request) {
   return statusRemarks[status] || "No additional remarks.";
 }
 
+function StatusLegend({ options }) {
+  if (!options.length) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-black uppercase">
+      {options.map((option) => (
+        <span key={option.value} className={`mrs-status-badge ${statusBadgeClass(option.value)}`}>
+          {option.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function Reports() {
   const location = useLocation();
   const { currentUser, isAdmin, userRole } = useAuth();
@@ -159,6 +207,7 @@ export default function Reports() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isDeletingLog, setIsDeletingLog] = useState(false);
   const [timelineRequest, setTimelineRequest] = useState(null);
+  const [canceledRequestRows, setCanceledRequestRows] = useState([]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -176,22 +225,37 @@ export default function Reports() {
     setIsLoading(true);
     setLoadError("");
 
-    const handleRows = (rows) => {
-      setReportRows(isRecordsUser ? rows : rows.filter((row) => row.requestedById === currentUser?.uid));
-      setIsLoading(false);
-    };
-
     const handleError = (error) => {
       setLoadError(error.message || "Unable to load reports from Firebase.");
       setIsLoading(false);
     };
 
-    return isRecordsUser
-      ? subscribeToChartLogs(handleRows, handleError)
-      : subscribeToChartRequests(handleRows, handleError);
+    if (isRecordsUser) {
+      // Records view = chart logs plus canceled chart requests (which never create a log).
+      const unsubscribeLogs = subscribeToChartLogs((rows) => {
+        setReportRows(rows);
+        setIsLoading(false);
+      }, handleError);
+      const unsubscribeRequests = subscribeToChartRequests((rows) => {
+        setCanceledRequestRows(rows.filter((row) => row.status === "canceled").map(canceledRequestToLogRow));
+      }, handleError);
+      return () => {
+        unsubscribeLogs();
+        unsubscribeRequests();
+      };
+    }
+
+    setCanceledRequestRows([]);
+    return subscribeToChartRequests((rows) => {
+      setReportRows(rows.filter((row) => row.requestedById === currentUser?.uid));
+      setIsLoading(false);
+    }, handleError);
   }, [currentUser?.uid, isRecordsUser]);
 
   const filterOptions = isRecordsUser ? recordsFilters : requestFilters;
+  // The colour legend is only shown in the records (chart-log) view, where it adds
+  // the "Voided" key. The request view's filter chips already cover every status.
+  const legendOptions = recordsLegend;
   const actionLabel = isRecordsUser ? "Action" : "Status";
   const searchPlaceholder = isRecordsUser
     ? "Search patient, case number, borrower, returner, or department"
@@ -204,8 +268,13 @@ export default function Reports() {
     }
   }, [actionFilter, filterOptions]);
 
+  const sourceRows = useMemo(
+    () => (isRecordsUser ? sortNewestFirst([...reportRows, ...canceledRequestRows]) : reportRows),
+    [isRecordsUser, reportRows, canceledRequestRows],
+  );
+
   const filteredRows = useMemo(() => {
-    return reportRows.filter((row) => {
+    return sourceRows.filter((row) => {
       const status = isRecordsUser ? row.action : normalizeStatus(row.status);
       const activityDate = toDateKey(isRecordsUser ? getLogActivityDate(row) : getRequestActivityDate(row));
       const matchesAction = actionFilter === "all" || status === actionFilter;
@@ -218,7 +287,7 @@ export default function Reports() {
 
       return matchesAction && matchesSearch && matchesStart && matchesEnd;
     });
-  }, [actionFilter, isRecordsUser, reportRows, searchTerm, startDate, endDate]);
+  }, [actionFilter, isRecordsUser, sourceRows, searchTerm, startDate, endDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -300,12 +369,14 @@ export default function Reports() {
     if (!deleteLog || isDeletingLog) return;
     try {
       setIsDeletingLog(true);
-      await deleteChartLog(deleteLog.id);
-      setSuccessMessage(`${deleteLog.caseNumber || "Report row"} was deleted.`);
+      const outcome = await deleteChartLog(deleteLog.id);
+      setSuccessMessage(outcome === "voided"
+        ? `${deleteLog.caseNumber || "Report row"} was voided and kept in chart reports.`
+        : `${deleteLog.caseNumber || "Report row"} was deleted.`);
       setSuccessMeta({
         patientName: deleteLog.patientName || "",
         caseNumber: deleteLog.caseNumber || "",
-        action: "Report Row Deleted",
+        action: outcome === "voided" ? "Report Row Voided" : "Report Row Deleted",
         audit: true,
         targetPath: `/reports?search=${encodeURIComponent(deleteLog.caseNumber || "")}`,
       });
@@ -341,9 +412,9 @@ export default function Reports() {
       </td>
       <td className="p-3">
         <span
-          className={`mrs-status-badge ${statusBadgeClass(log.action === "borrowed" ? "borrowed" : log.action === "canceled" ? "canceled" : "returned")}`}
+          className={`mrs-status-badge ${statusBadgeClass(["borrowed", "canceled", "voided"].includes(log.action) ? log.action : "returned")}`}
         >
-          {log.action === "borrowed" ? "borrowed" : log.action === "canceled" ? "canceled" : "returned"}
+          {["borrowed", "canceled", "voided"].includes(log.action) ? log.action : "returned"}
         </span>
       </td>
       <td className="p-3">
@@ -360,6 +431,11 @@ export default function Reports() {
             Canceled: {formatDateTime(log.canceledAt || log.updatedAt)}
           </p>
         )}
+        {log.action === "voided" && (
+          <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("voided")}`}>
+            Voided: {formatDateTime(log.voidedAt || log.updatedAt)}
+          </p>
+        )}
       </td>
       <td className="p-3 text-[11px] font-semibold leading-snug text-slate-500 break-words">
         {highlightSearch(log.remarks)}
@@ -367,13 +443,17 @@ export default function Reports() {
       {canManageReports && (
         <td className="p-3">
           <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setDeleteLog(log)}
-              className="p-2 rounded-xl border-2 border-transparent text-red-500 transition-colors hover:border-red-200 hover:bg-red-50"
-              aria-label={`Delete report row ${log.caseNumber}`}
-            >
-              <Trash2 size={17} />
-            </button>
+            {log._request ? (
+              <span className="px-1 text-sm font-black text-slate-300" title="Canceled chart request (read-only)">—</span>
+            ) : (
+              <button
+                onClick={() => setDeleteLog(log)}
+                className="p-2 rounded-xl border-2 border-transparent text-red-500 transition-colors hover:border-red-200 hover:bg-red-50"
+                aria-label={`Delete report row ${log.caseNumber}`}
+              >
+                <Trash2 size={17} />
+              </button>
+            )}
           </div>
         </td>
       )}
@@ -562,6 +642,8 @@ export default function Reports() {
                   </div>
                 </div>
               </div>
+
+              {isRecordsUser && <StatusLegend options={legendOptions} />}
             </div>
 
             <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">

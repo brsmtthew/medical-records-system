@@ -262,6 +262,40 @@
     }
   }
 
+  /* On short but wide screens (laptops/projectors) the fit-to-viewport layout still
+     has room, so restore it for every page: each page's own panels scroll internally
+     instead of the whole window scrolling. This stops pages like the dashboard (ALL
+     period) and chart viewing (after loading a folder) from stretching into a window
+     scrollbar. The narrower short-screen fallback below 1280px keeps its scroll
+     because stacked single-column content genuinely needs it. */
+  @media (max-height: 720px) and (min-width: 1280px) {
+    .mrs-deploy-fit main {
+      overflow: hidden;
+    }
+
+    .mrs-deploy-fit .mrs-main-content,
+    .mrs-deploy-fit .mrs-main-content > div {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-page {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-grid {
+      grid-template-rows: minmax(0, 1fr) minmax(0, 0.52fr) !important;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .mrs-deploy-fit .mrs-dashboard-recent,
+    .mrs-deploy-fit .mrs-dashboard-status {
+      min-height: 0;
+    }
+  }
+
   @media (max-width: 1023px) {
     html {
       font-size: 14px;

@@ -29,6 +29,31 @@
     box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
   }
 
+  /* Gives genuinely clickable cards a clear affordance so they no longer look
+     identical to static stat cards: pointer cursor, hover lift + colored border,
+     a pressed state, and a focus ring for keyboard users. */
+  .mrs-clickable-card {
+    cursor: pointer;
+    transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease, background-color 150ms ease;
+  }
+
+  .mrs-clickable-card:hover {
+    border-color: #16a34a;
+    box-shadow: 0 12px 24px rgba(22, 163, 74, 0.16);
+    transform: translateY(-2px);
+  }
+
+  .mrs-clickable-card:active {
+    transform: translateY(0);
+    box-shadow: 0 6px 14px rgba(22, 163, 74, 0.14);
+  }
+
+  .mrs-clickable-card:focus-visible {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.28);
+  }
+
   .mrs-field {
     border: 1px solid rgba(71, 85, 105, 0.28);
     background: #ffffff;

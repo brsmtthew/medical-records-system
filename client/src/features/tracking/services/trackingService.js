@@ -203,10 +203,29 @@ export async function updateTrackingRow(collectionName, id, payload) {
   });
 }
 
+// Deleting a released (done) transaction never erases it: the permanent Medical
+// Reports log keeps the row and flips its status to "voided" so there is an audit
+// trail that the record was removed elsewhere. In-process records that were never
+// released are removed outright.
 export async function deleteTrackingRow(collectionName, id) {
   const database = requireTrackingDb(collectionName);
   await requireActiveRole({ adminOnly: true });
-  await deleteDoc(doc(database, collectionName, id));
+  const rowRef = doc(database, collectionName, id);
+  const rowSnapshot = await getDoc(rowRef);
+  const row = rowSnapshot.exists() ? rowSnapshot.data() : {};
+
+  if (row.releaseStatus === "released") {
+    await updateDoc(rowRef, {
+      releaseStatus: "voided",
+      voidedAt: new Date().toISOString(),
+      remarks: "Record was deleted.",
+      updatedAt: serverTimestamp(),
+    });
+    return "voided";
+  }
+
+  await deleteDoc(rowRef);
+  return "deleted";
 }
 
 export async function cancelTrackingRow(collectionName, id, sourceLabel = "tracking page") {
