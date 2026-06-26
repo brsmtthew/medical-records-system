@@ -10,5 +10,6 @@ export {
   subscribeToOutpatientDepartments,
   subscribeToPatients,
   subscribeToDoctors,
+  subscribeToPhysicians,
   updatePatient,
 } from "@services/recordsService";

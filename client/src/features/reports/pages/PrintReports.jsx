@@ -173,6 +173,7 @@ function canceledRequestToLogRow(request) {
   return {
     id: `request-${request.id}`,
     action: "canceled",
+    deleted: Boolean(request.deleted),
     patientName: request.patientName || "",
     caseNumber: request.caseNumber || "",
     borrowedBy: request.requestedBy || "Clinical requester",
@@ -182,10 +183,23 @@ function canceledRequestToLogRow(request) {
     returnedAt: "",
     canceledAt: request.canceledAt || request.updatedAt || "",
     timestamp: request.createdAt || "",
-    remarks: request.purpose
-      ? `Chart request canceled. Purpose: ${request.purpose}`
-      : "Chart request canceled.",
+    remarks: request.deleted
+      ? (request.remarks || "Chart request deleted.")
+      : request.purpose
+        ? `Chart request canceled. Purpose: ${request.purpose}`
+        : "Chart request canceled.",
   };
+}
+
+// In Print Reports a soft-deleted row is preserved but its status is shown as
+// "Deleted" so the permanent audit log makes removals obvious. Legacy "voided"
+// rows (from the retired void workflow) are treated as deleted too.
+function isPrimaryStatusColumn(column) {
+  return column.statusKey === "action" || column.statusKey === "releaseStatus";
+}
+
+function isDeletedRow(row) {
+  return Boolean(row.deleted) || row.releaseStatus === "voided" || row.action === "voided";
 }
 
 function cellClassName(column) {
@@ -269,6 +283,14 @@ function stackDateTimeText(value) {
 function renderCellValue(column, row) {
   const value = column.value(row);
 
+  if (isDeletedRow(row) && isPrimaryStatusColumn(column)) {
+    return (
+      <span className={`mrs-status-badge ${statusBadgeClass("deleted")}`}>
+        Deleted
+      </span>
+    );
+  }
+
   if (column.patientCase) {
     return <PatientCaseCell patientName={row.patientName} caseNumber={row.caseNumber} />;
   }
@@ -327,11 +349,12 @@ function reportStatusOptions(config) {
 }
 
 function reportLegendOptions(config) {
-  if (["medicalDocumentRequests", "labResultRequests", "vitalCertificateRequests"].includes(config.collection)) {
-    return reportStatusOptions(config);
-  }
+  const options = ["medicalDocumentRequests", "labResultRequests", "vitalCertificateRequests"].includes(config.collection)
+    ? reportStatusOptions(config)
+    : reportStatusOptions(config).filter((option) => !["forRelease", "released"].includes(option.value));
 
-  return reportStatusOptions(config).filter((option) => !["forRelease", "released"].includes(option.value));
+  // Print Reports is the only view that shows deleted rows, so it gets a Deleted key.
+  return [...options, { value: "deleted", label: "Deleted" }];
 }
 
 function ExcelPreviewModal({ columns, fileName, isOpen, onClose, onExport, rows, title }) {
@@ -431,6 +454,16 @@ export default function PrintReports() {
   const activeColumns = activeConfig.collection === chartReportConfig.collection
     ? activeConfig.columns
     : getTrackingColumns(activeConfig, selectedType);
+  // The Excel export reads raw column values, so override the primary status to
+  // "Deleted" for soft-deleted rows to keep the export audit trail consistent.
+  const exportColumns = useMemo(
+    () => activeColumns.map((column) => (
+      isPrimaryStatusColumn(column)
+        ? { ...column, value: (row) => (isDeletedRow(row) ? "Deleted" : column.value(row)) }
+        : column
+    )),
+    [activeColumns],
+  );
   const chartReportRows = useMemo(
     () => sortNewestFirst([...chartRows, ...canceledRequestRows]),
     [chartRows, canceledRequestRows],
@@ -547,7 +580,9 @@ export default function PrintReports() {
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-green-700">TGMCI Medical Records</p>
               <div className="mt-2">
-                <h2 className="text-xl font-black uppercase text-slate-900">{activeConfig.pluralLabel} Report</h2>
+                <h2 className="text-xl font-black uppercase text-slate-900">
+                  {/^.*reports?$/i.test(activeConfig.pluralLabel) ? activeConfig.pluralLabel : `${activeConfig.pluralLabel} Report`}
+                </h2>
                 <p className="text-xs font-semibold text-slate-500">
                   Generated {formatDisplayDate(new Date())}
                 </p>
@@ -706,12 +741,12 @@ export default function PrintReports() {
       </div>
 
       <ExcelPreviewModal
-        columns={activeColumns}
+        columns={exportColumns}
         fileName={activeConfig.exportName}
         isOpen={isExcelPreviewOpen}
         onClose={() => setIsExcelPreviewOpen(false)}
         onExport={() => {
-          downloadExcel(filteredRows, activeColumns, activeConfig.exportName);
+          downloadExcel(filteredRows, exportColumns, activeConfig.exportName);
           setIsExcelPreviewOpen(false);
         }}
         rows={filteredRows}

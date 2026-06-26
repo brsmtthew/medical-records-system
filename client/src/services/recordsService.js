@@ -516,6 +516,77 @@ export function subscribeToDoctors(onRows, onError) {
   }, onError);
 }
 
+// Physician directory: every attending doctor lives here (with or without a hospital
+// login), so the patient registration dropdown is not limited to user accounts.
+// Visiting/affiliated/no-clinic doctors are registered here and optionally linked to
+// a login account later.
+function sanitizePhysicianPayload(physician) {
+  return sanitizeRecordPayload(physician, {
+    name: { maxLength: 160, uppercase: true },
+    clinic: { maxLength: 120, uppercase: true },
+    specialty: { maxLength: 120 },
+    licenseNumber: { maxLength: 80 },
+    doctorType: { maxLength: 30 },
+    status: { maxLength: 20 },
+    linkedUserId: { maxLength: 128 },
+    linkedUserEmail: { maxLength: 254 },
+  });
+}
+
+export function subscribeToPhysicians(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  return onSnapshot(collection(db, "physicians"), (snapshot) => {
+    onRows(sortByUserName(snapshotRows(snapshot)));
+  }, onError);
+}
+
+export async function addPhysician(physician) {
+  const database = requireDb();
+  const { user } = await requireActiveRole();
+  const payload = sanitizePhysicianPayload(physician);
+  if (!payload.name) {
+    throw new Error("Enter the doctor's name.");
+  }
+
+  await addDoc(collection(database, "physicians"), {
+    name: payload.name,
+    clinic: payload.clinic || "",
+    specialty: payload.specialty || "",
+    licenseNumber: payload.licenseNumber || "",
+    doctorType: payload.doctorType || "clinic",
+    status: payload.status || "active",
+    linkedUserId: payload.linkedUserId || "",
+    linkedUserEmail: payload.linkedUserEmail || "",
+    createdBy: user.uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updatePhysician(id, physician) {
+  const database = requireDb();
+  await requireActiveRole();
+  const payload = sanitizePhysicianPayload(physician);
+  if ("name" in payload && !payload.name) {
+    throw new Error("Enter the doctor's name.");
+  }
+
+  await updateDoc(doc(database, "physicians", id), {
+    ...payload,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deletePhysician(id) {
+  const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
+  await deleteDoc(doc(database, "physicians", id));
+}
+
 // Streams centralized audit actions so admins can review staff activity across workstations.
 export function subscribeToAuditLogs(onRows, onError) {
   if (!db) {
@@ -840,17 +911,18 @@ export async function updatePatient(previousCaseNumber, patient) {
 // Deletes a patient and cancels active borrow logs tied to its chart.
 export async function deletePatient(caseNumber) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  const { user, profile } = await requireActiveRole({ adminOnly: true });
   const chartRef = doc(database, "charts", caseNumber);
   const chartSnapshot = await getDoc(chartRef);
   const chart = chartSnapshot.exists() ? chartSnapshot.data() : null;
   const cancellationTime = new Date().toISOString();
-  const voidedTransactionUpdate = {
-    releaseStatus: "voided",
-    remarks: "Patient was deleted. All related transactions were voided.",
-    voidedAt: cancellationTime,
-    updatedAt: serverTimestamp(),
-  };
+  // Linked transactions are soft-deleted (not voided): they leave the working
+  // views but stay in Print Reports as "Deleted" rows noting they went with the
+  // patient record, matching the system-wide delete behavior.
+  const deletedTransactionUpdate = buildSoftDeleteFields({
+    sourceLabel: "Patient deletion",
+    actorName: actorDisplayName(profile, user),
+  });
   const trackingCollections = [
     "medicalDocumentRequests",
     "labResultRequests",
@@ -862,17 +934,38 @@ export async function deletePatient(caseNumber) {
     )),
   );
 
-  // Rows that are already canceled/voided are terminal: firestore.rules rejects
-  // voiding them (it is neither a released->voided transition nor an identity
-  // sync), and a single rejected update would abort the whole atomic batch and
-  // block the patient delete. Released and in-process rows are still voided.
-  const alreadyVoidedStatuses = new Set(["canceled", "voided"]);
-  const addVoidedTrackingUpdates = (batch) => {
+  // Rows already soft-deleted are skipped: firestore.rules rejects re-deleting a
+  // record (isAdminSoftDelete requires it was not already deleted), and a single
+  // rejected update would abort the whole atomic batch and block the delete.
+  const addDeletedTrackingUpdates = (batch) => {
     trackingCollections.forEach((collectionName, index) => {
       trackingSnapshots[index].docs.forEach((trackingSnapshot) => {
-        if (alreadyVoidedStatuses.has(trackingSnapshot.data().releaseStatus)) return;
-        batch.update(doc(database, collectionName, trackingSnapshot.id), voidedTransactionUpdate);
+        if (trackingSnapshot.data().deleted === true) return;
+        batch.update(doc(database, collectionName, trackingSnapshot.id), deletedTransactionUpdate);
       });
+    });
+  };
+
+  // Any in-flight chart request for this case (requested, prepared, picked up, in
+  // review, or returned but not yet received) is canceled so it never gets stuck
+  // waiting on a chart/patient record that no longer exists.
+  const ongoingRequestStatuses = new Set([
+    "pending", "reviewing", "preparing", "ready", "received", "inReview", "returned", "returnReceived",
+  ]);
+  const chartRequestsSnapshot = await getDocs(
+    query(collection(database, "chartRequests"), where("caseNumber", "==", caseNumber)),
+  );
+  const canceledRequestUpdate = {
+    status: "canceled",
+    canceledAt: cancellationTime,
+    canceledBy: actorDisplayName(profile, user),
+    remarks: "Patient record was deleted. Chart request canceled.",
+    updatedAt: serverTimestamp(),
+  };
+  const addCanceledRequestUpdates = (batch) => {
+    chartRequestsSnapshot.docs.forEach((requestSnapshot) => {
+      if (!ongoingRequestStatuses.has(requestSnapshot.data().status)) return;
+      batch.update(doc(database, "chartRequests", requestSnapshot.id), canceledRequestUpdate);
     });
   };
 
@@ -897,7 +990,8 @@ export async function deletePatient(caseNumber) {
     borrowedLogsSnapshot.docs.forEach((logSnapshot) => {
       batch.update(doc(database, "chartLogs", logSnapshot.id), cancelledLogUpdate);
     });
-    addVoidedTrackingUpdates(batch);
+    addDeletedTrackingUpdates(batch);
+    addCanceledRequestUpdates(batch);
     batch.delete(doc(database, "patients", caseNumber));
     batch.delete(chartRef);
 
@@ -910,7 +1004,8 @@ export async function deletePatient(caseNumber) {
   }
 
   const batch = writeBatch(database);
-  addVoidedTrackingUpdates(batch);
+  addDeletedTrackingUpdates(batch);
+  addCanceledRequestUpdates(batch);
   batch.delete(doc(database, "patients", caseNumber));
   batch.delete(chartRef);
   await batch.commit();
@@ -1077,13 +1172,44 @@ export function subscribeToUserNotifications(onRows, onError) {
   }
 
   const role = normalizeUserRole(activeUserProfile?.role);
-  const notificationQuery = medicalRecordsRoles.includes(role)
-    ? query(collection(db, "userNotifications"), where("targetRole", "==", "medicalRecords"))
-    : query(collection(db, "userNotifications"), where("targetUserId", "==", user.uid));
 
-  return onSnapshot(notificationQuery, (snapshot) => {
-    onRows(sortNewestFirst(snapshotRows(snapshot)));
-  }, onError);
+  // Clinical users only receive notifications addressed to them.
+  if (!medicalRecordsRoles.includes(role)) {
+    return onSnapshot(
+      query(collection(db, "userNotifications"), where("targetUserId", "==", user.uid)),
+      (snapshot) => onRows(sortNewestFirst(snapshotRows(snapshot))),
+      onError,
+    );
+  }
+
+  // Medical Records users receive role-wide notifications (targetRole) AND any sent
+  // directly to them (e.g. when they are the requester). Firestore can't OR two
+  // fields in one query, so run two listeners and merge — only emitting once both
+  // have delivered their first snapshot so the navbar's first-load read-state holds.
+  let roleRows = [];
+  let mineRows = [];
+  let roleReady = false;
+  let mineReady = false;
+  const emit = () => {
+    if (!roleReady || !mineReady) return;
+    const byId = new Map();
+    [...roleRows, ...mineRows].forEach((row) => byId.set(row.id, row));
+    onRows(sortNewestFirst([...byId.values()]));
+  };
+  const unsubscribeRole = onSnapshot(
+    query(collection(db, "userNotifications"), where("targetRole", "==", "medicalRecords")),
+    (snapshot) => { roleRows = snapshotRows(snapshot); roleReady = true; emit(); },
+    onError,
+  );
+  const unsubscribeMine = onSnapshot(
+    query(collection(db, "userNotifications"), where("targetUserId", "==", user.uid)),
+    (snapshot) => { mineRows = snapshotRows(snapshot); mineReady = true; emit(); },
+    onError,
+  );
+  return () => {
+    unsubscribeRole();
+    unsubscribeMine();
+  };
 }
 
 async function addUserNotification(notification) {
@@ -1313,53 +1439,49 @@ export async function updateChartRequest(id, updates) {
     const receivedBy = staffStamp.preparedBy || profile.fullName || profile.displayName || user.displayName || user.email || "";
 
     await runTransaction(database, async (transaction) => {
+      // Reads first (transaction rule): the chart may be gone if the patient record
+      // was deleted while the chart was still out — that must not block the return.
       const chartSnapshot = await transaction.get(chartRef);
-      if (!chartSnapshot.exists()) {
-        throw new Error("No chart found for that case number.");
-      }
+      const chartExists = chartSnapshot.exists();
+      const chart = chartExists ? chartSnapshot.data() : {};
 
-      const chart = chartSnapshot.data();
-      if (!["borrowed", "available"].includes(chart.status)) {
+      if (chartExists && !["borrowed", "available"].includes(chart.status)) {
         throw new Error("This chart cannot be received right now.");
       }
 
-      if (chart.status === "borrowed") {
-        const returnedLog = {
-          action: "returned",
-          patientName: currentRequest.patientName || chart.patientName || "",
-          caseNumber: safeCaseNumber,
-          borrowedBy: chart.borrower || currentRequest.requestedBy || "N/A",
-          requestedById: currentRequest.requestedById || user.uid,
-          returnedBy: returner,
-          department: chart.department || currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "N/A",
-          timestamp: chart.borrowedAt || currentRequest.borrowedAt || returnedAt,
-          borrowedAt: chart.borrowedAt || currentRequest.borrowedAt || returnedAt,
-          returnedAt,
-          dueDate: "",
-          remarks: safeUpdates.remarks || `Returned by requester and received by ${receivedBy}`,
-          updatedAt: serverTimestamp(),
-        };
-        const activeLogId = chart.activeLogId || currentRequest.activeLogId;
+      const activeLogId = (chartExists ? chart.activeLogId : "") || currentRequest.activeLogId;
+      const logRef = activeLogId ? doc(database, "chartLogs", activeLogId) : null;
+      const logSnapshot = logRef ? await transaction.get(logRef) : null;
 
-        if (activeLogId) {
-          const logRef = doc(database, "chartLogs", activeLogId);
-          const logSnapshot = await transaction.get(logRef);
+      const returnedLog = {
+        action: "returned",
+        patientName: currentRequest.patientName || chart.patientName || "",
+        caseNumber: safeCaseNumber,
+        borrowedBy: chart.borrower || currentRequest.requestedBy || "N/A",
+        requestedById: currentRequest.requestedById || user.uid,
+        returnedBy: returner,
+        department: chart.department || currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "N/A",
+        timestamp: chart.borrowedAt || currentRequest.borrowedAt || returnedAt,
+        borrowedAt: chart.borrowedAt || currentRequest.borrowedAt || returnedAt,
+        returnedAt,
+        dueDate: "",
+        remarks: safeUpdates.remarks || (chartExists
+          ? `Returned by requester and received by ${receivedBy}`
+          : `Chart received after the patient record was deleted (received by ${receivedBy}).`),
+        updatedAt: serverTimestamp(),
+      };
 
-          if (logSnapshot.exists()) {
-            transaction.update(logRef, returnedLog);
-          } else {
-            transaction.set(doc(collection(database, "chartLogs")), {
-              ...returnedLog,
-              createdAt: serverTimestamp(),
-            });
-          }
-        } else {
-          transaction.set(doc(collection(database, "chartLogs")), {
-            ...returnedLog,
-            createdAt: serverTimestamp(),
-          });
-        }
+      if (logSnapshot && logSnapshot.exists()) {
+        // Always close out the existing borrow log, even if the chart doc is gone.
+        transaction.update(logRef, returnedLog);
+      } else if (chartExists && chart.status === "borrowed") {
+        transaction.set(doc(collection(database, "chartLogs")), {
+          ...returnedLog,
+          createdAt: serverTimestamp(),
+        });
+      }
 
+      if (chartExists && chart.status === "borrowed") {
         transaction.update(chartRef, {
           caseNumber: safeCaseNumber,
           status: "available",
@@ -1424,11 +1546,11 @@ export async function updateChartRequest(id, updates) {
       targetRole: "medicalRecords",
       targetPath: `/chart-requests?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
     });
-  } else if (!isRecordsUser && nextStatus === "received") {
+  } else if (!isRecordsUser && (nextStatus === "received" || nextStatus === "inReview")) {
     await addUserNotification({
-      type: "success",
-      title: "Chart Received",
-      message: `${currentRequest.caseNumber} was received by the requester.`,
+      type: "info",
+      title: "Chart Picked Up",
+      message: `${currentRequest.caseNumber} was picked up by the requester.`,
       patientName: currentRequest.patientName || "",
       caseNumber: currentRequest.caseNumber || "",
       action: "Chart Request Received",
@@ -1451,35 +1573,54 @@ export async function updateChartRequest(id, updates) {
   }
 }
 
-// Deletes a chart audit log by id. A completed (returned) chart transaction is
-// never erased: it is flipped to "voided" so the chart report keeps a permanent
-// audit trail that the record was removed. Active or canceled logs that are not
-// completed transactions are removed outright.
-export async function deleteChartLog(id) {
+// Builds the soft-delete marker stamped onto a record when an admin deletes it.
+// The document is never physically removed: working views (root pages and their
+// wired reports) hide rows carrying `deleted`, while Print Reports keeps showing
+// them with a "Deleted" status, so every deletion stays auditable forever.
+export function buildSoftDeleteFields({ sourceLabel, actorName, originalRemarks } = {}) {
+  const deletedAt = new Date().toISOString();
+  const deletedFrom = sourceLabel || "the system";
+  const who = actorName || "an admin";
+  const note = `DELETED from ${deletedFrom} on ${new Date(deletedAt).toLocaleString()} by ${who}.`;
+  const trimmedOriginal = String(originalRemarks || "").trim();
+  return {
+    deleted: true,
+    deletedAt,
+    deletedBy: who,
+    deletedFrom,
+    remarks: trimmedOriginal ? `${trimmedOriginal} | ${note}` : note,
+    updatedAt: serverTimestamp(),
+  };
+}
+
+function actorDisplayName(profile, user) {
+  return profile?.fullName || profile?.displayName || user?.displayName || user?.email || "Admin";
+}
+
+// Soft-deletes a chart audit log by id. The log is kept in Firestore (so Print
+// Reports retains it as a "Deleted" row) but is hidden from the Chart Reports
+// working view. Only admins may delete.
+export async function deleteChartLog(id, sourceLabel = "Chart Reports") {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  const { user, profile } = await requireActiveRole({ adminOnly: true });
   const logRef = doc(database, "chartLogs", id);
   const logSnapshot = await getDoc(logRef);
   const log = logSnapshot.exists() ? logSnapshot.data() : {};
 
-  if (log.action === "returned") {
-    await updateDoc(logRef, {
-      action: "voided",
-      voidedAt: new Date().toISOString(),
-      remarks: "Record was deleted.",
-      updatedAt: serverTimestamp(),
-    });
-    return "voided";
-  }
-
-  await deleteDoc(logRef);
+  await updateDoc(logRef, buildSoftDeleteFields({
+    sourceLabel,
+    actorName: actorDisplayName(profile, user),
+    originalRemarks: log.remarks,
+  }));
   return "deleted";
 }
 
-// Deletes a clinical chart request report row and its linked chart movement log.
-export async function deleteChartRequestReport(id) {
+// Soft-deletes a clinical chart request and its linked chart movement logs. The
+// records stay in Firestore for Print Reports but disappear from Chart Requests
+// and Chart Reports. Only admins may delete.
+export async function deleteChartRequestReport(id, sourceLabel = "Chart Requests") {
   const database = requireDb();
-  const { user, role } = await requireActiveRole({ roles: allUserRoles });
+  const { user, profile } = await requireActiveRole({ adminOnly: true });
   const requestRef = doc(database, "chartRequests", id);
   const requestSnapshot = await getDoc(requestRef);
 
@@ -1488,15 +1629,7 @@ export async function deleteChartRequestReport(id) {
   }
 
   const request = requestSnapshot.data();
-  const isRecordsUser = medicalRecordsRoles.includes(role);
-  const terminalStatuses = ["returned", "completed", "canceled"];
-
-  if (!isRecordsUser && request.requestedById !== user.uid) {
-    throw new Error("You can only delete your own chart report rows.");
-  }
-  if (!isRecordsUser && !terminalStatuses.includes(request.status)) {
-    throw new Error("Only returned, completed, or canceled chart report rows can be deleted.");
-  }
+  const actorName = actorDisplayName(profile, user);
 
   const linkedLogIds = new Set();
   if (request.activeLogId) linkedLogIds.add(request.activeLogId);
@@ -1509,12 +1642,19 @@ export async function deleteChartRequestReport(id) {
   if (linkedLogIds.size > 0) {
     const batch = writeBatch(database);
     linkedLogIds.forEach((logId) => {
-      batch.delete(doc(database, "chartLogs", logId));
+      batch.update(doc(database, "chartLogs", logId), buildSoftDeleteFields({
+        sourceLabel,
+        actorName,
+      }));
     });
     await batch.commit();
   }
 
-  await deleteDoc(requestRef);
+  await updateDoc(requestRef, buildSoftDeleteFields({
+    sourceLabel,
+    actorName,
+    originalRemarks: request.remarks,
+  }));
 }
 
 // Adds a centralized audit action for important CRUD and account events.

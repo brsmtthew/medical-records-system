@@ -176,9 +176,21 @@ export default function PatientRegistrationModal({
             </div>
           </div>
 
-          <button className="mrs-primary-button flex w-full items-center justify-center gap-2 rounded-xl py-3 font-black transition-all sm:col-span-2">
-            ADD RECORD <ArrowRight size={18} />
-          </button>
+          <div className="flex justify-end gap-2 sm:col-span-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="mrs-soft-button rounded-xl px-4 py-3 text-xs font-black uppercase"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase"
+            >
+              Add Record <ArrowRight size={16} />
+            </button>
+          </div>
         </form>
       </Motion.div>
     </div>

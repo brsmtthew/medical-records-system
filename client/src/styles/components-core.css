@@ -97,12 +97,27 @@
     border: 1px solid #c9d6e2;
     background: #ffffff;
     color: #0f172a;
+    -webkit-text-fill-color: #0f172a;
+    caret-color: #0f172a;
     box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035);
     transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease, transform 150ms ease;
   }
 
   .login-field::placeholder {
     color: #64748b;
+    -webkit-text-fill-color: #64748b;
+  }
+
+  /* Browser autofill otherwise tints the field and lightens the text — force solid
+     black text on a white field. */
+  .login-field:-webkit-autofill,
+  .login-field:-webkit-autofill:hover,
+  .login-field:-webkit-autofill:focus {
+    -webkit-text-fill-color: #0f172a;
+    caret-color: #0f172a;
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+    box-shadow: 0 0 0 1000px #ffffff inset;
+    transition: background-color 9999s ease-in-out 0s;
   }
 
   .login-field:focus {

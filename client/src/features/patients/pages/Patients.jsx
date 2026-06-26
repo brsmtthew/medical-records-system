@@ -29,6 +29,7 @@ import {
   fallbackOutpatientDepartments,
   subscribeToAdmissionLocations,
   subscribeToDoctors,
+  subscribeToPhysicians,
   subscribeToOutpatientDepartments,
   subscribeToPatients,
   updatePatient as updatePatientRecord,
@@ -36,7 +37,7 @@ import {
 import { useAuth } from "@features/auth/context/useAuth";
 import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 import { normalizeCaseNumber, normalizePatientName, recordTimeValue, searchable } from "@shared/utils/recordSorting";
-import { buildAttendingDoctorFields, findDoctorById } from "@shared/utils/doctors";
+import { buildAttendingDoctorFields, findDoctorById, mergeDoctorSources } from "@shared/utils/doctors";
 
 // Keeps outpatient discharge dates aligned with the admission date used by the form.
 function normalizePatientDates(patient) {
@@ -168,7 +169,8 @@ export default function Patients() {
   const canManagePatients = isAdmin || isStaff;
   const canDeletePatients = isAdmin;
   const [patients, setPatients] = useState([]);
-  const [doctors, setDoctors] = useState([]);
+  const [doctorAccounts, setDoctorAccounts] = useState([]);
+  const [physicians, setPhysicians] = useState([]);
   const [admissionLocations, setAdmissionLocations] = useState([]);
   const [outpatientDepartments, setOutpatientDepartments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -191,6 +193,26 @@ export default function Patients() {
   const [confirmPatient, setConfirmPatient] = useState(null);
   const [isAddPatientOpen, setIsAddPatientOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState("");
+
+  // The attending-physician list = the doctor directory (source of truth) plus any
+  // doctor login accounts not yet linked to a directory entry, so nothing disappears.
+  const doctors = useMemo(
+    () => mergeDoctorSources(physicians, doctorAccounts),
+    [physicians, doctorAccounts],
+  );
+
+  // Resolve the attending physician from the directory, but if that doctor was
+  // deleted/inactivated (or the list has not loaded yet), keep the patient's saved
+  // snapshot instead of blanking it on save.
+  const resolveAttendingFields = (source) => {
+    const resolved = findDoctorById(doctors, source.attendingDoctorId);
+    if (resolved) return buildAttendingDoctorFields(resolved);
+    return {
+      attendingDoctorId: source.attendingDoctorId || "",
+      attendingDoctorName: source.attendingDoctorName || "",
+      attendingDoctorClinic: source.attendingDoctorClinic || "",
+    };
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -230,8 +252,13 @@ export default function Patients() {
     );
 
     const unsubscribeDoctors = subscribeToDoctors(
-      setDoctors,
+      setDoctorAccounts,
       (error) => setFormError(error.message || "Unable to load doctor accounts from Firebase."),
+    );
+
+    const unsubscribePhysicians = subscribeToPhysicians(
+      setPhysicians,
+      (error) => setFormError(error.message || "Unable to load the doctor directory from Firebase."),
     );
 
     return () => {
@@ -239,6 +266,7 @@ export default function Patients() {
       unsubscribeAdmissionLocations();
       unsubscribeOutpatientDepartments();
       unsubscribeDoctors();
+      unsubscribePhysicians();
     };
   }, []);
 
@@ -282,7 +310,7 @@ export default function Patients() {
     const patientCandidate = normalizePatientDates({
       ...form,
       name: patientName,
-      ...buildAttendingDoctorFields(findDoctorById(doctors, form.attendingDoctorId)),
+      ...resolveAttendingFields(form),
       recordType: hasPreviousRecord ? "old" : "new",
       caseNumber,
     });
@@ -378,7 +406,7 @@ export default function Patients() {
       name: patientName,
       caseNumber,
       department: editPatient.department || "",
-      ...buildAttendingDoctorFields(findDoctorById(doctors, editPatient.attendingDoctorId)),
+      ...resolveAttendingFields(editPatient),
       recordType: hasPreviousRecord ? "old" : editPatient.recordType || "new",
       type: editPatient.type,
       admissionDate: editPatient.admissionDate || "",
@@ -557,29 +585,11 @@ export default function Patients() {
                   Add Patient
                 </button>
               )}
-              {[
-                { id: "all", label: "All" },
-                { id: "inpatient", label: "Inpatient" },
-                { id: "outpatient", label: "Outpatient" },
-              ].map((filter) => (
-                <button
-                  key={filter.id}
-                  type="button"
-                  onClick={() => setTypeFilter(filter.id)}
-                  className={`rounded-lg border px-3 py-2 text-[10px] font-black uppercase transition-colors ${
-                    typeFilter === filter.id
-                      ? "border-green-700 bg-green-700 text-white"
-                      : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:text-green-700"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
             </div>
           </div>
 
           <div className="mrs-panel mb-2 rounded-xl p-2.5">
-            <div className="grid gap-2 lg:grid-cols-[minmax(18rem,1fr)_10rem_10rem_7rem]">
+            <div className="grid gap-2 lg:grid-cols-[minmax(18rem,1fr)_9rem_10rem_10rem_7rem]">
               <div className="relative group">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
                 <input
@@ -591,6 +601,17 @@ export default function Patients() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
+
+              <select
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value)}
+                className="mrs-field w-full rounded-lg px-3 py-2.5 text-xs font-black uppercase"
+                aria-label="Filter by patient type"
+              >
+                <option value="all">All Types</option>
+                <option value="inpatient">Inpatient</option>
+                <option value="outpatient">Outpatient</option>
+              </select>
 
               <input
                 type="date"

@@ -44,6 +44,17 @@ const initialCreateForm = {
   licenseNumber: "",
 };
 
+// Sub-text shown in the content panel header for the selected left-menu item.
+const filterDescriptions = {
+  all: "Every account across Medical Records and clinical workspaces.",
+  active: "Accounts that can currently sign in and work.",
+  blocked: "Disabled accounts that cannot sign in.",
+  admins: "System administrators with full access.",
+  staff: "Medical Records workspace accounts.",
+  nurses: "Nurse accounts for clinical workspace access.",
+  doctors: "Doctor accounts for chart requests and clinical access.",
+};
+
 export default function Users() {
   const { currentUser } = useAuth();
   const [users, setUsers] = useState([]);
@@ -146,10 +157,6 @@ export default function Users() {
       setAccessError("Assign a department for the nurse account.");
       return;
     }
-    if (role === userRoles.doctor && !createForm.clinic.trim()) {
-      setAccessError("Assign a clinic for the doctor account.");
-      return;
-    }
 
     try {
       setIsCreatingUser(true);
@@ -159,6 +166,7 @@ export default function Users() {
         email,
         role,
       });
+
       setCreateForm(initialCreateForm);
       setIsCreateModalOpen(false);
       setAccessError("");
@@ -281,8 +289,8 @@ export default function Users() {
     { id: "nurses", label: "Nurses", value: nurseUsers, icon: HeartPulse, tone: "text-emerald-700", iconClass: "border-emerald-200 bg-emerald-50 text-emerald-700" },
     { id: "doctors", label: "Doctors", value: doctorUsers, icon: Stethoscope, tone: "text-violet-700", iconClass: "border-violet-200 bg-violet-50 text-violet-700" },
   ];
-  const recordsUsers = filteredUsers.filter((user) => [userRoles.admin, userRoles.staff].includes(normalizeUserRole(user.role)));
-  const clinicalUsers = filteredUsers.filter((user) => [userRoles.doctor, userRoles.nurse].includes(normalizeUserRole(user.role)));
+  const activeNavItem = userNavItems.find((item) => item.id === userFilter) || userNavItems[0];
+  const ActiveNavIcon = activeNavItem.icon;
 
   const renderUserRows = (rows, emptyTitle, emptyDescription) => (
     <tbody className="divide-y divide-slate-100">
@@ -410,143 +418,129 @@ export default function Users() {
     </tbody>
   );
 
-  const renderUsersTable = ({ title, description, rows, emptyTitle, emptyDescription, icon, iconClass }) => {
-    const SectionIcon = icon;
-    return (
-    <section className="mrs-panel min-h-0 overflow-hidden rounded-xl">
-      <div className="mrs-section-band flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5">
-        <div className="flex items-center gap-2.5">
-          <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg border ${iconClass}`}>
-            <SectionIcon size={17} />
-          </div>
-          <div>
-            <h2 className="text-sm font-black uppercase text-slate-800">{title}</h2>
-            <p className="mt-0.5 text-[10px] font-bold uppercase text-slate-400">{description}</p>
-          </div>
-        </div>
-        <span className="mrs-status-badge mrs-status-neutral">{rows.length} shown</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full table-fixed text-left">
-          <thead>
-            <tr className="mrs-section-band border-b border-slate-100">
-              <th className="w-[28%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
-              <th className="w-[16%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Role</th>
-              <th className="w-[24%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Assignment</th>
-              <th className="w-[16%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
-              <th className="w-[16%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</th>
-            </tr>
-          </thead>
-          {renderUserRows(rows, emptyTitle, emptyDescription)}
-        </table>
-      </div>
-    </section>
-    );
-  };
-
   return (
     <DashboardLayout>
-      <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
-        <div className="flex shrink-0 flex-col gap-2">
-          <div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
-                  User <span className="text-green-700">Management</span>
-                </h1>
-                <p className="text-xs font-medium text-slate-500">
-                  Create and manage Medical Records, nurse, and doctor access from a dedicated admin workspace.
-                </p>
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+        <div className="mb-2 shrink-0">
+          <h1 className="text-xl font-black uppercase tracking-tight text-slate-800 sm:text-2xl">
+            User <span className="text-green-700">Management</span>
+          </h1>
+          <p className="text-xs font-medium text-slate-500">
+            Create and manage Medical Records, nurse, and doctor access from a dedicated admin workspace.
+          </p>
+        </div>
+
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden lg:grid-cols-12">
+          <div className="lg:col-span-3">
+            <div className="mrs-settings-menu mrs-panel flex flex-col rounded-2xl p-2.5">
+              <div className="flex flex-wrap gap-2 overflow-x-hidden lg:block lg:space-y-1.5 lg:overflow-visible">
+                {userNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = userFilter === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setUserFilter(item.id)}
+                      aria-pressed={isActive}
+                      className={`flex shrink-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs font-black transition-colors lg:w-full ${
+                        isActive
+                          ? "border-green-200 bg-green-700 text-white shadow-sm"
+                          : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+                      }`}
+                    >
+                      <span className={`inline-flex size-7 shrink-0 items-center justify-center rounded-lg ${
+                        isActive ? "bg-white/15 text-white" : "bg-slate-50 text-slate-400"
+                      }`}>
+                        <Icon size={16} />
+                      </span>
+                      <span className="flex-1 whitespace-nowrap text-left uppercase">{item.label}</span>
+                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${
+                        isActive ? "bg-white/25 text-white" : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {item.value}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase"
-              >
-                <UserPlus size={17} />
-                Create Account
-              </button>
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-1.5">
-            {userNavItems.map((item) => {
-              const isActive = userFilter === item.id;
-              return (
+
+          <div className="flex min-h-0 flex-col gap-2 overflow-hidden lg:col-span-9">
+            <div className="mrs-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
+              <div className="flex flex-col justify-between gap-2 border-b border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-green-100 p-2.5 text-green-700 shadow-sm">
+                    <ActiveNavIcon size={21} />
+                  </div>
+                  <div>
+                    <h2 className="font-black uppercase text-slate-800">{activeNavItem.label}</h2>
+                    <p className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                      {filterDescriptions[activeNavItem.id]}
+                    </p>
+                  </div>
+                </div>
                 <button
-                  key={item.id}
                   type="button"
-                  onClick={() => setUserFilter(item.id)}
-                  aria-pressed={isActive}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase transition-colors ${
-                    isActive
-                      ? "border-green-600 bg-green-600 text-white shadow-sm"
-                      : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:text-green-700"
-                  }`}
+                  onClick={openCreateModal}
+                  className="mrs-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase"
                 >
-                  <item.icon size={13} className={isActive ? "text-white" : ""} />
-                  {item.label}
-                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${
-                    isActive ? "bg-white/25 text-white" : "bg-slate-100 text-slate-600"
-                  }`}>
-                    {item.value}
-                  </span>
+                  <UserPlus size={17} />
+                  Create Account
                 </button>
-              );
-            })}
-          </div>
-        </div>
+              </div>
 
-        <div className="mrs-panel mrs-filter-strip shrink-0 rounded-xl p-2">
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_14rem]">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search users, email, or department"
-                className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
-              />
+              <div className="mrs-filter-strip shrink-0 border-b border-slate-100 p-2">
+                <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_14rem]">
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="Search users, email, or department"
+                      className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2">
+                    <ArrowUpDown size={16} className="text-slate-400" />
+                    <select
+                      value={sortMode}
+                      onChange={(event) => setSortMode(event.target.value)}
+                      className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-black uppercase"
+                      aria-label="Sort users"
+                    >
+                      <option value="name">Sort By Name</option>
+                      <option value="email">Sort By Email</option>
+                      <option value="role">Sort By Role</option>
+                      <option value="status">Sort By Status</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-auto">
+                <table className="w-full table-fixed text-left">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="mrs-section-band border-b border-slate-200">
+                      <th className="w-[28%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">User</th>
+                      <th className="w-[16%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Role</th>
+                      <th className="w-[24%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Assignment</th>
+                      <th className="w-[16%] p-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                      <th className="w-[16%] p-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</th>
+                    </tr>
+                  </thead>
+                  {renderUserRows(
+                    filteredUsers,
+                    users.length === 0 ? "No user profiles yet" : "No accounts match this view",
+                    users.length === 0
+                      ? "Profiles appear after users sign in or create an account."
+                      : "Change the menu selection or search term to see more accounts.",
+                  )}
+                </table>
+              </div>
             </div>
-            <label className="flex items-center gap-2">
-              <ArrowUpDown size={16} className="text-slate-400" />
-              <select
-                value={sortMode}
-                onChange={(event) => setSortMode(event.target.value)}
-                className="mrs-field rounded-lg px-3 py-2 text-xs font-black uppercase"
-                aria-label="Sort users"
-              >
-                <option value="name">Sort By Name</option>
-                <option value="email">Sort By Email</option>
-                <option value="role">Sort By Role</option>
-                <option value="status">Sort By Status</option>
-              </select>
-            </label>
           </div>
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-          {renderUsersTable({
-            title: "Admin And Medical Records Staff",
-            description: "System administrators and daily records workspace accounts.",
-            rows: recordsUsers,
-            icon: UserCog,
-            iconClass: "border-green-200 bg-green-50 text-green-700",
-            emptyTitle: users.length === 0 ? "No user profiles yet" : "No admin or staff accounts match this view",
-            emptyDescription: users.length === 0
-              ? "Profiles appear after users sign in or create an account."
-              : "Change the user filter or search term to see more records accounts.",
-          })}
-          {renderUsersTable({
-            title: "Doctors And Nurses",
-            description: "Clinical accounts for chart requests and clinical workspace access.",
-            rows: clinicalUsers,
-            icon: Stethoscope,
-            iconClass: "border-violet-200 bg-violet-50 text-violet-700",
-            emptyTitle: users.length === 0 ? "No user profiles yet" : "No doctor or nurse accounts match this view",
-            emptyDescription: users.length === 0
-              ? "Profiles appear after users sign in or create an account."
-              : "Change the user filter or search term to see more clinical accounts.",
-          })}
         </div>
       </div>
 

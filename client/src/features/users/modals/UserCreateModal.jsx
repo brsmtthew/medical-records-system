@@ -1,7 +1,11 @@
 import { LoaderCircle, UserPlus, X } from "lucide-react";
 
 import { managedUserRoles, roleLabel, userRoles } from "@shared/constants/userRoles";
-import { defaultDoctorClinics, defaultNurseDepartments } from "@shared/constants/defaultOptions";
+import { defaultNurseDepartments } from "@shared/constants/defaultOptions";
+
+// Doctor accounts are created from the Doctor Directory (Settings) to keep one
+// source of truth, so they are not offered here.
+const creatableRoles = managedUserRoles.filter((role) => role !== userRoles.doctor);
 
 export default function UserCreateModal({
   form,
@@ -39,7 +43,7 @@ export default function UserCreateModal({
           <div>
             <h2 className="text-lg font-black uppercase text-slate-900">Create V3 Account</h2>
             <p className="text-xs font-semibold text-slate-500">
-              Admin-created access for Medical Records staff, nurses, and doctors.
+              Admin-created access for Medical Records staff and nurses. Doctor logins are created from the Doctor Directory.
             </p>
           </div>
         </div>
@@ -98,48 +102,23 @@ export default function UserCreateModal({
               onChange={(event) => updateForm("role", event.target.value)}
               className="mrs-field w-full rounded-xl px-3 py-3 text-sm font-black uppercase"
             >
-              {managedUserRoles.map((role) => (
+              {creatableRoles.map((role) => (
                 <option key={role} value={role}>{roleLabel(role)}</option>
               ))}
             </select>
           </label>
 
-          {form.role === userRoles.doctor ? (
-            <label className="space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Clinic</span>
-              <input
-                list="doctor-clinics"
-                value={form.clinic}
-                onChange={(event) => updateForm("clinic", event.target.value)}
-                placeholder="Clinic"
-                className="mrs-field w-full rounded-xl px-3 py-3 text-sm font-bold"
-                required
-              />
-            </label>
-          ) : (
-            <label className="space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                {form.role === userRoles.nurse ? "Department" : "Unit"}
-              </span>
-              <input
-                list="nurse-departments"
-                value={form.department}
-                onChange={(event) => updateForm("department", event.target.value)}
-                placeholder={form.role === userRoles.nurse ? "Department" : "Unit"}
-                className="mrs-field w-full rounded-xl px-3 py-3 text-sm font-bold"
-                required
-              />
-            </label>
-          )}
-
           <label className="space-y-1">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Specialty</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              {form.role === userRoles.nurse ? "Department" : "Unit"}
+            </span>
             <input
-              value={form.specialty}
-              onChange={(event) => updateForm("specialty", event.target.value)}
-              placeholder="Specialty"
+              list="nurse-departments"
+              value={form.department}
+              onChange={(event) => updateForm("department", event.target.value)}
+              placeholder={form.role === userRoles.nurse ? "Department" : "Unit"}
               className="mrs-field w-full rounded-xl px-3 py-3 text-sm font-bold"
-              disabled={form.role !== userRoles.doctor}
+              required
             />
           </label>
 
@@ -157,11 +136,6 @@ export default function UserCreateModal({
         <datalist id="nurse-departments">
           {defaultNurseDepartments.map((department) => (
             <option key={department} value={department} />
-          ))}
-        </datalist>
-        <datalist id="doctor-clinics">
-          {defaultDoctorClinics.map((clinic) => (
-            <option key={clinic} value={clinic} />
           ))}
         </datalist>
 

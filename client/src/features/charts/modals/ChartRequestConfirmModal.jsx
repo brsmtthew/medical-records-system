@@ -1,5 +1,5 @@
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, ClipboardList, LoaderCircle, RotateCcw, Send, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardList, LoaderCircle, RotateCcw, Send, Trash2, XCircle } from "lucide-react";
 
 const statusLabels = {
   reviewing: "Review",
@@ -38,7 +38,7 @@ export default function ChartRequestConfirmModal({
           >
             <div className="mb-5 flex items-center gap-3">
               <div className={`flex size-12 items-center justify-center rounded-2xl ${
-                action.type === "cancel"
+                action.type === "cancel" || action.type === "delete"
                   ? "bg-red-50 text-red-600"
                   : action.type === "submit"
                     ? "bg-green-50 text-green-700"
@@ -46,6 +46,8 @@ export default function ChartRequestConfirmModal({
               }`}>
                 {action.type === "submit" ? (
                   <Send size={23} />
+                ) : action.type === "delete" ? (
+                  <Trash2 size={23} />
                 ) : action.type === "cancel" ? (
                   <XCircle size={24} />
                 ) : action.status === "returned" ? (
@@ -58,10 +60,16 @@ export default function ChartRequestConfirmModal({
               </div>
               <div>
                 <h3 className="text-lg font-black uppercase text-slate-900">
-                  {action.type === "submit" ? "Submit Chart Request?" : `${statusLabels[action.status] || "Update"} Request?`}
+                  {action.type === "submit"
+                    ? "Submit Chart Request?"
+                    : action.type === "delete"
+                      ? "Delete Chart Request?"
+                      : `${statusLabels[action.status] || "Update"} Request?`}
                 </h3>
                 <p className="text-xs font-bold uppercase text-slate-400">
-                  Review request details before saving
+                  {action.type === "delete"
+                    ? "This permanently removes the request"
+                    : "Review request details before saving"}
                 </p>
               </div>
             </div>
@@ -102,13 +110,13 @@ export default function ChartRequestConfirmModal({
                 onClick={onConfirm}
                 disabled={isSaving}
                 className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black uppercase text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-70 ${
-                  action.type === "cancel"
+                  action.type === "cancel" || action.type === "delete"
                     ? "bg-red-600 shadow-red-600/20"
                     : "mrs-primary-button"
                 }`}
               >
                 {isSaving && <LoaderCircle size={16} className="animate-spin" />}
-                {isSaving ? "Saving..." : "Confirm"}
+                {isSaving ? (action.type === "delete" ? "Deleting..." : "Saving...") : (action.type === "delete" ? "Delete" : "Confirm")}
               </button>
             </div>
           </Motion.div>

@@ -177,12 +177,9 @@ function getMedicalReportColumns() {
 
 function reportStatusOptions(config) {
   const hasCanceled = config.statusOptions.some((option) => option.value === "canceled");
-  const statuses = hasCanceled
+  return hasCanceled
     ? config.statusOptions
     : [...config.statusOptions, { value: "canceled", label: "Canceled" }];
-  return statuses.some((option) => option.value === "voided")
-    ? statuses
-    : [...statuses, { value: "voided", label: "Voided" }];
 }
 
 function FilterField({ label, children }) {
@@ -311,7 +308,7 @@ export default function TrackingReports() {
   const activeConfig = trackingReportConfigs.find((config) => config.collection === activeCollection) || trackingReportConfigs[0];
   const activeColumns = useMemo(() => getMedicalReportColumns(), []);
   const rows = useMemo(
-    () => rowsByCollection[activeConfig.collection] || [],
+    () => (rowsByCollection[activeConfig.collection] || []).filter((row) => !row.deleted && row.releaseStatus !== "voided"),
     [activeConfig.collection, rowsByCollection],
   );
 
@@ -331,6 +328,8 @@ export default function TrackingReports() {
   const filteredRows = useMemo(() => {
     const search = debouncedSearch.trim().toLowerCase();
     return rows.filter((row) => {
+      // Soft-deleted rows (and legacy voided rows) are preserved only in Print Reports.
+      if (row.deleted || row.releaseStatus === "voided") return false;
       const matchesSearch = !search || reportSearchValue(row, activeColumns).includes(search);
       const matchesStatus = statusFilter === "all" || (
         activeConfig.matchesStatus
@@ -361,17 +360,14 @@ export default function TrackingReports() {
 
     try {
       setPendingAction(`delete-${row.id}`);
-      let outcome = "deleted";
       if (["medicalDocumentRequests", "vitalCertificateRequests"].includes(activeConfig.collection) && Array.isArray(row.typeList) && row.typeList.length > 1) {
         await deleteTrackingRowType(activeConfig.collection, row.id, selectedType);
       } else {
-        outcome = await deleteTrackingRow(activeConfig.collection, row.id);
+        await deleteTrackingRow(activeConfig.collection, row.id, `${activeConfig.pluralLabel} Report`);
       }
-      setSuccessMessage(outcome === "voided"
-        ? "Released record was voided and kept in this report."
-        : "Report record was deleted.");
+      setSuccessMessage("Report record was deleted. It stays in Print Reports for audit.");
       setSuccessMeta({
-        action: outcome === "voided" ? "Medical Record Voided" : "Medical Record Deleted",
+        action: "Medical Record Deleted",
         patientName: row.patientName || "",
         caseNumber: row.caseNumber || "",
         audit: true,
@@ -437,7 +433,7 @@ export default function TrackingReports() {
                 }`}
               >
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{config.pluralLabel}</p>
-                <p className="mt-0.5 text-base font-black leading-none text-slate-800">{(rowsByCollection[config.collection] || []).length}</p>
+                <p className="mt-0.5 text-base font-black leading-none text-slate-800">{(rowsByCollection[config.collection] || []).filter((row) => !row.deleted && row.releaseStatus !== "voided").length}</p>
               </button>
             ))}
           </div>

@@ -16,7 +16,7 @@ import {
 import { db } from "@/firebaseClient";
 import { sortNewestFirst } from "@shared/utils/recordSorting";
 import { sanitizeRecordPayload } from "@shared/utils/security";
-import { recordsUnavailableMessage, requireActiveRole } from "@services/recordsService";
+import { buildSoftDeleteFields, recordsUnavailableMessage, requireActiveRole } from "@services/recordsService";
 import {
   assertCanReleaseTrackingRow,
   assertCanReviewTrackingRow,
@@ -203,28 +203,22 @@ export async function updateTrackingRow(collectionName, id, payload) {
   });
 }
 
-// Deleting a released (done) transaction never erases it: the permanent Medical
-// Reports log keeps the row and flips its status to "voided" so there is an audit
-// trail that the record was removed elsewhere. In-process records that were never
-// released are removed outright.
-export async function deleteTrackingRow(collectionName, id) {
+// Deleting a tracking record never erases it: the row is soft-deleted (marked
+// `deleted`) so it disappears from this tracking page and from Medical Reports,
+// but stays in Firestore so Print Reports keeps a permanent "Deleted" audit row
+// noting where and by whom it was removed. Only admins may delete.
+export async function deleteTrackingRow(collectionName, id, sourceLabel) {
   const database = requireTrackingDb(collectionName);
-  await requireActiveRole({ adminOnly: true });
+  const { user, profile } = await requireActiveRole({ adminOnly: true });
   const rowRef = doc(database, collectionName, id);
   const rowSnapshot = await getDoc(rowRef);
   const row = rowSnapshot.exists() ? rowSnapshot.data() : {};
 
-  if (row.releaseStatus === "released") {
-    await updateDoc(rowRef, {
-      releaseStatus: "voided",
-      voidedAt: new Date().toISOString(),
-      remarks: "Record was deleted.",
-      updatedAt: serverTimestamp(),
-    });
-    return "voided";
-  }
-
-  await deleteDoc(rowRef);
+  await updateDoc(rowRef, buildSoftDeleteFields({
+    sourceLabel: sourceLabel || "a tracking page",
+    actorName: profile?.fullName || profile?.displayName || user?.displayName || user?.email || "Admin",
+    originalRemarks: row.remarks,
+  }));
   return "deleted";
 }
 

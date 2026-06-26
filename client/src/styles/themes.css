@@ -142,15 +142,15 @@
   html.dark .fixed.inset-0 .mrs-panel input,
   html.dark .fixed.inset-0 .mrs-panel select,
   html.dark .fixed.inset-0 .mrs-panel textarea {
-    border-color: rgb(148 163 184);
-    background: rgb(248 250 252);
-    color: rgb(15 23 42);
+    border-color: rgb(71 85 105);
+    background: rgb(30 41 59);
+    color: rgb(226 232 240);
   }
 
   html.dark .fixed.inset-0 .mrs-panel .mrs-field::placeholder,
   html.dark .fixed.inset-0 .mrs-panel input::placeholder,
   html.dark .fixed.inset-0 .mrs-panel textarea::placeholder {
-    color: rgb(100 116 139);
+    color: rgb(148 163 184);
     opacity: 1;
   }
 
@@ -158,9 +158,9 @@
   html.dark .fixed.inset-0 .mrs-panel input:disabled,
   html.dark .fixed.inset-0 .mrs-panel select:disabled,
   html.dark .fixed.inset-0 .mrs-panel textarea:disabled {
-    border-color: rgb(100 116 139);
-    background: rgb(203 213 225);
-    color: rgb(71 85 105);
+    border-color: rgb(51 65 85);
+    background: rgb(15 23 42);
+    color: rgb(100 116 139);
     opacity: 1;
   }
 
@@ -566,10 +566,22 @@
     border-color: #cbd5e1 !important;
     background: #ffffff !important;
     color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a !important;
   }
 
   html.dark .login-auth-panel .login-field::placeholder {
     color: #64748b !important;
+    -webkit-text-fill-color: #64748b !important;
+  }
+
+  html.dark .login-auth-panel .login-field:-webkit-autofill,
+  html.dark .login-auth-panel .login-field:-webkit-autofill:hover,
+  html.dark .login-auth-panel .login-field:-webkit-autofill:focus {
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a !important;
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+    box-shadow: 0 0 0 1000px #ffffff inset !important;
   }
 
   html.dark .mrs-soft-button {

@@ -2,13 +2,17 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
   ArrowRight,
+  BadgeCheck,
   CheckCircle2,
   ClipboardList,
   Clock,
   Eye,
   FileText,
+  Inbox,
+  PackageOpen,
   RotateCcw,
   Search,
+  Trash2,
   X,
   XCircle,
 } from "lucide-react";
@@ -17,7 +21,7 @@ import DashboardLayout from "../../../layouts/DashboardLayout";
 import FloatingToast from "@shared/components/FloatingToast";
 import PatientCaseCell from "@shared/components/PatientCaseCell";
 import ChartRequestConfirmModal from "../modals/ChartRequestConfirmModal";
-import { subscribeToChartRequests, updateChartRequest } from "@features/charts/services/chartService";
+import { deleteChartRequestReport, subscribeToChartRequests, updateChartRequest } from "@features/charts/services/chartService";
 import { useAuth } from "@features/auth/context/useAuth";
 import { isMedicalRecordsRole } from "@shared/constants/userRoles";
 import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
@@ -141,7 +145,7 @@ const statusFilters = ["all", "pending", "preparing", "ready", "received", "inRe
 
 export default function ChartTransactions() {
   const location = useLocation();
-  const { userProfile, userRole, currentUser } = useAuth();
+  const { userProfile, userRole, currentUser, isAdmin } = useAuth();
   const isRecordsUser = isMedicalRecordsRole(userRole);
   const [requests, setRequests] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -173,6 +177,8 @@ export default function ChartTransactions() {
   const visibleRequests = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase();
     return requests.filter((request) => {
+      // Soft-deleted requests live on only in Print Reports; hide them everywhere else.
+      if (request.deleted) return false;
       if (!isRecordsUser && request.requestedById !== currentUser?.uid) return false;
       if (statusFilter !== "all" && request.status !== statusFilter) return false;
       if (!query) return true;
@@ -190,9 +196,10 @@ export default function ChartTransactions() {
   }, [currentUser?.uid, isRecordsUser, requests, debouncedSearch, statusFilter]);
 
   const stats = useMemo(() => {
+    const liveRequests = requests.filter((request) => !request.deleted);
     const scopedRequests = isRecordsUser
-      ? requests
-      : requests.filter((request) => request.requestedById === currentUser?.uid);
+      ? liveRequests
+      : liveRequests.filter((request) => request.requestedById === currentUser?.uid);
 
     return [
       { label: "Active", value: scopedRequests.filter((request) => !["completed", "canceled"].includes(request.status)).length, icon: ClipboardList },
@@ -210,6 +217,45 @@ export default function ChartTransactions() {
       patientName: request.patientName,
       purpose: request.purpose,
     });
+  };
+
+  // Admin-only hard delete of a chart request (and its linked movement logs).
+  const requestDelete = (request) => {
+    setConfirmAction({
+      type: "delete",
+      request,
+      caseNumber: request.caseNumber,
+      patientName: request.patientName,
+      purpose: request.purpose,
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmAction || confirmAction.type !== "delete") return;
+    const { request } = confirmAction;
+    try {
+      setIsSaving(true);
+      await deleteChartRequestReport(request.id);
+      setToast({
+        type: "success",
+        title: "Request Deleted",
+        message: `${request.caseNumber || "Chart request"} was permanently deleted.`,
+        action: "Chart Request Deleted",
+        audit: true,
+        caseNumber: request.caseNumber,
+        patientName: request.patientName,
+      });
+      setConfirmAction(null);
+    } catch (error) {
+      setToast({ type: "error", message: error.message || "Unable to delete this request." });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirm = () => {
+    if (confirmAction?.type === "delete") return confirmDelete();
+    return confirmStatusUpdate();
   };
 
   const confirmStatusUpdate = async () => {
@@ -349,8 +395,8 @@ export default function ChartTransactions() {
                   <th className="w-[16%] p-3 text-[10px] font-black uppercase text-slate-400">Unit / Physician</th>
                   <th className="w-[15%] p-3 text-[10px] font-black uppercase text-slate-400">Purpose</th>
                   <th className="w-[13%] p-3 text-[10px] font-black uppercase text-slate-400">Status</th>
-                  <th className="w-[10%] p-3 text-[10px] font-black uppercase text-slate-400">Progress</th>
-                  <th className="w-[13%] p-3 text-right text-[10px] font-black uppercase text-slate-400">Actions</th>
+                  <th className="w-[11%] p-3 text-[10px] font-black uppercase text-slate-400">Progress</th>
+                  <th className="w-[12%] p-3 text-right text-[10px] font-black uppercase text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -415,59 +461,70 @@ export default function ChartTransactions() {
                         </button>
                       </td>
                       <td className="p-3">
-                        <div className="flex justify-end gap-1.5">
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
                           {isRecordsUser ? (
                             <>
                               {(request.status === "pending" || request.status === "reviewing") && (
-                                <button type="button" onClick={() => setRequestStatus(request, "preparing")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
-                                  Prepare
+                                <button type="button" onClick={() => setRequestStatus(request, "preparing")} className="mrs-primary-button inline-flex size-9 items-center justify-center rounded-lg" title="Prepare chart" aria-label="Prepare chart">
+                                  <FileText size={15} />
                                 </button>
                               )}
                               {request.status === "preparing" && (
-                                <button type="button" onClick={() => setRequestStatus(request, "ready")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
-                                  Ready
+                                <button type="button" onClick={() => setRequestStatus(request, "ready")} className="mrs-primary-button inline-flex size-9 items-center justify-center rounded-lg" title="Mark ready for pickup" aria-label="Mark ready for pickup">
+                                  <CheckCircle2 size={15} />
                                 </button>
                               )}
                               {request.status === "returned" && (
-                                <button type="button" onClick={() => setRequestStatus(request, "returnReceived")} className="mrs-blue-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
-                                  Receive
+                                <button type="button" onClick={() => setRequestStatus(request, "returnReceived")} className="mrs-blue-button inline-flex size-9 items-center justify-center rounded-lg" title="Receive returned chart" aria-label="Receive returned chart">
+                                  <Inbox size={15} />
                                 </button>
                               )}
                               {request.status === "returnReceived" && (
-                                <button type="button" onClick={() => setRequestStatus(request, "completed")} className="mrs-blue-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
-                                  Complete
+                                <button type="button" onClick={() => setRequestStatus(request, "completed")} className="mrs-blue-button inline-flex size-9 items-center justify-center rounded-lg" title="Complete transaction" aria-label="Complete transaction">
+                                  <BadgeCheck size={15} />
                                 </button>
                               )}
                               {!["ready", "received", "inReview", "returned", "returnReceived", "completed", "canceled"].includes(request.status) && (
-                                <button type="button" onClick={() => setRequestStatus(request, "canceled")} className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-black uppercase text-red-600">
-                                  Cancel
+                                <button type="button" onClick={() => setRequestStatus(request, "canceled")} className="inline-flex size-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100" title="Cancel request" aria-label="Cancel request">
+                                  <XCircle size={15} />
                                 </button>
                               )}
-                              {["ready", "received", "inReview", "completed", "canceled"].includes(request.status) && (
+                              {["ready", "received", "inReview", "completed", "canceled"].includes(request.status) && !isAdmin && (
                                 <span className="px-1 text-sm font-black text-slate-300" title="No action needed here">—</span>
                               )}
                             </>
                           ) : (
                             <>
                               {request.status === "ready" && (
-                                <button type="button" onClick={() => setRequestStatus(request, "inReview")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
-                                  Pick Up
+                                <button type="button" onClick={() => setRequestStatus(request, "inReview")} className="mrs-primary-button inline-flex size-9 items-center justify-center rounded-lg" title="Pick up chart" aria-label="Pick up chart">
+                                  <PackageOpen size={15} />
                                 </button>
                               )}
                               {["received", "inReview"].includes(request.status) && (
-                                <button type="button" onClick={() => setRequestStatus(request, "returned")} className="mrs-primary-button rounded-lg px-2.5 py-2 text-[10px] font-black uppercase">
-                                  Return
+                                <button type="button" onClick={() => setRequestStatus(request, "returned")} className="mrs-primary-button inline-flex size-9 items-center justify-center rounded-lg" title="Return chart" aria-label="Return chart">
+                                  <RotateCcw size={15} />
                                 </button>
                               )}
                               {request.status === "pending" && (
-                                <button type="button" onClick={() => setRequestStatus(request, "canceled")} className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-black uppercase text-red-600">
-                                  Cancel
+                                <button type="button" onClick={() => setRequestStatus(request, "canceled")} className="inline-flex size-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100" title="Cancel request" aria-label="Cancel request">
+                                  <XCircle size={15} />
                                 </button>
                               )}
-                              {!["pending", "ready", "received", "inReview"].includes(request.status) && (
+                              {!["pending", "ready", "received", "inReview"].includes(request.status) && !isAdmin && (
                                 <span className="px-1 text-sm font-black text-slate-300" title="No action needed here">—</span>
                               )}
                             </>
+                          )}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => requestDelete(request)}
+                              className="inline-flex size-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                              title="Delete chart request (admin only)"
+                              aria-label={`Delete chart request for ${request.patientName || "patient"}, case ${request.caseNumber || ""}`}
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           )}
                         </div>
                       </td>
@@ -618,7 +675,7 @@ export default function ChartTransactions() {
         onCancel={() => {
           if (!isSaving) setConfirmAction(null);
         }}
-        onConfirm={confirmStatusUpdate}
+        onConfirm={handleConfirm}
       />
     </DashboardLayout>
   );

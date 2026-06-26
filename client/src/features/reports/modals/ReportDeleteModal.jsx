@@ -8,8 +8,6 @@ export default function ReportDeleteModal({
 }) {
   if (!log) return null;
 
-  const willVoid = log.action === "returned";
-
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
@@ -18,12 +16,10 @@ export default function ReportDeleteModal({
           <CircleAlert size={30} />
         </div>
         <h2 className="text-2xl font-black text-slate-800 uppercase">
-          {willVoid ? "Void Report Row?" : "Delete Report Row?"}
+          Delete Report Row?
         </h2>
         <p className="text-sm font-semibold text-slate-500 mt-2 mb-7">
-          {willVoid
-            ? `This completed transaction for ${log.caseNumber || "this chart"} stays in the report and is marked voided.`
-            : `This removes the audit row for ${log.caseNumber || "this chart"}.`}
+          {`This removes the row for ${log.caseNumber || "this chart"} from Chart Reports. It is kept in Print Reports as a deleted record for audit.`}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <button
@@ -41,7 +37,7 @@ export default function ReportDeleteModal({
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-xs font-black uppercase text-white shadow-lg shadow-red-600/20 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isDeleting && <LoaderCircle size={16} className="animate-spin" />}
-            {isDeleting ? (willVoid ? "Voiding..." : "Deleting...") : (willVoid ? "Void" : "Delete")}
+            {isDeleting ? "Deleting..." : "Delete"}
           </button>
         </div>
       </div>

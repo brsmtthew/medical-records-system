@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import {
   deleteChartLog,
+  deleteChartRequestReport,
   subscribeToChartLogs,
   subscribeToChartRequests,
 } from "../../charts/services/chartService";
@@ -39,6 +40,8 @@ function canceledRequestToLogRow(request) {
   return {
     id: `request-${request.id}`,
     _request: true,
+    requestId: request.id,
+    deleted: Boolean(request.deleted),
     action: "canceled",
     patientName: request.patientName || "",
     caseNumber: request.caseNumber || "",
@@ -59,7 +62,6 @@ const recordsLegend = [
   { value: "borrowed", label: "Borrowed" },
   { value: "returned", label: "Returned" },
   { value: "canceled", label: "Canceled" },
-  { value: "voided", label: "Voided" },
 ];
 
 function getLogActivityDate(log) {
@@ -273,7 +275,15 @@ export default function Reports() {
   }, [actionFilter, filterOptions]);
 
   const sourceRows = useMemo(
-    () => (isRecordsUser ? sortNewestFirst([...reportRows, ...canceledRequestRows]) : reportRows),
+    () => {
+      // Soft-deleted rows are preserved only in Print Reports; the Chart Reports
+      // working view hides them so deletes feel like real removals here.
+      // Soft-deleted rows (and any legacy "voided" rows, which are now treated as
+      // deleted) live on only in Print Reports; hide them from this working view.
+      const combined = isRecordsUser ? [...reportRows, ...canceledRequestRows] : reportRows;
+      const live = combined.filter((row) => !row.deleted && row.action !== "voided");
+      return isRecordsUser ? sortNewestFirst(live) : live;
+    },
     [isRecordsUser, reportRows, canceledRequestRows],
   );
 
@@ -294,6 +304,8 @@ export default function Reports() {
     });
   }, [actionFilter, isRecordsUser, sourceRows, debouncedSearch, startDate, endDate]);
 
+  // Stats should reflect the working view, so they exclude soft-deleted rows too.
+  const liveReportRows = useMemo(() => reportRows.filter((row) => !row.deleted), [reportRows]);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const paginatedRows = filteredRows.slice((safeCurrentPage - 1) * rowsPerPage, safeCurrentPage * rowsPerPage);
@@ -308,13 +320,13 @@ export default function Reports() {
         },
         {
           label: "Total Number of Borrowed Charts",
-          value: reportRows.filter((row) => row.action === "borrowed").length,
+          value: liveReportRows.filter((row) => row.action === "borrowed").length,
           icon: CalendarDays,
           tone: "blue",
         },
         {
           label: "Total Number of Returned Charts",
-          value: reportRows.filter((row) => row.action === "returned").length,
+          value: liveReportRows.filter((row) => row.action === "returned").length,
           icon: RotateCcw,
           tone: "green",
         },
@@ -328,34 +340,20 @@ export default function Reports() {
         },
         {
           label: "Ready For Pickup",
-          value: reportRows.filter((row) => normalizeStatus(row.status) === "ready").length,
+          value: liveReportRows.filter((row) => normalizeStatus(row.status) === "ready").length,
           icon: CheckCircle2,
           tone: "blue",
         },
         {
           label: "Completed Transactions",
-          value: reportRows.filter((row) => normalizeStatus(row.status) === "completed").length,
+          value: liveReportRows.filter((row) => normalizeStatus(row.status) === "completed").length,
           icon: RotateCcw,
           tone: "green",
         },
       ];
 
-  const highlightSearch = (value) => {
-    const text = String(value || "");
-    const queryText = searchTerm.trim();
-    if (!queryText) return text;
-
-    const index = text.toLowerCase().indexOf(queryText.toLowerCase());
-    if (index === -1) return text;
-
-    return (
-      <>
-        {text.slice(0, index)}
-        <mark className="rounded bg-amber-100 px-0.5 text-amber-900">{text.slice(index, index + queryText.length)}</mark>
-        {text.slice(index + queryText.length)}
-      </>
-    );
-  };
+  // Search no longer highlights matches; show the plain text value.
+  const highlightSearch = (value) => String(value || "");
 
   const resetFilters = () => {
     if (actionFilter === "all" && !searchTerm && !startDate && !endDate) {
@@ -374,14 +372,18 @@ export default function Reports() {
     if (!deleteLog || isDeletingLog) return;
     try {
       setIsDeletingLog(true);
-      const outcome = await deleteChartLog(deleteLog.id);
-      setSuccessMessage(outcome === "voided"
-        ? `${deleteLog.caseNumber || "Report row"} was voided and kept in chart reports.`
-        : `${deleteLog.caseNumber || "Report row"} was deleted.`);
+      // Canceled chart-request rows have no real chart log; delete the underlying
+      // request (and any linked logs) instead of the log row.
+      if (deleteLog._request) {
+        await deleteChartRequestReport(deleteLog.requestId, "Chart Reports");
+      } else {
+        await deleteChartLog(deleteLog.id, "Chart Reports");
+      }
+      setSuccessMessage(`${deleteLog.caseNumber || "Report row"} was deleted. It stays in Print Reports for audit.`);
       setSuccessMeta({
         patientName: deleteLog.patientName || "",
         caseNumber: deleteLog.caseNumber || "",
-        action: outcome === "voided" ? "Report Row Voided" : "Report Row Deleted",
+        action: "Report Row Deleted",
         audit: true,
         targetPath: `/reports?search=${encodeURIComponent(deleteLog.caseNumber || "")}`,
       });
@@ -417,9 +419,9 @@ export default function Reports() {
       </td>
       <td className="p-3">
         <span
-          className={`mrs-status-badge ${statusBadgeClass(["borrowed", "canceled", "voided"].includes(log.action) ? log.action : "returned")}`}
+          className={`mrs-status-badge ${statusBadgeClass(["borrowed", "canceled"].includes(log.action) ? log.action : "returned")}`}
         >
-          {["borrowed", "canceled", "voided"].includes(log.action) ? log.action : "returned"}
+          {["borrowed", "canceled"].includes(log.action) ? log.action : "returned"}
         </span>
       </td>
       <td className="p-3">
@@ -436,11 +438,6 @@ export default function Reports() {
             Canceled: {formatDateTime(log.canceledAt || log.updatedAt)}
           </p>
         )}
-        {log.action === "voided" && (
-          <p className={`text-[10px] font-black uppercase leading-tight ${statusTextClass("voided")}`}>
-            Voided: {formatDateTime(log.voidedAt || log.updatedAt)}
-          </p>
-        )}
       </td>
       <td className="p-3 text-[11px] font-semibold leading-snug text-slate-500 break-words">
         {highlightSearch(log.remarks)}
@@ -448,17 +445,13 @@ export default function Reports() {
       {canManageReports && (
         <td className="p-3">
           <div className="flex justify-end gap-2">
-            {log._request ? (
-              <span className="px-1 text-sm font-black text-slate-300" title="Canceled chart request (read-only)">—</span>
-            ) : (
-              <button
-                onClick={() => setDeleteLog(log)}
-                className="p-2 rounded-xl border-2 border-transparent text-red-500 transition-colors hover:border-red-200 hover:bg-red-50"
-                aria-label={`Delete report row ${log.caseNumber}`}
-              >
-                <Trash2 size={17} />
-              </button>
-            )}
+            <button
+              onClick={() => setDeleteLog(log)}
+              className="p-2 rounded-xl border-2 border-transparent text-red-500 transition-colors hover:border-red-200 hover:bg-red-50"
+              aria-label={`Delete report row ${log.caseNumber}`}
+            >
+              <Trash2 size={17} />
+            </button>
           </div>
         </td>
       )}
@@ -572,7 +565,7 @@ export default function Reports() {
         <div className="min-h-0 flex-1 overflow-hidden">
           <div className="mrs-panel flex h-full min-h-0 flex-col overflow-hidden rounded-xl">
             <div className="space-y-2 border-b border-slate-100 bg-slate-50 p-2 shrink-0">
-              <div className="grid gap-2 lg:grid-cols-[1fr_auto_auto_auto]">
+              <div className="grid gap-2 lg:grid-cols-[1fr_auto_auto_auto_auto]">
                 <label className="block">
                   <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">Search</span>
                   <div className="relative">
@@ -590,6 +583,24 @@ export default function Reports() {
                       className="mrs-field w-full rounded-lg py-2 pl-9 pr-3 text-xs font-bold"
                     />
                   </div>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">{actionLabel}</span>
+                  <select
+                    value={actionFilter}
+                    onChange={(event) => {
+                      setActionFilter(event.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="mrs-field w-full rounded-lg px-3 py-2 text-xs font-black uppercase lg:min-w-[10rem]"
+                  >
+                    {filterOptions.map((filter) => (
+                      <option key={filter} value={filter}>
+                        {filter === "all" ? "All" : filter}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <label className="block">
@@ -624,30 +635,6 @@ export default function Reports() {
                 </button>
               </div>
               {isRecordsUser && <StatusLegend options={legendOptions} />}
-
-              <div className="flex flex-wrap items-end gap-1.5">
-                <div>
-                  <span className="mb-1 block text-[9px] font-black uppercase tracking-widest text-slate-400">{actionLabel}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {filterOptions.map((filter) => (
-                      <button
-                        key={filter}
-                        onClick={() => {
-                          setActionFilter(filter);
-                          setCurrentPage(1);
-                        }}
-                        className={`rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase transition-colors ${
-                          actionFilter === filter
-                            ? "border-green-700 bg-green-700 text-white"
-                            : "border-slate-200 bg-white text-slate-500 hover:border-green-200 hover:text-green-700"
-                        }`}
-                      >
-                        {filter}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
 
             </div>
 

@@ -119,19 +119,20 @@ service cloud.firestore {
       return status in ["released", "canceled", "voided"];
     }
 
-    // A released (done) transaction is never edited again, except to be voided
-    // when its source record is deleted from a tracking section. Reports keep the
-    // voided row as a permanent audit trail.
-    function isVoidingReleasedRecord() {
-      return resource.data.releaseStatus == "released"
-        && request.resource.data.releaseStatus == "voided";
-    }
-
     // When a patient is renamed, Medical Records syncs the new case number and name
     // into every linked record so the workflow stays connected. Only these identity
     // fields may change, so terminal/locked records keep their status untouched.
     function isPatientIdentitySync() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["caseNumber", "patientName", "updatedAt"]);
+    }
+
+    // An admin soft-delete: the document is kept (so Print Reports retains a
+    // permanent audit trail) but flagged `deleted` so the working views and their
+    // wired reports hide it. Identity is never rewritten by a soft-delete.
+    function isAdminSoftDelete() {
+      return isAdmin()
+        && request.resource.data.deleted == true
+        && (!("deleted" in resource.data) || resource.data.deleted != true);
     }
 
     function isValidCaseNumber(caseNumber) {
@@ -297,6 +298,21 @@ service cloud.firestore {
               && request.resource.data.status == "returned"
             )
           )
+        )
+        || (
+          isAdminSoftDelete()
+          && request.resource.data.requestedById == resource.data.requestedById
+          && request.resource.data.caseNumber == resource.data.caseNumber
+          && request.resource.data.patientName == resource.data.patientName
+        )
+        || (
+          // Admin override: cancel any in-flight request from any status (used when a
+          // patient record is deleted so the request never gets stuck).
+          isAdmin()
+          && request.resource.data.status == "canceled"
+          && request.resource.data.requestedById == resource.data.requestedById
+          && request.resource.data.caseNumber == resource.data.caseNumber
+          && request.resource.data.patientName == resource.data.patientName
         );
       allow delete: if isAdmin();
     }
@@ -322,24 +338,33 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /physicians/{physicianId} {
+      allow read: if isActiveStaff();
+      allow create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
     match /medicalDocumentRequests/{requestId} {
       allow read, create: if isActiveStaff();
-      allow update: if isActiveStaff()
-        && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isVoidingReleasedRecord() || isPatientIdentitySync());
+      allow update: if (isActiveStaff()
+          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync()))
+        || isAdminSoftDelete();
       allow delete: if isAdmin();
     }
 
     match /labResultRequests/{requestId} {
       allow read, create: if isActiveStaff();
-      allow update: if isActiveStaff()
-        && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isVoidingReleasedRecord() || isPatientIdentitySync());
+      allow update: if (isActiveStaff()
+          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync()))
+        || isAdminSoftDelete();
       allow delete: if isAdmin();
     }
 
     match /vitalCertificateRequests/{requestId} {
       allow read, create: if isActiveStaff();
-      allow update: if isActiveStaff()
-        && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isVoidingReleasedRecord() || isPatientIdentitySync());
+      allow update: if (isActiveStaff()
+          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync()))
+        || isAdminSoftDelete();
       allow delete: if isAdmin();
     }
 

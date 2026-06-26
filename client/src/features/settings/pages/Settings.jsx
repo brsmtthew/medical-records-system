@@ -3,6 +3,7 @@ import DashboardLayout from "../../../layouts/DashboardLayout";
 import FloatingToast from "@shared/components/FloatingToast";
 import DepartmentEditorConfirmModal from "../modals/DepartmentEditorConfirmModal";
 import DepartmentEditorEntryModal from "../modals/DepartmentEditorEntryModal";
+import DoctorDirectoryEditor from "../components/DoctorDirectoryEditor";
 import SettingsClearLogsConfirmModal from "../modals/SettingsClearLogsConfirmModal";
 import SettingsResetConfirmModal from "../modals/SettingsResetConfirmModal";
 import UserAccessConfirmModal from "../../users/modals/UserAccessConfirmModal";
@@ -20,6 +21,7 @@ import {
   Save,
   Settings as SettingsIcon,
   ShieldCheck,
+  Stethoscope,
   Sun,
   Trash2,
   UserCheck,
@@ -67,6 +69,7 @@ import { roleLabel } from "@shared/constants/userRoles";
 const tabs = [
   { id: "rules", label: "System Settings", icon: SettingsIcon },
   { id: "departmentEditor", label: "Department Editor", icon: Building2 },
+  { id: "doctorDirectory", label: "Doctor Directory", icon: Stethoscope },
   { id: "notifications", label: "Notification Action Log", icon: Bell },
   { id: "about", label: "About System", icon: Info },
 ];
@@ -182,7 +185,7 @@ export default function Settings({ initialTab = "rules" }) {
   const [pendingDepartmentAction, setPendingDepartmentAction] = useState(null);
   const [isDepartmentActionSaving, setIsDepartmentActionSaving] = useState(false);
   const visibleTabs = useMemo(
-    () => (isAdmin ? tabs : tabs.filter((tab) => ["rules", "departmentEditor", "about"].includes(tab.id))),
+    () => (isAdmin ? tabs : tabs.filter((tab) => ["rules", "departmentEditor", "doctorDirectory", "about"].includes(tab.id))),
     [isAdmin],
   );
 
@@ -1164,6 +1167,10 @@ export default function Settings({ initialTab = "rules" }) {
                   </div>
                 )}
 
+                {safeActiveTab === "doctorDirectory" && (
+                  <DoctorDirectoryEditor isAdmin={isAdmin} />
+                )}
+
                 {safeActiveTab === "access" && (
                   <div className="flex min-h-0 flex-1 flex-col gap-3">
                     <div className="grid gap-3 xl:grid-cols-3">
@@ -1402,7 +1409,7 @@ export default function Settings({ initialTab = "rules" }) {
                         </div>
                         <div>
                           <p className="text-sm font-black uppercase text-blue-800">Developer</p>
-                          <p className="mt-1 text-lg font-black uppercase text-slate-900">Boris</p>
+                          <p className="mt-1 text-lg font-black uppercase text-slate-900">UMTC INTERNS</p>
                           <p className="mt-1 text-[10px] font-semibold uppercase leading-relaxed text-blue-700">
                             Designed and developed for the TGMCI Medical Records workflow.
                           </p>

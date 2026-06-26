@@ -26,17 +26,17 @@ export const releaseStatuses = [
   { value: "forRelease", label: "For Release" },
   { value: "released", label: "Released" },
   { value: "canceled", label: "Canceled" },
-  { value: "voided", label: "Voided" },
 ];
 
-export const documentReleaseStatuses = releaseStatuses.filter((status) => status.value !== "voided");
+// Kept as a separate export for callers; voided is fully retired so this now
+// mirrors releaseStatuses.
+export const documentReleaseStatuses = releaseStatuses;
 
 export const vitalCertificateStatuses = [
   { value: "forReview", label: "For Review" },
   { value: "forRelease", label: "For Release" },
   { value: "released", label: "Released" },
   { value: "canceled", label: "Canceled" },
-  { value: "voided", label: "Voided" },
 ];
 
 export const paymentStatuses = [
@@ -101,6 +101,7 @@ export function statusTextClass(status) {
     reviewed: "mrs-status-text-reviewed",
     unpaid: "mrs-status-text-danger",
     voided: "mrs-status-text-voided",
+    deleted: "mrs-status-text-danger",
   };
 
   return classes[status] || "mrs-status-text-neutral";
@@ -132,6 +133,7 @@ export function statusBadgeClass(status) {
     reviewed: "mrs-status-info",
     unpaid: "mrs-status-danger",
     voided: "mrs-status-voided",
+    deleted: "mrs-status-danger",
   };
 
   return classes[status] || "mrs-status-neutral";

@@ -658,7 +658,7 @@ export default function TrackingPage({ config }) {
   }, []);
 
   const activeRows = useMemo(
-    () => rows.filter((row) => !["voided", "canceled"].includes(row.releaseStatus)),
+    () => rows.filter((row) => !row.deleted && !["voided", "canceled"].includes(row.releaseStatus)),
     [rows],
   );
 
@@ -896,10 +896,8 @@ export default function TrackingPage({ config }) {
         await deleteTrackingRowType(config.collection, row.id, selectedType);
         setSuccessMessage(`${config.singleLabel} type was deleted.`);
       } else {
-        const outcome = await deleteTrackingRow(config.collection, row.id);
-        setSuccessMessage(outcome === "voided"
-          ? `${config.singleLabel} was voided and kept in Medical Reports.`
-          : `${config.singleLabel} was deleted.`);
+        await deleteTrackingRow(config.collection, row.id, config.pluralLabel);
+        setSuccessMessage(`${config.singleLabel} was deleted. It stays in Print Reports for audit.`);
       }
       setConfirmation(null);
     } catch (error) {
