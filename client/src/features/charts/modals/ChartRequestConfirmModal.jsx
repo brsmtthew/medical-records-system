@@ -6,6 +6,7 @@ const statusLabels = {
   preparing: "Prepare",
   ready: "Ready",
   received: "Received",
+  inReview: "Pick Up",
   returned: "Return",
   returnReceived: "Receive Return",
   completed: "Complete",
@@ -49,7 +50,7 @@ export default function ChartRequestConfirmModal({
                   <XCircle size={24} />
                 ) : action.status === "returned" ? (
                   <RotateCcw size={24} />
-                ) : action.status === "received" ? (
+                ) : action.status === "received" || action.status === "inReview" ? (
                   <ClipboardList size={24} />
                 ) : (
                   <CheckCircle2 size={24} />

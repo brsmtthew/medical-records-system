@@ -862,9 +862,15 @@ export async function deletePatient(caseNumber) {
     )),
   );
 
+  // Rows that are already canceled/voided are terminal: firestore.rules rejects
+  // voiding them (it is neither a released->voided transition nor an identity
+  // sync), and a single rejected update would abort the whole atomic batch and
+  // block the patient delete. Released and in-process rows are still voided.
+  const alreadyVoidedStatuses = new Set(["canceled", "voided"]);
   const addVoidedTrackingUpdates = (batch) => {
     trackingCollections.forEach((collectionName, index) => {
       trackingSnapshots[index].docs.forEach((trackingSnapshot) => {
+        if (alreadyVoidedStatuses.has(trackingSnapshot.data().releaseStatus)) return;
         batch.update(doc(database, collectionName, trackingSnapshot.id), voidedTransactionUpdate);
       });
     });
@@ -1188,7 +1194,7 @@ export async function updateChartRequest(id, updates) {
   const nextStatus = safeUpdates.status || currentRequest.status;
   assertChartRequestTransition(currentRequest.status, nextStatus);
 
-  if (isRecordsUser && nextStatus === "received") {
+  if (isRecordsUser && (nextStatus === "received" || nextStatus === "inReview")) {
     throw new Error("The requesting clinician must confirm chart receipt.");
   }
 
@@ -1197,16 +1203,21 @@ export async function updateChartRequest(id, updates) {
       currentRequest.requestedById === user.uid &&
       currentRequest.status === "pending" &&
       nextStatus === "canceled";
-    const canConfirmOwnReceipt =
+    // Picking up the chart moves it straight into review for the requester.
+    const canPickUpForReview =
       currentRequest.requestedById === user.uid &&
       currentRequest.status === "ready" &&
-      nextStatus === "received";
-    const canReturnOwnBorrowedChart =
+      ["received", "inReview"].includes(nextStatus);
+    const canStartOwnReview =
       currentRequest.requestedById === user.uid &&
       currentRequest.status === "received" &&
+      nextStatus === "inReview";
+    const canReturnOwnBorrowedChart =
+      currentRequest.requestedById === user.uid &&
+      ["received", "inReview"].includes(currentRequest.status) &&
       nextStatus === "returned";
 
-    if (!canCancelOwnRequest && !canConfirmOwnReceipt && !canReturnOwnBorrowedChart) {
+    if (!canCancelOwnRequest && !canPickUpForReview && !canStartOwnReview && !canReturnOwnBorrowedChart) {
       throw new Error("Only Medical Records can update chart request status.");
     }
   }
@@ -1399,7 +1410,7 @@ export async function updateChartRequest(id, updates) {
       action: "Chart Request Status Updated",
       sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
       targetUserId: currentRequest.requestedById,
-      targetPath: `/chart-requests?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
+      targetPath: `/chart-transactions?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
     });
   } else if (!isRecordsUser && nextStatus === "canceled") {
     await addUserNotification({

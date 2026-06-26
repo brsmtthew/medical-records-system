@@ -34,6 +34,7 @@ import {
   updatePatient as updatePatientRecord,
 } from "@features/patients/services/patientService";
 import { useAuth } from "@features/auth/context/useAuth";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 import { normalizeCaseNumber, normalizePatientName, recordTimeValue, searchable } from "@shared/utils/recordSorting";
 import { buildAttendingDoctorFields, findDoctorById } from "@shared/utils/doctors";
 
@@ -460,8 +461,9 @@ export default function Patients() {
     img.src = image64;
   };
 
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const filteredPatients = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
+    const search = debouncedSearch.trim().toLowerCase();
 
     return patients.filter((p) => {
       const matchesSearch =
@@ -479,7 +481,7 @@ export default function Patients() {
 
       return matchesSearch && matchesType && matchesAdmission && matchesDischarge;
     });
-  }, [admissionDateFilter, dischargeDateFilter, patients, searchTerm, typeFilter]);
+  }, [admissionDateFilter, dischargeDateFilter, patients, debouncedSearch, typeFilter]);
 
   const stats = [
     { label: "Total Patients", value: patients.length, icon: Users, color: "bg-green-100 text-green-700" },

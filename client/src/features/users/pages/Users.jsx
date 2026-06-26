@@ -19,6 +19,7 @@ import UserAccessConfirmModal from "../modals/UserAccessConfirmModal";
 import UserCreateModal from "../modals/UserCreateModal";
 import { createManagedUserAccount, deleteUserProfile, subscribeToUsers, updateUserAccess } from "@features/users/services/userService";
 import { useAuth } from "@features/auth/context/useAuth";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 import { normalizeUserRole, roleLabel, userRoles } from "@shared/constants/userRoles";
 import { defaultDoctorClinics, defaultNurseDepartments } from "@shared/constants/defaultOptions";
 import { isStrongPassword, normalizeEmail, sanitizeText } from "@shared/utils/security";
@@ -247,8 +248,9 @@ export default function Users() {
   const staffUsers = users.filter((user) => normalizeUserRole(user.role) === userRoles.staff).length;
   const nurseUsers = users.filter((user) => normalizeUserRole(user.role) === userRoles.nurse).length;
   const doctorUsers = users.filter((user) => normalizeUserRole(user.role) === userRoles.doctor).length;
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const filteredUsers = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
+    const query = debouncedSearch.trim().toLowerCase();
     return users.filter((user) => {
       const role = normalizeUserRole(user.role);
       if (userFilter === "active") return user.accountStatus !== "disabled";
@@ -269,7 +271,7 @@ export default function Users() {
       if (sortMode === "email") return String(first.email || "").localeCompare(String(second.email || ""));
       return String(first.fullName || first.displayName || first.email || "").localeCompare(String(second.fullName || second.displayName || second.email || ""));
     });
-  }, [searchTerm, sortMode, userFilter, users]);
+  }, [debouncedSearch, sortMode, userFilter, users]);
   const userNavItems = [
     { id: "all", label: "All Users", value: users.length, icon: UsersIcon, tone: "text-green-700", iconClass: "border-green-200 bg-green-50 text-green-700" },
     { id: "active", label: "Active", value: activeUsers, icon: UserCheck, tone: "text-blue-700", iconClass: "border-blue-200 bg-blue-50 text-blue-700" },

@@ -13,6 +13,9 @@ test("assertChartRequestTransition allows expected chart request flow", () => {
   assert.equal(assertChartRequestTransition("reviewing", "preparing"), "preparing");
   assert.equal(assertChartRequestTransition("preparing", "ready"), "ready");
   assert.equal(assertChartRequestTransition("ready", "received"), "received");
+  assert.equal(assertChartRequestTransition("ready", "inReview"), "inReview");
+  assert.equal(assertChartRequestTransition("received", "inReview"), "inReview");
+  assert.equal(assertChartRequestTransition("inReview", "returned"), "returned");
   assert.equal(assertChartRequestTransition("received", "returned"), "returned");
   assert.equal(assertChartRequestTransition("returned", "returnReceived"), "returnReceived");
   assert.equal(assertChartRequestTransition("returnReceived", "completed"), "completed");

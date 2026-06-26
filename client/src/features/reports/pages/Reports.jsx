@@ -22,6 +22,7 @@ import {
 } from "../../charts/services/chartService";
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { useAuth } from "@features/auth/context/useAuth";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 import { isMedicalRecordsRole } from "@shared/constants/userRoles";
 import { readSystemSettings } from "@shared/utils/systemSettings";
 import { recordTimeValue, sortNewestFirst } from "@shared/utils/recordSorting";
@@ -53,7 +54,7 @@ function canceledRequestToLogRow(request) {
       : "Chart request canceled.",
   };
 }
-const requestFilters = ["all", "pending", "preparing", "ready", "received", "returned", "returnReceived", "completed", "canceled"];
+const requestFilters = ["all", "pending", "preparing", "ready", "received", "inReview", "returned", "returnReceived", "completed", "canceled"];
 const recordsLegend = [
   { value: "borrowed", label: "Borrowed" },
   { value: "returned", label: "Returned" },
@@ -110,6 +111,7 @@ function normalizeStatus(value, fallback = "pending") {
 
 function requestStatusLabel(status) {
   if (status === "returnReceived" || status === "returnreceived") return "return received";
+  if (status === "inReview" || status === "inreview") return "in review";
   return status;
 }
 
@@ -137,6 +139,7 @@ function requestDateRows(request) {
     ["Prepared", request.preparedAt, statusTextClass("preparing")],
     ["Ready", request.readyAt, statusTextClass("ready")],
     ["Received", request.receivedAt, statusTextClass("received")],
+    ["In Review", request.inReviewAt, statusTextClass("inReview")],
     ["Returned", request.returnedAt, statusTextClass("returned")],
     ["Return Received", request.returnReceivedAt, statusTextClass("returnReceived")],
     ["Completed", request.completedAt, statusTextClass("completed")],
@@ -164,6 +167,7 @@ function requestReportRemark(request) {
     preparing: "Chart is being prepared for release.",
     ready: "Chart is ready for pickup.",
     received: "Requester confirmed chart receipt.",
+    inreview: "Chart is being reviewed by the requester.",
     returned: "Chart was returned by the requester.",
     returnreceived: "Returned chart was received by Medical Records.",
     completed: "Chart request transaction completed.",
@@ -273,6 +277,7 @@ export default function Reports() {
     [isRecordsUser, reportRows, canceledRequestRows],
   );
 
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const filteredRows = useMemo(() => {
     return sourceRows.filter((row) => {
       const status = isRecordsUser ? row.action : normalizeStatus(row.status);
@@ -281,13 +286,13 @@ export default function Reports() {
       const searchBlob = isRecordsUser
         ? `${row.patientName || ""} ${row.caseNumber || ""} ${row.borrowedBy || ""} ${row.returnedBy || ""} ${row.department || ""} ${row.remarks || ""}`
         : `${row.patientName || ""} ${row.caseNumber || ""} ${row.purpose || ""} ${row.requestedBy || ""} ${row.requestedByClinic || ""} ${row.department || ""} ${row.status || ""} ${requestReportRemark(row)}`;
-      const matchesSearch = searchBlob.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = searchBlob.toLowerCase().includes(debouncedSearch.toLowerCase());
       const matchesStart = !startDate || activityDate >= startDate;
       const matchesEnd = !endDate || activityDate <= endDate;
 
       return matchesAction && matchesSearch && matchesStart && matchesEnd;
     });
-  }, [actionFilter, isRecordsUser, sourceRows, searchTerm, startDate, endDate]);
+  }, [actionFilter, isRecordsUser, sourceRows, debouncedSearch, startDate, endDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -618,6 +623,7 @@ export default function Reports() {
                   Reset
                 </button>
               </div>
+              {isRecordsUser && <StatusLegend options={legendOptions} />}
 
               <div className="flex flex-wrap items-end gap-1.5">
                 <div>
@@ -643,7 +649,6 @@ export default function Reports() {
                 </div>
               </div>
 
-              {isRecordsUser && <StatusLegend options={legendOptions} />}
             </div>
 
             <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">

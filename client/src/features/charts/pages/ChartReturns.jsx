@@ -6,16 +6,17 @@ import FloatingToast from "@shared/components/FloatingToast";
 import PatientCaseCell from "@shared/components/PatientCaseCell";
 import { subscribeToChartRequests, updateChartRequest } from "@features/charts/services/chartService";
 import { useAuth } from "@features/auth/context/useAuth";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 
-const returnStatuses = new Set(["received", "for_return", "returned"]);
+const returnStatuses = new Set(["received", "inReview", "for_return", "returned"]);
 
 function searchable(value) {
   return String(value || "").toLowerCase();
 }
 
 function statusBadge(status) {
-  if (status === "received") return "mrs-status-info";
+  if (status === "received" || status === "inReview") return "mrs-status-info";
   if (status === "for_return") return "mrs-status-warning";
   return "mrs-status-success";
 }
@@ -23,6 +24,7 @@ function statusBadge(status) {
 function statusLabel(status) {
   if (status === "for_return") return "Waiting for Records";
   if (status === "returned") return "Return Confirmed";
+  if (status === "inReview") return "In Review";
   return "Received";
 }
 
@@ -42,8 +44,9 @@ export default function ChartReturns() {
     return () => unsubscribe();
   }, []);
 
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const rows = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
+    const query = debouncedSearch.trim().toLowerCase();
     return requests.filter((request) => {
       if (request.requestedById !== currentUser?.uid) return false;
       if (!returnStatuses.has(request.status)) return false;
@@ -58,7 +61,7 @@ export default function ChartReturns() {
         request.status,
       ].some((value) => searchable(value).includes(query));
     });
-  }, [currentUser?.uid, requests, searchTerm]);
+  }, [currentUser?.uid, requests, debouncedSearch]);
 
   const markReturn = async (request) => {
     try {

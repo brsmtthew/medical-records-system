@@ -4,8 +4,11 @@ const chartRequestTransitions = {
   // Kept only so any legacy request already in "reviewing" can still be resolved.
   reviewing: new Set(["preparing", "canceled"]),
   preparing: new Set(["ready", "canceled"]),
-  ready: new Set(["received"]),
-  received: new Set(["returned"]),
+  // Pickup lands the chart straight into review (the requester reviews it before
+  // returning); "received" is kept for any legacy request still parked there.
+  ready: new Set(["received", "inReview"]),
+  received: new Set(["inReview", "returned"]),
+  inReview: new Set(["returned"]),
   returned: new Set(["returnReceived"]),
   returnReceived: new Set(["completed"]),
   completed: new Set([]),

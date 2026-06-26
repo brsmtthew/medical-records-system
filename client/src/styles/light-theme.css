@@ -1,4 +1,9 @@
 @layer components {
+  /* Keep native controls (date pickers, selects, scrollbars) in light styling. */
+  html:not(.dark) {
+    color-scheme: light;
+  }
+
   html:not(.dark) body {
     background: rgb(232 239 247);
     color: rgb(15 23 42);

@@ -108,8 +108,9 @@ service cloud.firestore {
         || (currentStatus == "pending" && nextStatus in ["preparing", "canceled"])
         || (currentStatus == "reviewing" && nextStatus in ["preparing", "canceled"])
         || (currentStatus == "preparing" && nextStatus in ["ready", "canceled"])
-        || (currentStatus == "ready" && nextStatus == "received")
-        || (currentStatus == "received" && nextStatus == "returned")
+        || (currentStatus == "ready" && nextStatus in ["received", "inReview"])
+        || (currentStatus == "received" && nextStatus in ["inReview", "returned"])
+        || (currentStatus == "inReview" && nextStatus == "returned")
         || (currentStatus == "returned" && nextStatus == "returnReceived")
         || (currentStatus == "returnReceived" && nextStatus == "completed");
     }
@@ -285,10 +286,14 @@ service cloud.firestore {
             )
             || (
               resource.data.status == "ready"
-              && request.resource.data.status == "received"
+              && request.resource.data.status in ["received", "inReview"]
             )
             || (
               resource.data.status == "received"
+              && request.resource.data.status in ["inReview", "returned"]
+            )
+            || (
+              resource.data.status == "inReview"
               && request.resource.data.status == "returned"
             )
           )

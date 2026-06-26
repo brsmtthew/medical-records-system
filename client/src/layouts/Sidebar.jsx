@@ -87,6 +87,7 @@ export default function Sidebar({
       label: "Chart Requests",
       items: [
         { name: "Chart Requests", icon: ClipboardList, path: "/chart-requests" },
+        { name: "Transactions", icon: Files, path: "/chart-transactions" },
         { name: "Return Charts", icon: FileText, path: "/chart-return" },
       ],
     },

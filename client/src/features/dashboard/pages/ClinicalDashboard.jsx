@@ -13,7 +13,7 @@ import hospitalImage from "@assets/hospital image.jpg";
 function statusBadgeClass(status) {
   if (status === "ready" || status === "returned" || status === "completed") return "mrs-status-success";
   if (status === "canceled") return "mrs-status-danger";
-  if (status === "reviewing" || status === "preparing" || status === "received") return "mrs-status-info";
+  if (status === "reviewing" || status === "preparing" || status === "received" || status === "inReview") return "mrs-status-info";
   return "mrs-status-warning";
 }
 

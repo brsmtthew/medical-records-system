@@ -18,6 +18,7 @@ import {
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { recordTimeValue } from "@shared/utils/recordSorting";
 import { useAuth } from "@features/auth/context/useAuth";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 
 function reportSearchValue(row, columns) {
   return columns.map((column) => column.value(row)).join(" ").toLowerCase();
@@ -326,8 +327,9 @@ export default function TrackingReports() {
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, []);
 
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const filteredRows = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
+    const search = debouncedSearch.trim().toLowerCase();
     return rows.filter((row) => {
       const matchesSearch = !search || reportSearchValue(row, activeColumns).includes(search);
       const matchesStatus = statusFilter === "all" || (
@@ -338,7 +340,7 @@ export default function TrackingReports() {
       const matchesDate = rowMatchesDateRange(row, startDate, endDate);
       return matchesSearch && matchesStatus && matchesDate;
     });
-  }, [activeColumns, activeConfig, endDate, rows, searchTerm, startDate, statusFilter]);
+  }, [activeColumns, activeConfig, endDate, rows, debouncedSearch, startDate, statusFilter]);
   const displayedRows = activeConfig.typeOptions
     ? filteredRows.filter((row) => rowMatchesSelectedType(activeConfig, row, selectedType))
     : filteredRows;
@@ -515,6 +517,10 @@ export default function TrackingReports() {
                 Reset
               </button>
             </div>
+            {/* Non-lab shows the legend right under the filter row; lab keeps it at the strip end. */}
+            {activeConfig.collection !== "labResultRequests" && (
+              <StatusLegend options={reportStatusOptions(activeConfig)} />
+            )}
             {activeConfig.typeOptions && (
               <div className="flex flex-wrap gap-1.5">
                 {activeConfig.typeOptions.map((type) => (
@@ -533,7 +539,10 @@ export default function TrackingReports() {
                 ))}
               </div>
             )}
-            <StatusLegend options={reportStatusOptions(activeConfig)} />
+            {/* Lab results keeps its legend inside the filter strip; the others move it below. */}
+            {activeConfig.collection === "labResultRequests" && (
+              <StatusLegend options={reportStatusOptions(activeConfig)} />
+            )}
           </div>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">

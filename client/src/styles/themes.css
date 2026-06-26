@@ -38,6 +38,12 @@
     background-color: rgb(255 255 255) !important;
   }
 
+  /* Tell the browser to render native controls (date pickers, selects, scrollbars,
+     calendar/spinner icons) in dark styling so they stay legible in dark mode. */
+  html.dark {
+    color-scheme: dark;
+  }
+
   html.dark body {
     background: rgb(15 23 42);
     color: rgb(226 232 240);
@@ -190,35 +196,35 @@
   html.dark .mrs-status-success,
   html.dark .mrs-status-available,
   html.dark .mrs-status-inpatient {
-    border-color: rgba(74, 222, 128, 0.28);
-    background: rgba(22, 101, 52, 0.22);
-    color: rgb(134 239 172);
+    border-color: rgba(74, 222, 128, 0.45);
+    background: rgba(22, 101, 52, 0.38);
+    color: rgb(167 243 208);
   }
 
   html.dark .mrs-status-info,
   html.dark .mrs-status-borrowed,
   html.dark .mrs-status-outpatient {
-    border-color: rgba(96, 165, 250, 0.3);
-    background: rgba(30, 64, 175, 0.22);
-    color: rgb(147 197 253);
+    border-color: rgba(96, 165, 250, 0.5);
+    background: rgba(30, 64, 175, 0.38);
+    color: rgb(191 219 254);
   }
 
   html.dark .mrs-status-warning {
-    border-color: rgba(251, 191, 36, 0.3);
-    background: rgba(146, 64, 14, 0.24);
-    color: rgb(252 211 77);
+    border-color: rgba(251, 191, 36, 0.5);
+    background: rgba(146, 64, 14, 0.42);
+    color: rgb(253 230 138);
   }
 
   html.dark .mrs-status-danger {
-    border-color: rgba(248, 113, 113, 0.3);
-    background: rgba(127, 29, 29, 0.24);
-    color: rgb(252 165 165);
+    border-color: rgba(248, 113, 113, 0.5);
+    background: rgba(127, 29, 29, 0.42);
+    color: rgb(254 202 202);
   }
 
   html.dark .mrs-status-voided {
-    border-color: rgba(167, 139, 250, 0.34);
-    background: rgba(91, 33, 182, 0.24);
-    color: rgb(196 181 253);
+    border-color: rgba(167, 139, 250, 0.5);
+    background: rgba(91, 33, 182, 0.4);
+    color: rgb(221 214 254);
   }
 
   html.dark .mrs-status-neutral {

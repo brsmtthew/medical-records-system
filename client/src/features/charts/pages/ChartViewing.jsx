@@ -4,6 +4,7 @@ import FloatingToast from "@shared/components/FloatingToast";
 import ChartClearFolderModal from "../modals/ChartClearFolderModal";
 import ChartFolderLoadModal from "../modals/ChartFolderLoadModal";
 import ChartFullscreenImageModal from "../modals/ChartFullscreenImageModal";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 import {
   ChevronLeft,
   ChevronRight,
@@ -200,14 +201,15 @@ export default function ChartViewing() {
     });
   }, [charts, sortMode]);
 
+  const debouncedSearch = useDebouncedValue(searchQuery);
   const filteredCharts = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = debouncedSearch.trim().toLowerCase();
     if (!query) return sortedCharts;
 
     return sortedCharts.filter((chart) =>
       `${chart.name} ${chart.path}`.toLowerCase().includes(query)
     );
-  }, [searchQuery, sortedCharts]);
+  }, [debouncedSearch, sortedCharts]);
 
   const selectedIndex = filteredCharts.findIndex((chart) => chart.path === selectedChart?.path);
   const selectRelativeChart = useCallback((direction) => {

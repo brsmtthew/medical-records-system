@@ -476,6 +476,7 @@ export default function Navbar({ onMenuClick }) {
     "/chart-viewing": "Chart Viewing",
     "/chartviewing": "Chart Viewing",
     "/chart-requests": "Chart Requests",
+    "/chart-transactions": "Transactions",
     "/reports": "Chart Reports",
     "/medical-documents": "Medical Documents",
     "/lab-results": "Laboratory Results",

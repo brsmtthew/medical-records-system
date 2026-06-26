@@ -27,6 +27,7 @@ import {
 } from "@features/tracking/services/trackingService";
 import { subscribeToPatients } from "../../patients/services/patientService";
 import { useAuth } from "@features/auth/context/useAuth";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 import {
   getTrackingColumns,
   releaseRelationshipOptions,
@@ -661,8 +662,9 @@ export default function TrackingPage({ config }) {
     [rows],
   );
 
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const filteredRows = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
+    const search = debouncedSearch.trim().toLowerCase();
     return activeRows.filter((row) => {
       const matchesSearch = !search || normalizeSearchValue(row, activeColumns).includes(search);
       const matchesStatus = statusFilter === "all" || (
@@ -673,7 +675,7 @@ export default function TrackingPage({ config }) {
       const matchesDate = rowMatchesDateRange(row, startDate, endDate);
       return matchesSearch && matchesStatus && matchesDate;
     });
-  }, [activeColumns, activeRows, config, endDate, searchTerm, startDate, statusFilter]);
+  }, [activeColumns, activeRows, config, endDate, debouncedSearch, startDate, statusFilter]);
   const displayedRows = config.typeOptions
     ? filteredRows.filter((row) => rowMatchesSelectedType(config, row, selectedType))
     : filteredRows;
@@ -1025,6 +1027,10 @@ export default function TrackingPage({ config }) {
                 Reset
               </button>
             </div>
+            {/* Non-lab shows the legend right under the filter row; lab keeps it at the strip end. */}
+            {config.collection !== "labResultRequests" && config.statusOptions.length > 0 && (
+              <StatusLegend options={config.statusOptions} />
+            )}
             {config.typeOptions && (
               <div className="flex flex-wrap gap-1.5">
                 {config.typeOptions.map((type) => (
@@ -1043,7 +1049,10 @@ export default function TrackingPage({ config }) {
                 ))}
               </div>
             )}
-            <StatusLegend options={config.statusOptions} />
+            {/* Lab results keeps its legend inside the filter strip; the others move it below. */}
+            {config.collection === "labResultRequests" && (
+              <StatusLegend options={config.statusOptions} />
+            )}
           </div>
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">

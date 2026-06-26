@@ -14,6 +14,7 @@ import {
 } from "@features/tracking/utils/trackingConfigs";
 import { formatDisplayDate } from "@shared/utils/dateFormatting";
 import { recordTimeValue, sortNewestFirst } from "@shared/utils/recordSorting";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 
 function escapeExcelValue(value) {
   return String(value ?? "")
@@ -469,8 +470,9 @@ export default function PrintReports() {
     };
   }, []);
 
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const filteredRows = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
+    const search = debouncedSearch.trim().toLowerCase();
     const dateKeys = activeConfig.dateKeys || ["requestedAt", "reviewedAt", "releasedAt"];
 
     return rows.filter((row) => {
@@ -484,7 +486,7 @@ export default function PrintReports() {
       const matchesType = rowMatchesSelectedType(activeConfig, row, selectedType);
       return matchesSearch && matchesStatus && matchesDate && matchesType;
     });
-  }, [activeColumns, activeConfig, endDate, rows, searchTerm, selectedType, startDate, statusFilter]);
+  }, [activeColumns, activeConfig, endDate, rows, debouncedSearch, selectedType, startDate, statusFilter]);
 
   const activeStats = activeConfig.stats(filteredRows);
 
@@ -636,6 +638,10 @@ export default function PrintReports() {
                 Reset
               </button>
             </div>
+            {/* Non-lab shows the legend right under the filter row; lab keeps it at the strip end. */}
+            {activeConfig.collection !== "labResultRequests" && (
+              <StatusLegend options={reportLegendOptions(activeConfig)} />
+            )}
             {activeConfig.typeOptions && (
               <div className="flex flex-wrap gap-1.5">
                 {activeConfig.typeOptions.map((type) => (
@@ -654,7 +660,10 @@ export default function PrintReports() {
                 ))}
               </div>
             )}
-            <StatusLegend options={reportLegendOptions(activeConfig)} />
+            {/* Lab results keeps its legend inside the filter strip; the others move it below. */}
+            {activeConfig.collection === "labResultRequests" && (
+              <StatusLegend options={reportLegendOptions(activeConfig)} />
+            )}
           </div>
 
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">

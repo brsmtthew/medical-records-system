@@ -25,6 +25,7 @@ import {
   subscribeToDepartments,
 } from "@features/charts/services/chartService";
 import { buildReturnedChartLog, buildReturnedChartUpdate } from "@features/charts/utils/chartTransactions";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 import { normalizeCaseNumber, normalizePatientName, searchable } from "@shared/utils/recordSorting";
 
 const today = new Date();
@@ -161,10 +162,12 @@ export default function Charts() {
   const activeTransaction = transactionModes.find((mode) => mode.id === transactionMode);
   const activeCaseNumber = transactionMode === "return" ? returnCaseNumber : borrowCaseNumber;
 
-  // Selects borrow or return mode and primes the matching table filter.
+  // Return mode can only act on checked-out charts, so default that list to borrowed
+  // only. Borrow mode shows every chart (checked-out ones flagged as such). The manual
+  // filter chips still let operators widen or narrow the list afterwards.
   const selectTransactionMode = (mode) => {
     setTransactionMode(mode);
-    setStatusFilter(mode === "borrow" ? "available" : "borrowed");
+    setStatusFilter(mode === "return" ? "borrowed" : "all");
     setNotice(null);
   };
 
@@ -230,8 +233,9 @@ export default function Charts() {
     ];
   }, [charts]);
 
+  const debouncedSearch = useDebouncedValue(searchQuery);
   const filteredCharts = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = debouncedSearch.trim().toLowerCase();
 
     return charts.filter((chart) => {
       const matchesStatus =
@@ -248,7 +252,7 @@ export default function Charts() {
 
       return matchesStatus && matchesSearch;
     });
-  }, [charts, searchQuery, statusFilter]);
+  }, [charts, debouncedSearch, statusFilter]);
 
   // Validates borrow details and opens the confirmation dialog.
   const prepareCheckout = () => {
@@ -630,6 +634,13 @@ export default function Charts() {
                   {filteredCharts.map((chart) => {
                     const recordType = determineChartRecordType(chart, charts);
                     const isSelected = activeCaseNumber === chart.caseNumber;
+                    // Borrow mode can only act on available charts, return mode on
+                    // checked-out ones; dim the rows that don't fit the active mode.
+                    const isSelectable = transactionMode === "borrow"
+                      ? chart.status === "available"
+                      : transactionMode === "return"
+                        ? chart.status === "borrowed"
+                        : true;
 
                     return (
                       <Motion.tr
@@ -650,7 +661,7 @@ export default function Charts() {
                         tabIndex={0}
                         className={`mrs-table-row group cursor-pointer ${
                           isSelected ? "mrs-table-row-selected" : ""
-                        }`}
+                        } ${!isSelectable ? "opacity-60" : ""}`}
                       >
                         <td className="p-3">
                           <PatientCaseCell patientName={chart.patientName} caseNumber={chart.caseNumber} />
@@ -679,7 +690,7 @@ export default function Charts() {
                                 ? "mrs-status-success"
                                 : "mrs-status-info"
                             }`}>
-                              {chart.status}
+                              {chart.status === "available" ? "Available" : "Checked Out"}
                             </span>
                             {chart.status === "borrowed" && (
                               <span className="text-[10px] font-bold uppercase text-slate-400">
