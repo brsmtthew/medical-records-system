@@ -228,7 +228,7 @@ export default function Navbar({ onMenuClick }) {
 
     return subscribeToUserNotifications(
       (rows) => {
-        let remoteNotifications = rows.map((row) => normalizeNotification({
+        const remoteNotifications = rows.map((row) => normalizeNotification({
           id: row.id,
           type: row.type || "info",
           title: row.title || "",
@@ -241,31 +241,54 @@ export default function Navbar({ onMenuClick }) {
           userId: row.sourceUserId || "",
           targetPath: row.targetPath || "",
         }));
-        if (!hasLoadedRemoteNotificationsRef.current) {
-          const readAt = new Date().toISOString();
-          remoteNotifications = remoteNotifications.map((notification) => ({ ...notification, readAt }));
-        }
+        const isFirstLoad = !hasLoadedRemoteNotificationsRef.current;
         const nextIds = new Set(remoteNotifications.map((notification) => notification.id));
 
-        if (hasLoadedRemoteNotificationsRef.current) {
-          const newNotifications = remoteNotifications.filter((notification) => !remoteNotificationIdsRef.current.has(notification.id));
-          const newCount = newNotifications.length;
-          if (newCount > 0) {
-            const latestNotification = newNotifications[0];
+        // Read the seen/read state straight from storage so the first-load
+        // decision never depends on async React state having hydrated yet. Each
+        // entry persisted here carries the readAt it had when last shown.
+        const seenById = new Map(
+          readStoredBellNotifications(currentUser.uid).map((notification) => [notification.id, notification]),
+        );
+        const hasLocalHistory = seenById.size > 0;
+        // A brand-new device with no local history reads through any backlog so
+        // the badge doesn't explode; from then on new arrivals are tracked.
+        const readThroughBacklog = isFirstLoad && !hasLocalHistory;
+        const readAt = new Date().toISOString();
+
+        // Decide each notification's read state: keep whatever was already seen,
+        // leave genuinely-new ones (e.g. a chart request, or a "ready to pickup"
+        // for the requester) unread so the bell badge surfaces them.
+        const prepared = remoteNotifications.map((notification) => {
+          const seen = seenById.get(notification.id);
+          if (seen) return { ...notification, readAt: seen.readAt };
+          if (readThroughBacklog) return { ...notification, readAt };
+          return notification;
+        });
+
+        // Toast the newest unseen notification — on live updates and on login
+        // when something arrived while this account was offline (rows are sorted
+        // newest-first). Skip only the fresh-device backlog read-through.
+        if (!readThroughBacklog) {
+          const freshUnseen = prepared.find((notification) => (
+            !notification.readAt
+            && !seenById.has(notification.id)
+            && !remoteNotificationIdsRef.current.has(notification.id)
+          ));
+          if (freshUnseen) {
             setIncomingNotificationToast({
-              type: latestNotification.type || "info",
-              title: latestNotification.title || "New Notification",
-              message: latestNotification.message,
-              patientName: latestNotification.patientName,
-              caseNumber: latestNotification.caseNumber,
+              type: freshUnseen.type || "info",
+              title: freshUnseen.title || "New Notification",
+              message: freshUnseen.message,
+              patientName: freshUnseen.patientName,
+              caseNumber: freshUnseen.caseNumber,
             });
           }
-        } else {
-          hasLoadedRemoteNotificationsRef.current = true;
         }
 
+        hasLoadedRemoteNotificationsRef.current = true;
         remoteNotificationIdsRef.current = nextIds;
-        setNotifications((current) => mergeNotifications(remoteNotifications, current));
+        setNotifications((current) => mergeNotifications(prepared, current));
       },
       (error) => console.error("Unable to load targeted notifications:", error),
     );

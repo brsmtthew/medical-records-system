@@ -2,9 +2,11 @@ import React, { useState } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
+import { useChartRequestBadgeCount } from "@features/charts/hooks/useChartRequestBadgeCount";
 
 export default function DashboardLayout({ children }) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const chartRequestCount = useChartRequestBadgeCount();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem("mrs-sidebar-collapsed") === "true";
@@ -33,6 +35,7 @@ export default function DashboardLayout({ children }) {
         <Sidebar
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={toggleSidebarCollapsed}
+          chartRequestCount={chartRequestCount}
         />
       </aside>
 
@@ -57,6 +60,7 @@ export default function DashboardLayout({ children }) {
                 showCloseButton
                 onClose={() => setIsMobileSidebarOpen(false)}
                 onNavigate={() => setIsMobileSidebarOpen(false)}
+                chartRequestCount={chartRequestCount}
               />
             </Motion.aside>
           </div>

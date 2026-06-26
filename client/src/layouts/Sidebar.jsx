@@ -29,6 +29,7 @@ export default function Sidebar({
   onNavigate,
   onClose,
   showCloseButton = false,
+  chartRequestCount = 0,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,7 +48,7 @@ export default function Sidebar({
     {
       label: "Charts",
       items: [
-        { name: "Chart Requests", icon: ClipboardList, path: "/chart-requests" },
+        { name: "Chart Requests", icon: ClipboardList, path: "/chart-requests", badge: chartRequestCount },
         { name: "Chart Circulation", icon: FileText, path: "/charts" },
         { name: "Chart Viewing", icon: FileSearch, path: "/chart-viewing" },
       ],
@@ -87,7 +88,7 @@ export default function Sidebar({
       label: "Chart Requests",
       items: [
         { name: "Chart Requests", icon: ClipboardList, path: "/chart-requests" },
-        { name: "Transactions", icon: Files, path: "/chart-transactions" },
+        { name: "Transactions", icon: Files, path: "/chart-transactions", badge: chartRequestCount },
         { name: "Return Charts", icon: FileText, path: "/chart-return" },
       ],
     },
@@ -110,6 +111,8 @@ export default function Sidebar({
     const isActive = location.pathname === item.path;
     const Icon = item.icon;
     const collapsed = options.collapsed ?? isCollapsed;
+    const badgeCount = Number(item.badge) || 0;
+    const badgeLabel = badgeCount > 9 ? "9+" : String(badgeCount);
 
     return (
       <Motion.button
@@ -123,18 +126,23 @@ export default function Sidebar({
         whileTap={{ scale: 0.98 }}
         title={collapsed ? item.name : undefined}
         className={`
-          mrs-sidebar-link group flex w-full cursor-pointer items-center rounded-xl border text-left transition-all duration-300 ease-out
+          mrs-sidebar-link group relative flex w-full cursor-pointer items-center rounded-xl border text-left transition-all duration-300 ease-out
           ${collapsed ? "justify-center px-0 py-1 2xl:py-1.5" : "gap-2.5 px-2.5 py-1.5 2xl:gap-3 2xl:px-3 2xl:py-2"}
           ${isActive ? "mrs-sidebar-link-active" : ""}
         `}
       >
-        <span className={`mrs-sidebar-icon-frame flex shrink-0 items-center justify-center rounded-lg transition-all ${
+        <span className={`mrs-sidebar-icon-frame relative flex shrink-0 items-center justify-center rounded-lg transition-all ${
           collapsed ? "size-8 2xl:size-9" : "size-7 2xl:size-8"
         }`}>
           <Icon
             size={collapsed ? 18 : 17}
             strokeWidth={2.2}
           />
+          {collapsed && badgeCount > 0 && (
+            <span className="absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[9px] font-black leading-3 text-white shadow-sm">
+              {badgeLabel}
+            </span>
+          )}
         </span>
 
         {!collapsed && (
@@ -143,7 +151,13 @@ export default function Sidebar({
           </span>
         )}
 
-        {isActive && !collapsed && (
+        {!collapsed && badgeCount > 0 && (
+          <span className="ml-auto flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-sm">
+            {badgeLabel}
+          </span>
+        )}
+
+        {isActive && !collapsed && badgeCount === 0 && (
           <Motion.div
             layoutId="activeIndicator"
             className="ml-auto h-1.5 w-1.5 rounded-full bg-green-600"

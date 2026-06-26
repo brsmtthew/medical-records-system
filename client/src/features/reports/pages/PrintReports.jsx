@@ -88,7 +88,9 @@ function rowHasSelectedType(row, type) {
 
 function rowMatchesSelectedType(config, row, type) {
   if (!config.typeOptions || !type) return true;
-  if (rowHasSelectedType(row, type)) return true;
+  // Rows carrying an explicit typeList must include the selected type; otherwise
+  // a multi-type record would appear under every type tab as duplicate rows.
+  if (Array.isArray(row.typeList) && row.typeList.length) return rowHasSelectedType(row, type);
   if (config.typeFilterKey) return row[config.typeFilterKey] === type;
   return true;
 }

@@ -2,6 +2,7 @@ import {
   formatTrackingDateOnly,
   formatTrackingDateTimeWithTime,
   nowLocalKey,
+  todayKey,
   trackingDateRangeColumn,
 } from "./trackingPageHelpers";
 
@@ -260,6 +261,7 @@ export const medicalDocumentConfig = {
     if (!form.patientName.trim()) return "Enter the patient name.";
     if (!Array.isArray(form.typeList) || form.typeList.length === 0) return "Choose at least one document type.";
     if (!form.requestedAt) return "Enter the requested date.";
+    if (form.releasedAt && form.releasedAt < form.requestedAt) return "Released date cannot be earlier than the requested date.";
     return "";
   },
   toForm: (row) => ({
@@ -436,9 +438,19 @@ export const vitalCertificateConfig = {
   validate: (form) => {
     if (!form.patientName.trim()) return "Enter the patient name.";
     if (!Array.isArray(form.typeList) || form.typeList.length === 0) return "Choose at least one certificate type.";
-    if ((form.typeList || []).includes("birth") && !form.birthday) return "Enter the birthday for birth certificate requests.";
-    if ((form.typeList || []).some((type) => ["death", "fetalDeath"].includes(type)) && !form.dateOfDeath) return "Enter the date of death for death or fetal death certificate requests.";
+    const needsBirth = (form.typeList || []).includes("birth");
+    const needsDeath = (form.typeList || []).some((type) => ["death", "fetalDeath"].includes(type));
+    if (needsBirth && !form.birthday) return "Enter the birthday for birth certificate requests.";
+    if (needsDeath && !form.dateOfDeath) return "Enter the date of death for death or fetal death certificate requests.";
+    const today = todayKey();
+    if (needsBirth && form.birthday && form.birthday > today) return "Birthday cannot be in the future.";
+    if (needsDeath && form.dateOfDeath && form.dateOfDeath > today) return "Date of death cannot be in the future.";
+    if (needsBirth && needsDeath && form.birthday && form.dateOfDeath && form.dateOfDeath < form.birthday) {
+      return "Date of death cannot be earlier than the birthday.";
+    }
     if (!form.requestedAt) return "Enter the recorded date.";
+    if (form.reviewedAt && form.reviewedAt < form.requestedAt) return "Reviewed date cannot be earlier than the recorded date.";
+    if (form.releasedAt && form.releasedAt < form.requestedAt) return "Released date cannot be earlier than the recorded date.";
     return "";
   },
   toForm: (row) => ({
