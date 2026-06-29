@@ -119,16 +119,12 @@ service cloud.firestore {
       return status in ["released", "canceled", "voided"];
     }
 
-    // When a patient is renamed, Medical Records syncs the new case number and name
-    // into every linked record so the workflow stays connected. Only these identity
-    // fields may change, so terminal/locked records keep their status untouched.
+    // Patient rename: only identity fields (case number/name) sync into linked records.
     function isPatientIdentitySync() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["caseNumber", "patientName", "updatedAt"]);
     }
 
-    // An admin soft-delete: the document is kept (so Print Reports retains a
-    // permanent audit trail) but flagged `deleted` so the working views and their
-    // wired reports hide it. Identity is never rewritten by a soft-delete.
+    // Admin soft-delete: keep the doc, just flag `deleted`; identity is untouched.
     function isAdminSoftDelete() {
       return isAdmin()
         && request.resource.data.deleted == true
@@ -184,11 +180,17 @@ service cloud.firestore {
             "clinicalPortalSubtitle",
             "photoDataUrl",
             "clinicalCoverDataUrl",
+            "mustChangePassword",
             "updatedAt"
           ])
           && request.resource.data.role == resource.data.role
           && validSystemRole(request.resource.data.role)
           && preservesAccountStatus()
+          // The first-login flow may only clear the flag, never set it.
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(["mustChangePassword"])
+            || request.resource.data.mustChangePassword == false
+          )
         );
       allow delete: if isAdmin() && request.auth.uid != userId;
     }
@@ -199,7 +201,8 @@ service cloud.firestore {
         && request.resource.data.caseNumber == caseNumber
         && isValidCaseNumber(request.resource.data.caseNumber)
         && request.resource.data.name is string
-        && request.resource.data.type in ["inpatient", "outpatient"];
+        && request.resource.data.type in ["inpatient", "outpatient"]
+        && validPatientDates();
       allow delete: if isAdmin() || isSelfRenameDelete("patients", caseNumber);
     }
 
@@ -306,8 +309,7 @@ service cloud.firestore {
           && request.resource.data.patientName == resource.data.patientName
         )
         || (
-          // Admin override: cancel any in-flight request from any status (used when a
-          // patient record is deleted so the request never gets stuck).
+          // Admin override: cancel an in-flight request from any status.
           isAdmin()
           && request.resource.data.status == "canceled"
           && request.resource.data.requestedById == resource.data.requestedById
@@ -344,26 +346,81 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /nurses/{nurseId} {
+      allow read: if isActiveStaff();
+      allow create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
     match /medicalDocumentRequests/{requestId} {
-      allow read, create: if isActiveStaff();
+      allow read: if isActiveStaff();
+      allow create: if isActiveStaff() && validProcessDates();
       allow update: if (isActiveStaff()
-          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync()))
+          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync())
+          && validProcessDates())
         || isAdminSoftDelete();
       allow delete: if isAdmin();
     }
 
     match /labResultRequests/{requestId} {
-      allow read, create: if isActiveStaff();
+      allow read: if isActiveStaff();
+      allow create: if isActiveStaff() && validProcessDates();
       allow update: if (isActiveStaff()
-          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync()))
+          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync())
+          && validProcessDates())
         || isAdminSoftDelete();
       allow delete: if isAdmin();
     }
 
+    // Shared date guards. "Not future" ceiling is tomorrow's UTC date (~1-day
+    // buffer for clients ahead of UTC); ordering compares local date strings.
+    function dateStringOf(ts) {
+      return string(ts.year()) + '-'
+        + (ts.month() < 10 ? '0' + string(ts.month()) : string(ts.month())) + '-'
+        + (ts.day() < 10 ? '0' + string(ts.day()) : string(ts.day()));
+    }
+    function maxDateAllowed() {
+      return dateStringOf(request.time + duration.value(1, 'd'));
+    }
+    function dateFieldStr(field) {
+      return (field in request.resource.data && request.resource.data[field] is string)
+        ? request.resource.data[field] : '';
+    }
+    function notFutureField(field) {
+      return dateFieldStr(field) == '' || dateFieldStr(field).split('T')[0] <= maxDateAllowed();
+    }
+    // 'later' must not precede 'earlier' when both are present.
+    function orderedFields(earlier, later) {
+      return dateFieldStr(earlier) == '' || dateFieldStr(later) == ''
+        || dateFieldStr(later) >= dateFieldStr(earlier);
+    }
+    // Civil documents: no future birthday/death, and death not before birthday.
+    function validCivilDates() {
+      return notFutureField('birthday')
+        && notFutureField('dateOfDeath')
+        && orderedFields('birthday', 'dateOfDeath');
+    }
+    // Tracking timestamps must not be in the future. Ordering is enforced on the
+    // client form; reviewed/released are system-set in UTC while requestedAt is
+    // local, so cross-field string ordering is unreliable here.
+    function validProcessDates() {
+      return notFutureField('requestedAt')
+        && notFutureField('reviewedAt')
+        && notFutureField('releasedAt');
+    }
+    // Patients: no future admission/discharge, and discharge not before admission.
+    function validPatientDates() {
+      return notFutureField('admissionDate')
+        && notFutureField('dischargeDate')
+        && orderedFields('admissionDate', 'dischargeDate');
+    }
+
     match /vitalCertificateRequests/{requestId} {
-      allow read, create: if isActiveStaff();
+      allow read: if isActiveStaff();
+      allow create: if isActiveStaff() && validCivilDates() && validProcessDates();
       allow update: if (isActiveStaff()
-          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync()))
+          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync())
+          && validCivilDates() && validProcessDates())
         || isAdminSoftDelete();
       allow delete: if isAdmin();
     }
@@ -382,10 +439,7 @@ service cloud.firestore {
     }
 
     match /auditLogs/{logId} {
-      // createdAt must equal request.time, so entries cannot be backdated or
-      // post-dated, and content fields are length-capped to block oversized writes.
-      // Admins may attribute a log to another user (e.g. logging a newly created
-      // account); non-admin staff can only write entries for their own uid.
+      // createdAt is pinned to request.time; non-admins can only log their own uid.
       allow create: if validAuditLogShape()
         && (
           isAdmin()

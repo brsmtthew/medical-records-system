@@ -64,6 +64,12 @@ function dateValue(value) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+// Local "YYYY-MM-DD" for today; used to reject future admission/discharge dates.
+function todayDateKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 // Builds an admission-to-discharge range used to detect overlapping inpatient stays.
 function patientStayRange(patient) {
   const normalizedPatient = normalizePatientDates(patient);
@@ -300,6 +306,15 @@ export default function Patients() {
       setFormError("Discharge date cannot be earlier than admission date.");
       return null;
     }
+    const today = todayDateKey();
+    if (form.admissionDate > today) {
+      setFormError("Admission date cannot be in the future.");
+      return null;
+    }
+    if (form.dischargeDate && form.dischargeDate > today) {
+      setFormError("Discharge date cannot be in the future.");
+      return null;
+    }
     if (patients.some((p) => normalizeCaseNumber(p.caseNumber) === caseNumber)) {
       setFormError("A patient with this case number already exists.");
       return null;
@@ -388,6 +403,15 @@ export default function Patients() {
     }
     if (editPatient.dischargeDate && dateValue(editPatient.dischargeDate) < dateValue(editPatient.admissionDate)) {
       setEditError("Discharge date cannot be earlier than admission date.");
+      return;
+    }
+    const today = todayDateKey();
+    if (editPatient.admissionDate > today) {
+      setEditError("Admission date cannot be in the future.");
+      return;
+    }
+    if (editPatient.dischargeDate && editPatient.dischargeDate > today) {
+      setEditError("Discharge date cannot be in the future.");
       return;
     }
     const duplicateCase = patients.some(

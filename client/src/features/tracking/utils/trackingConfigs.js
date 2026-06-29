@@ -6,6 +6,29 @@ import {
   trackingDateRangeColumn,
 } from "./trackingPageHelpers";
 
+// Shared guard for the requested/reviewed/released process timestamps. Rejects
+// future-dated entries and out-of-order dates (reviewed/released before the
+// recorded date, or released before reviewed). requestedLabel is the noun used
+// for the first date ("Requested date" or "Recorded date"). datetime-local
+// inputs are local, so compare against nowLocalKey() which is also local.
+function validateProcessDates(form, requestedLabel) {
+  const now = nowLocalKey();
+  const requestedNoun = requestedLabel.toLowerCase();
+  if (form.requestedAt && form.requestedAt > now) return `${requestedLabel} cannot be in the future.`;
+  if (form.reviewedAt && form.reviewedAt > now) return "Reviewed date cannot be in the future.";
+  if (form.reviewedAt && form.requestedAt && form.reviewedAt < form.requestedAt) {
+    return `Reviewed date cannot be earlier than the ${requestedNoun}.`;
+  }
+  if (form.releasedAt && form.releasedAt > now) return "Released date cannot be in the future.";
+  if (form.releasedAt && form.requestedAt && form.releasedAt < form.requestedAt) {
+    return `Released date cannot be earlier than the ${requestedNoun}.`;
+  }
+  if (form.releasedAt && form.reviewedAt && form.releasedAt < form.reviewedAt) {
+    return "Released date cannot be earlier than the reviewed date.";
+  }
+  return "";
+}
+
 export const documentTypes = [
   { value: "medicalCertificate", label: "Medical Certificate" },
   { value: "medicalAbstract", label: "Clinical Abstract" },
@@ -261,8 +284,7 @@ export const medicalDocumentConfig = {
     if (!form.patientName.trim()) return "Enter the patient name.";
     if (!Array.isArray(form.typeList) || form.typeList.length === 0) return "Choose at least one document type.";
     if (!form.requestedAt) return "Enter the requested date.";
-    if (form.releasedAt && form.releasedAt < form.requestedAt) return "Released date cannot be earlier than the requested date.";
-    return "";
+    return validateProcessDates(form, "Requested date");
   },
   toForm: (row) => ({
     patientName: row.patientName || "",
@@ -344,7 +366,7 @@ export const labResultConfig = {
     if (!form.patientName.trim()) return "Enter the patient name.";
     if (!Number(form.copyCount)) return "Enter the number of laboratory result copies.";
     if (!form.requestedAt) return "Enter the requested date.";
-    return "";
+    return validateProcessDates(form, "Requested date");
   },
   toForm: (row) => ({
     patientName: row.patientName || "",
@@ -443,15 +465,13 @@ export const vitalCertificateConfig = {
     if (needsBirth && !form.birthday) return "Enter the birthday for birth certificate requests.";
     if (needsDeath && !form.dateOfDeath) return "Enter the date of death for death or fetal death certificate requests.";
     const today = todayKey();
-    if (needsBirth && form.birthday && form.birthday > today) return "Birthday cannot be in the future.";
-    if (needsDeath && form.dateOfDeath && form.dateOfDeath > today) return "Date of death cannot be in the future.";
-    if (needsBirth && needsDeath && form.birthday && form.dateOfDeath && form.dateOfDeath < form.birthday) {
+    if (form.birthday && form.birthday > today) return "Birthday cannot be in the future.";
+    if (form.dateOfDeath && form.dateOfDeath > today) return "Date of death cannot be in the future.";
+    if (form.birthday && form.dateOfDeath && form.dateOfDeath < form.birthday) {
       return "Date of death cannot be earlier than the birthday.";
     }
     if (!form.requestedAt) return "Enter the recorded date.";
-    if (form.reviewedAt && form.reviewedAt < form.requestedAt) return "Reviewed date cannot be earlier than the recorded date.";
-    if (form.releasedAt && form.releasedAt < form.requestedAt) return "Released date cannot be earlier than the recorded date.";
-    return "";
+    return validateProcessDates(form, "Recorded date");
   },
   toForm: (row) => ({
     patientName: row.patientName || "",

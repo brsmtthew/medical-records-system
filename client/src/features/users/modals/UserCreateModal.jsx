@@ -3,9 +3,11 @@ import { LoaderCircle, UserPlus, X } from "lucide-react";
 import { managedUserRoles, roleLabel, userRoles } from "@shared/constants/userRoles";
 import { defaultNurseDepartments } from "@shared/constants/defaultOptions";
 
-// Doctor accounts are created from the Doctor Directory (Settings) to keep one
-// source of truth, so they are not offered here.
-const creatableRoles = managedUserRoles.filter((role) => role !== userRoles.doctor);
+// Doctor and nurse accounts are created from their directories (Settings) to keep
+// one source of truth, so they are not offered here.
+const creatableRoles = managedUserRoles.filter(
+  (role) => role !== userRoles.doctor && role !== userRoles.nurse,
+);
 
 export default function UserCreateModal({
   form,
@@ -43,7 +45,7 @@ export default function UserCreateModal({
           <div>
             <h2 className="text-lg font-black uppercase text-slate-900">Create V3 Account</h2>
             <p className="text-xs font-semibold text-slate-500">
-              Admin-created access for Medical Records staff and nurses. Doctor logins are created from the Doctor Directory.
+              Admin-created access for Medical Records staff. A set-password email is sent so the user chooses their own password. Doctor and nurse logins are created from their directories.
             </p>
           </div>
         </div>
@@ -76,20 +78,6 @@ export default function UserCreateModal({
               onChange={(event) => updateForm("email", event.target.value)}
               placeholder="name@hospital.com"
               name={`managed-user-email-${modalKey}`}
-              className="mrs-field w-full rounded-xl px-3 py-3 text-sm font-bold"
-              required
-            />
-          </label>
-
-          <label className="space-y-1">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Temporary Password</span>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={form.password}
-              onChange={(event) => updateForm("password", event.target.value)}
-              placeholder="Temporary password"
-              name={`managed-user-temp-password-${modalKey}`}
               className="mrs-field w-full rounded-xl px-3 py-3 text-sm font-bold"
               required
             />

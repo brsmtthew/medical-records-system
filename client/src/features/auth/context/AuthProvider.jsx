@@ -108,6 +108,7 @@ export function AuthProvider({ children }) {
       isDoctor: normalizeUserRole(userProfile?.role) === userRoles.doctor,
       isMedicalRecordsUser: isMedicalRecordsRole(userProfile?.role),
       isAccountDisabled: userProfile?.accountStatus === "disabled" || isUnavailableAccount(userProfile?.accountStatus),
+      mustChangePassword: Boolean(userProfile?.mustChangePassword),
       authLoading,
       isAuthenticated: Boolean(currentUser),
       missingFirebaseConfig,

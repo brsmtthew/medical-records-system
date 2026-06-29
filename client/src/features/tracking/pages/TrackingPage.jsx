@@ -712,7 +712,12 @@ export default function TrackingPage({ config }) {
       const typeList = currentTypes.includes(type)
         ? currentTypes.filter((item) => item !== type)
         : [...currentTypes, type];
-      return { ...current, typeList };
+      const next = { ...current, typeList };
+      if (isVitalConfig(config)) {
+        if (!typeList.includes("birth")) next.birthday = "";
+        if (!typeList.some((item) => ["death", "fetalDeath"].includes(item))) next.dateOfDeath = "";
+      }
+      return next;
     });
   };
 
@@ -740,6 +745,12 @@ export default function TrackingPage({ config }) {
               ...form,
               documentType: isMedicalDocumentConfig(config) ? type : form.documentType || "",
               typeList: [type],
+              ...(isVitalConfig(config)
+                ? {
+                    birthday: type === "birth" ? form.birthday : "",
+                    dateOfDeath: ["death", "fetalDeath"].includes(type) ? form.dateOfDeath : "",
+                  }
+                : {}),
               reviewStatus: isVitalConfig(config) ? "forReview" : form.reviewStatus || "",
               releaseStatus: "forRelease",
               reviewedAt: "",

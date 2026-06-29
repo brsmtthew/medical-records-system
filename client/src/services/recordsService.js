@@ -587,6 +587,74 @@ export async function deletePhysician(id) {
   await deleteDoc(doc(database, "physicians", id));
 }
 
+// Nurse directory: mirrors the physician directory. Nurses are registered here as
+// the source of truth, and an admin can create + link a hospital login directly
+// from the directory. Inactive nurses stay for history but are flagged.
+function sanitizeNursePayload(nurse) {
+  return sanitizeRecordPayload(nurse, {
+    name: { maxLength: 160, uppercase: true },
+    department: { maxLength: 120, uppercase: true },
+    departmentType: { maxLength: 20 },
+    licenseNumber: { maxLength: 80 },
+    status: { maxLength: 20 },
+    linkedUserId: { maxLength: 128 },
+    linkedUserEmail: { maxLength: 254 },
+  });
+}
+
+export function subscribeToNurses(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  return onSnapshot(collection(db, "nurses"), (snapshot) => {
+    onRows(sortByUserName(snapshotRows(snapshot)));
+  }, onError);
+}
+
+export async function addNurse(nurse) {
+  const database = requireDb();
+  const { user } = await requireActiveRole();
+  const payload = sanitizeNursePayload(nurse);
+  if (!payload.name) {
+    throw new Error("Enter the nurse's name.");
+  }
+
+  await addDoc(collection(database, "nurses"), {
+    name: payload.name,
+    department: payload.department || "",
+    departmentType: payload.departmentType || "admission",
+    licenseNumber: payload.licenseNumber || "",
+    status: payload.status || "active",
+    linkedUserId: payload.linkedUserId || "",
+    linkedUserEmail: payload.linkedUserEmail || "",
+    createdBy: user.uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateNurse(id, nurse) {
+  const database = requireDb();
+  await requireActiveRole();
+  const payload = sanitizeNursePayload(nurse);
+  if ("name" in payload && !payload.name) {
+    throw new Error("Enter the nurse's name.");
+  }
+
+  await updateDoc(doc(database, "nurses", id), {
+    ...payload,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteNurse(id) {
+  const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
+  await deleteDoc(doc(database, "nurses", id));
+}
+
 // Streams centralized audit actions so admins can review staff activity across workstations.
 export function subscribeToAuditLogs(onRows, onError) {
   if (!db) {
@@ -706,6 +774,22 @@ export async function updateUserAccess(userId, updates) {
 
 // Removes a user profile from the admin user list. The matching Firebase Auth
 // account can no longer enter because sign-in now requires an existing profile.
+// Clears the account link on any physician/nurse directory entry that pointed at a
+// now-deleted login, so the directory no longer shows a stale "Account" badge. The
+// directory record itself is kept because patient/chart history may reference it;
+// an admin can later issue a fresh login from the directory.
+async function unlinkDirectoryAccounts(database, userId) {
+  await Promise.all(["physicians", "nurses"].map(async (collectionName) => {
+    const snapshot = await getDocs(
+      query(collection(database, collectionName), where("linkedUserId", "==", userId)),
+    );
+    await Promise.all(snapshot.docs.map((entry) => updateDoc(
+      doc(database, collectionName, entry.id),
+      { linkedUserId: "", linkedUserEmail: "", updatedAt: serverTimestamp() },
+    )));
+  }));
+}
+
 export async function deleteUserProfile(userId) {
   const database = requireDb();
   const { user } = await requireActiveRole({ adminOnly: true });
@@ -714,6 +798,7 @@ export async function deleteUserProfile(userId) {
   }
 
   await deleteDoc(doc(database, "users", userId));
+  await unlinkDirectoryAccounts(database, userId);
 }
 
 // Creates a patient and its matching available chart document.

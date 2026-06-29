@@ -17,12 +17,13 @@ import DashboardLayout from "../../../layouts/DashboardLayout";
 import FloatingToast from "@shared/components/FloatingToast";
 import UserAccessConfirmModal from "../modals/UserAccessConfirmModal";
 import UserCreateModal from "../modals/UserCreateModal";
+import CredentialResultModal from "@shared/components/CredentialResultModal";
 import { createManagedUserAccount, deleteUserProfile, subscribeToUsers, updateUserAccess } from "@features/users/services/userService";
 import { useAuth } from "@features/auth/context/useAuth";
 import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
 import { normalizeUserRole, roleLabel, userRoles } from "@shared/constants/userRoles";
 import { defaultDoctorClinics, defaultNurseDepartments } from "@shared/constants/defaultOptions";
-import { isStrongPassword, normalizeEmail, sanitizeText } from "@shared/utils/security";
+import { normalizeEmail, sanitizeText } from "@shared/utils/security";
 
 function getInitials(name = "") {
   return name
@@ -36,7 +37,6 @@ function getInitials(name = "") {
 const initialCreateForm = {
   fullName: "",
   email: "",
-  password: "",
   role: userRoles.staff,
   department: "Medical Records",
   clinic: "",
@@ -69,6 +69,7 @@ export default function Users() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createModalKey, setCreateModalKey] = useState(0);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [createdCredential, setCreatedCredential] = useState(null);
 
   useEffect(() => {
     const unsubscribeUsers = subscribeToUsers(
@@ -145,12 +146,8 @@ export default function Users() {
     const email = normalizeEmail(createForm.email);
     const role = normalizeUserRole(createForm.role);
 
-    if (!fullName || !email || !createForm.password) {
-      setAccessError("Enter full name, email, and temporary password.");
-      return;
-    }
-    if (!isStrongPassword(createForm.password)) {
-      setAccessError("Temporary password must use at least 8 characters with uppercase, lowercase, and a number.");
+    if (!fullName || !email) {
+      setAccessError("Enter the full name and email.");
       return;
     }
     if (role === userRoles.nurse && !createForm.department.trim()) {
@@ -160,7 +157,7 @@ export default function Users() {
 
     try {
       setIsCreatingUser(true);
-      await createManagedUserAccount({
+      const { temporaryPassword } = await createManagedUserAccount({
         ...createForm,
         fullName,
         email,
@@ -170,7 +167,7 @@ export default function Users() {
       setCreateForm(initialCreateForm);
       setIsCreateModalOpen(false);
       setAccessError("");
-      setAccessMessage(`${roleLabel(role)} account created for ${fullName}.`);
+      setCreatedCredential({ name: fullName, email, temporaryPassword });
     } catch (error) {
       setAccessError(error.message || "Unable to create this account.");
     } finally {
@@ -566,6 +563,15 @@ export default function Users() {
         onSubmit={handleCreateManagedUser}
         updateForm={updateCreateForm}
       />
+
+      {createdCredential && (
+        <CredentialResultModal
+          name={createdCredential.name}
+          email={createdCredential.email}
+          temporaryPassword={createdCredential.temporaryPassword}
+          onClose={() => setCreatedCredential(null)}
+        />
+      )}
 
       <FloatingToast
         toast={

@@ -4,6 +4,7 @@ import FloatingToast from "@shared/components/FloatingToast";
 import DepartmentEditorConfirmModal from "../modals/DepartmentEditorConfirmModal";
 import DepartmentEditorEntryModal from "../modals/DepartmentEditorEntryModal";
 import DoctorDirectoryEditor from "../components/DoctorDirectoryEditor";
+import NurseDirectoryEditor from "../components/NurseDirectoryEditor";
 import SettingsClearLogsConfirmModal from "../modals/SettingsClearLogsConfirmModal";
 import SettingsResetConfirmModal from "../modals/SettingsResetConfirmModal";
 import UserAccessConfirmModal from "../../users/modals/UserAccessConfirmModal";
@@ -14,6 +15,7 @@ import {
   Code2,
   Edit,
   Eye,
+  HeartPulse,
   Info,
   Moon,
   Plus,
@@ -70,6 +72,7 @@ const tabs = [
   { id: "rules", label: "System Settings", icon: SettingsIcon },
   { id: "departmentEditor", label: "Department Editor", icon: Building2 },
   { id: "doctorDirectory", label: "Doctor Directory", icon: Stethoscope },
+  { id: "nurseDirectory", label: "Nurse Directory", icon: HeartPulse },
   { id: "notifications", label: "Notification Action Log", icon: Bell },
   { id: "about", label: "About System", icon: Info },
 ];
@@ -185,7 +188,7 @@ export default function Settings({ initialTab = "rules" }) {
   const [pendingDepartmentAction, setPendingDepartmentAction] = useState(null);
   const [isDepartmentActionSaving, setIsDepartmentActionSaving] = useState(false);
   const visibleTabs = useMemo(
-    () => (isAdmin ? tabs : tabs.filter((tab) => ["rules", "departmentEditor", "doctorDirectory", "about"].includes(tab.id))),
+    () => (isAdmin ? tabs : tabs.filter((tab) => ["rules", "departmentEditor", "doctorDirectory", "nurseDirectory", "about"].includes(tab.id))),
     [isAdmin],
   );
 
@@ -1169,6 +1172,10 @@ export default function Settings({ initialTab = "rules" }) {
 
                 {safeActiveTab === "doctorDirectory" && (
                   <DoctorDirectoryEditor isAdmin={isAdmin} />
+                )}
+
+                {safeActiveTab === "nurseDirectory" && (
+                  <NurseDirectoryEditor isAdmin={isAdmin} />
                 )}
 
                 {safeActiveTab === "access" && (

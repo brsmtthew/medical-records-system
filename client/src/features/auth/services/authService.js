@@ -3,11 +3,14 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   getAuth,
+  reauthenticateWithCredential,
   sendPasswordResetEmail,
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
+  updatePassword,
   updateProfile,
 } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
@@ -17,6 +20,7 @@ import { apiRequest } from "@services/apiClient";
 import { clearPersistentSignIn, clearSession, savePersistentSignIn, saveSession } from "@services/sessionService";
 import { addAuditLog, getActiveUserProfile } from "@services/recordsService";
 import { managedUserRoles, normalizeUserRole, roleLabel, userRoles } from "@shared/constants/userRoles";
+import { isStrongPassword } from "@shared/utils/security";
 
 const loginAttemptStorageKey = "mrs-login-attempts";
 const maxLoginAttempts = 5;
@@ -162,7 +166,17 @@ function cleanManagedAccountProfile(profile) {
   };
 }
 
-export async function createManagedUserAccount({ email, password, fullName, role, department, clinic, specialty, licenseNumber }) {
+// Builds the temporary password as role + the email's local part, e.g. a nurse
+// with email joelasentista@hospital.com gets "nursejoelasentista". It is only used
+// for the first sign-in; the user is then forced to set their own password.
+function buildTemporaryPassword(role, email) {
+  const localPart = String(email || "").split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+  const password = `${role}${localPart}`;
+  // Firebase requires at least 6 characters; pad rare short values.
+  return password.length >= 6 ? password : `${password}000000`.slice(0, Math.max(6, password.length));
+}
+
+export async function createManagedUserAccount({ email, fullName, role, department, clinic, specialty, licenseNumber }) {
   if (!auth?.currentUser || !db) {
     throw new Error("Sign in as admin before creating accounts.");
   }
@@ -181,15 +195,19 @@ export async function createManagedUserAccount({ email, password, fullName, role
     specialty,
     licenseNumber,
   });
+  const initialPassword = buildTemporaryPassword(safeProfile.role, safeProfile.email);
   const secondaryApp = initializeApp(firebaseConfig, `mrs-managed-user-${Date.now()}`);
   const secondaryAuth = getAuth(secondaryApp);
 
   try {
-    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, safeProfile.email, password);
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, safeProfile.email, initialPassword);
     await updateProfile(userCredential.user, { displayName: safeProfile.fullName });
     await setDoc(doc(db, "users", userCredential.user.uid), {
       uid: userCredential.user.uid,
       ...safeProfile,
+      // The user signs in with the temporary password, then is forced to set their
+      // own password before reaching the dashboard (see FirstLoginPasswordSetup).
+      mustChangePassword: true,
       createdBy: auth.currentUser.uid,
       createdByName: adminProfile?.fullName || auth.currentUser.displayName || auth.currentUser.email || "Admin",
       lastLoginDevice: "",
@@ -201,20 +219,56 @@ export async function createManagedUserAccount({ email, password, fullName, role
     await addAuditLog({
       type: "user",
       title: "Managed Account Created",
-      message: `${roleLabel(safeProfile.role)} account was created by admin.`,
+      message: `${roleLabel(safeProfile.role)} account was created by admin with a temporary password.`,
       action: "Create Managed User",
       userName: safeProfile.fullName,
       userEmail: safeProfile.email,
       userId: userCredential.user.uid,
     }).catch((error) => console.error("Audit log write failed:", error));
 
-    return userCredential.user.uid;
+    return { uid: userCredential.user.uid, temporaryPassword: initialPassword };
   } finally {
     if (secondaryAuth.currentUser) {
       await signOut(secondaryAuth).catch(() => {});
     }
     await deleteApp(secondaryApp).catch(() => {});
   }
+}
+
+// First-login flow: the user re-enters the temporary password (to reauthenticate),
+// sets a new password, and we clear the mustChangePassword flag so the dashboard
+// gate in ProtectedRoute opens.
+export async function completeFirstLoginPasswordSetup({ currentPassword, newPassword }) {
+  if (!auth?.currentUser || !db) {
+    throw new Error("You must be signed in to set your password.");
+  }
+  if (!isStrongPassword(newPassword)) {
+    throw new Error("New password must be at least 8 characters with uppercase, lowercase, and a number.");
+  }
+
+  const user = auth.currentUser;
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  try {
+    await reauthenticateWithCredential(user, credential);
+  } catch {
+    throw new Error("The temporary password is incorrect.");
+  }
+  await updatePassword(user, newPassword);
+  await setDoc(
+    doc(db, "users", user.uid),
+    { mustChangePassword: false, updatedAt: serverTimestamp() },
+    { merge: true },
+  );
+
+  await addAuditLog({
+    type: "auth",
+    title: "Password Set",
+    message: "User set a new password on first sign-in.",
+    action: "First Login Password Setup",
+    userName: user.displayName || user.email,
+    userEmail: user.email,
+    userId: user.uid,
+  }).catch((error) => console.error("Audit log write failed:", error));
 }
 
 export function requestPasswordReset(email) {

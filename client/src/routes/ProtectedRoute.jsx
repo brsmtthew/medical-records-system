@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { LoaderCircle } from "lucide-react";
 import { useAuth } from "@features/auth/context/useAuth";
+import FirstLoginPasswordSetup from "@features/auth/components/FirstLoginPasswordSetup";
 import { auth } from "@/firebaseClient";
 import { cancelAutoLogout, clearPersistentSignIn, scheduleAutoLogout } from "@services/sessionService";
 import { readSystemSettings } from "@shared/utils/systemSettings";
@@ -19,7 +20,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
       return false;
     }
   });
-  const { authLoading, isAuthenticated, isAccountDisabled, isAdmin, userRole } = useAuth();
+  const { authLoading, isAuthenticated, isAccountDisabled, isAdmin, userRole, mustChangePassword } = useAuth();
 
   useEffect(() => {
     // Locks inactive protected routes using the workstation timeout from Settings.
@@ -126,6 +127,10 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
         </div>
       </div>
     );
+  }
+
+  if (mustChangePassword) {
+    return <FirstLoginPasswordSetup />;
   }
 
   const isMissingRequiredRole = roles.length > 0 && !roles.includes(userRole);
