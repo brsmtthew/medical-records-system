@@ -31,7 +31,7 @@ function issueSession(res, user) {
   const refreshToken = signRefreshToken(user);
   saveRefreshToken(refreshToken, user);
   setRefreshCookie(res, refreshToken);
-  return { accessToken, refreshToken };
+  return { accessToken };
 }
 
 export async function login(req, res) {
@@ -81,17 +81,23 @@ export async function register(req, res) {
       throw httpError(409, "User already exists.");
     }
     if (error.code === "INVALID_ROLE") {
-      throw httpError(400, "Role must be admin or staff.");
+      throw httpError(400, "Role must be admin, staff, nurse, or doctor.");
     }
     throw error;
   }
 }
 
 export async function refresh(req, res) {
-  const token = req.body?.refreshToken || req.cookies?.refreshToken;
+  const token = req.cookies?.refreshToken;
   if (!token) throw httpError(401, "Refresh token is required.");
 
-  const payload = verifyRefreshToken(token);
+  let payload;
+  try {
+    payload = verifyRefreshToken(token);
+  } catch {
+    throw httpError(401, "Refresh token is invalid or expired.");
+  }
+
   const storedToken = consumeRefreshToken(token);
   if (!storedToken || storedToken.email !== payload.email) {
     throw httpError(401, "Refresh token is invalid.");
@@ -107,10 +113,12 @@ export async function refresh(req, res) {
 }
 
 export async function logout(req, res) {
-  const token = req.body?.refreshToken || req.cookies?.refreshToken;
+  const token = req.cookies?.refreshToken;
   if (token) revokeRefreshToken(token);
   res.clearCookie("refreshToken");
-  await writeAuditLog("logout", req, { email: req.user?.email, role: req.user?.role });
+  if (req.user) {
+    await writeAuditLog("logout", req, { email: req.user.email, role: req.user.role });
+  }
   res.status(200).json({ message: "Logged out." });
 }
 

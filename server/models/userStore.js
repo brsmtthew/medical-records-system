@@ -2,13 +2,17 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
 const users = new Map();
-const allowedRoles = new Set(["admin", "staff"]);
+const allowedRoles = new Set(["admin", "staff", "nurse", "doctor"]);
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
 export async function seedDefaultAdmin() {
+  if (process.env.NODE_ENV === "production" && (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)) {
+    throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are required to seed the production admin account.");
+  }
+
   const email = normalizeEmail(process.env.ADMIN_EMAIL || "admin@example.com");
   if (users.has(email)) return;
 
@@ -28,6 +32,13 @@ export async function seedDefaultAdmin() {
 
 export function findUserByEmail(email) {
   return users.get(normalizeEmail(email)) || null;
+}
+
+export function findUserById(id) {
+  for (const user of users.values()) {
+    if (user.id === id) return user;
+  }
+  return null;
 }
 
 export function listSafeUsers() {

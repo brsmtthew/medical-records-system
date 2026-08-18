@@ -10,18 +10,125 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function isActiveAccount(data) {
+      return !("accountStatus" in data) || data.accountStatus == "active";
+    }
+
     function isAdmin() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && userProfile().data.role == "admin"
-        && userProfile().data.accountStatus != "disabled";
+        && isActiveAccount(userProfile().data);
     }
 
     function isActiveStaff() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && userProfile().data.role in ["admin", "staff"]
-        && userProfile().data.accountStatus != "disabled";
+        && isActiveAccount(userProfile().data);
+    }
+
+    function isActiveClinicalUser() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userProfile().data.role in ["doctor", "nurse"]
+        && isActiveAccount(userProfile().data);
+    }
+
+    function isActiveSystemUser() {
+      return isActiveStaff() || isActiveClinicalUser();
+    }
+
+    function validSystemRole(role) {
+      return role in ["admin", "staff", "nurse", "doctor"];
+    }
+
+    function validAccountStatus(status) {
+      return status in ["active", "disabled", "missing"];
+    }
+
+    function validShortString(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+
+    function validOptionalImageDataUrl(value) {
+      return value == ""
+        || (
+          value is string
+          && value.size() <= 921600
+          && value.matches("^data:image/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$")
+        );
+    }
+
+    function validUserProfileShape() {
+      return (!("role" in request.resource.data) || validSystemRole(request.resource.data.role))
+        && (!("accountStatus" in request.resource.data) || validAccountStatus(request.resource.data.accountStatus))
+        && (!("fullName" in request.resource.data) || validShortString(request.resource.data.fullName, 160))
+        && (!("email" in request.resource.data) || validShortString(request.resource.data.email, 254))
+        && (!("phone" in request.resource.data) || validShortString(request.resource.data.phone, 40))
+        && (!("position" in request.resource.data) || validShortString(request.resource.data.position, 120))
+        && (!("department" in request.resource.data) || validShortString(request.resource.data.department, 120))
+        && (!("clinic" in request.resource.data) || validShortString(request.resource.data.clinic, 120))
+        && (!("specialty" in request.resource.data) || validShortString(request.resource.data.specialty, 120))
+        && (!("licenseNumber" in request.resource.data) || validShortString(request.resource.data.licenseNumber, 80))
+        && (!("restrictionReason" in request.resource.data) || validShortString(request.resource.data.restrictionReason, 300))
+        && (!("doctorDescription" in request.resource.data) || validShortString(request.resource.data.doctorDescription, 420))
+        && (!("clinicalDescription" in request.resource.data) || validShortString(request.resource.data.clinicalDescription, 420))
+        && (!("clinicalPortalSubtitle" in request.resource.data) || validShortString(request.resource.data.clinicalPortalSubtitle, 180))
+        && (!("photoDataUrl" in request.resource.data) || validOptionalImageDataUrl(request.resource.data.photoDataUrl))
+        && (!("clinicalCoverDataUrl" in request.resource.data) || validOptionalImageDataUrl(request.resource.data.clinicalCoverDataUrl));
+    }
+
+    function preservesAccountStatus() {
+      return (
+          !("accountStatus" in resource.data)
+          && !("accountStatus" in request.resource.data)
+        )
+        || (
+          "accountStatus" in resource.data
+          && "accountStatus" in request.resource.data
+          && request.resource.data.accountStatus == resource.data.accountStatus
+        );
+    }
+
+    function preservesRole() {
+      return (
+          !("role" in resource.data)
+          && !("role" in request.resource.data)
+        )
+        || (
+          "role" in resource.data
+          && "role" in request.resource.data
+          && request.resource.data.role == resource.data.role
+        );
+    }
+
+    function validChartRequestTransition(currentStatus, nextStatus) {
+      return currentStatus == nextStatus
+        || (currentStatus == "pending" && nextStatus in ["preparing", "canceled"])
+        || (currentStatus == "reviewing" && nextStatus in ["preparing", "canceled"])
+        || (currentStatus == "preparing" && nextStatus in ["ready", "canceled"])
+        || (currentStatus == "ready" && nextStatus in ["received", "inReview"])
+        || (currentStatus == "received" && nextStatus in ["inReview", "returned"])
+        || (currentStatus == "inReview" && nextStatus == "returned")
+        || (currentStatus == "returned" && nextStatus == "returnReceived")
+        || (currentStatus == "returnReceived" && nextStatus == "completed");
+    }
+
+    function isTerminalReleaseStatus(status) {
+      return status in ["released", "canceled", "voided"];
+    }
+
+    // Patient rename: only identity fields (case number/name) sync into linked records.
+    function isPatientIdentitySync() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["caseNumber", "patientName", "updatedAt"]);
+    }
+
+    // Admin soft-delete: keep the doc, just flag `deleted`; identity is untouched.
+    function isAdminSoftDelete() {
+      return isAdmin()
+        && request.resource.data.deleted == true
+        && (!("deleted" in resource.data) || resource.data.deleted != true);
     }
 
     function isValidCaseNumber(caseNumber) {
@@ -38,30 +145,54 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow create: if signedIn()
-        && request.auth.uid == userId
-        && request.resource.data.role == "staff"
+      allow create: if isAdmin()
+        && validUserProfileShape()
+        && request.resource.data.role in ["staff", "nurse", "doctor"]
         && request.resource.data.accountStatus == "active";
 
-      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow update: if (isAdmin() && request.resource.data.role in ["admin", "staff"])
+      allow read: if signedIn()
+        && (
+          request.auth.uid == userId
+          || isAdmin()
+          || (isActiveStaff() && resource.data.role == "doctor")
+        );
+      allow update: if (
+          isAdmin()
+          && validUserProfileShape()
+          && (
+            request.auth.uid != userId
+            || (preservesRole() && preservesAccountStatus())
+          )
+        )
         || (
           signedIn()
           && request.auth.uid == userId
+          && validUserProfileShape()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "fullName",
             "email",
             "phone",
             "position",
             "department",
+            "clinic",
+            "doctorDescription",
+            "clinicalDescription",
+            "clinicalPortalSubtitle",
             "photoDataUrl",
+            "clinicalCoverDataUrl",
+            "mustChangePassword",
             "updatedAt"
           ])
           && request.resource.data.role == resource.data.role
-          && request.resource.data.role in ["admin", "staff"]
-          && request.resource.data.accountStatus == resource.data.accountStatus
+          && validSystemRole(request.resource.data.role)
+          && preservesAccountStatus()
+          // The first-login flow may only clear the flag, never set it.
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(["mustChangePassword"])
+            || request.resource.data.mustChangePassword == false
+          )
         );
-      allow delete: if false;
+      allow delete: if isAdmin() && request.auth.uid != userId;
     }
 
     match /patients/{caseNumber} {
@@ -70,30 +201,250 @@ service cloud.firestore {
         && request.resource.data.caseNumber == caseNumber
         && isValidCaseNumber(request.resource.data.caseNumber)
         && request.resource.data.name is string
-        && request.resource.data.type in ["inpatient", "outpatient"];
+        && request.resource.data.type in ["inpatient", "outpatient"]
+        && validPatientDates();
       allow delete: if isAdmin() || isSelfRenameDelete("patients", caseNumber);
     }
 
     match /charts/{caseNumber} {
-      allow read: if isActiveStaff();
+      allow read: if isActiveSystemUser();
       allow create, update: if isActiveStaff()
         && request.resource.data.caseNumber == caseNumber
         && isValidCaseNumber(request.resource.data.caseNumber);
+      allow update: if isActiveClinicalUser()
+        && request.resource.data.caseNumber == caseNumber
+        && isValidCaseNumber(request.resource.data.caseNumber)
+        && (
+          (
+            resource.data.status == "available"
+            && request.resource.data.status == "borrowed"
+            && request.resource.data.borrowerId == request.auth.uid
+            && request.resource.data.borrower is string
+            && request.resource.data.borrower.size() > 0
+            && request.resource.data.department is string
+            && request.resource.data.department.size() > 0
+            && request.resource.data.activeLogId is string
+            && request.resource.data.activeLogId.size() > 0
+            && request.resource.data.borrowedAt is string
+            && request.resource.data.borrowedAt.size() > 0
+          )
+          || (
+            resource.data.status == "borrowed"
+            && resource.data.borrowerId == request.auth.uid
+            && request.resource.data.status == "available"
+            && request.resource.data.borrower == ""
+            && request.resource.data.borrowerId == ""
+            && request.resource.data.department == ""
+            && request.resource.data.borrowedAt == ""
+            && request.resource.data.activeLogId == ""
+          )
+        );
       allow delete: if isAdmin() || isSelfRenameDelete("charts", caseNumber);
     }
 
     match /chartLogs/{logId} {
-      allow read, create, update: if isActiveStaff();
+      allow read: if isActiveStaff()
+        || (isActiveClinicalUser() && resource.data.requestedById == request.auth.uid);
+      allow create, update: if isActiveStaff()
+        || (
+          isActiveClinicalUser()
+          && request.resource.data.requestedById == request.auth.uid
+          && request.resource.data.action in ["borrowed", "returned"]
+          && isValidCaseNumber(request.resource.data.caseNumber)
+        );
       allow delete: if isAdmin();
+    }
+
+    match /chartRequests/{requestId} {
+      allow read: if isActiveStaff()
+        || (isActiveClinicalUser() && resource.data.requestedById == request.auth.uid);
+      allow create: if isActiveSystemUser()
+        && request.resource.data.requestedById == request.auth.uid
+        && request.resource.data.status == "pending"
+        && isValidCaseNumber(request.resource.data.caseNumber)
+        && request.resource.data.patientName is string;
+      allow update: if (
+          isActiveStaff()
+          && request.resource.data.requestedById == resource.data.requestedById
+          && request.resource.data.caseNumber == resource.data.caseNumber
+          && request.resource.data.patientName == resource.data.patientName
+          && validChartRequestTransition(resource.data.status, request.resource.data.status)
+          && request.resource.data.status != "received"
+        )
+        || (
+          isActiveStaff()
+          && request.resource.data.requestedById == resource.data.requestedById
+          && request.resource.data.status == resource.data.status
+          && isPatientIdentitySync()
+        )
+        || (
+          isActiveClinicalUser()
+          && resource.data.requestedById == request.auth.uid
+          && request.resource.data.requestedById == resource.data.requestedById
+          && request.resource.data.caseNumber == resource.data.caseNumber
+          && request.resource.data.patientName == resource.data.patientName
+          && (
+            (
+              resource.data.status == "pending"
+              && request.resource.data.status == "canceled"
+            )
+            || (
+              resource.data.status == "ready"
+              && request.resource.data.status in ["received", "inReview"]
+            )
+            || (
+              resource.data.status == "received"
+              && request.resource.data.status in ["inReview", "returned"]
+            )
+            || (
+              resource.data.status == "inReview"
+              && request.resource.data.status == "returned"
+            )
+          )
+        )
+        || (
+          isAdminSoftDelete()
+          && request.resource.data.requestedById == resource.data.requestedById
+          && request.resource.data.caseNumber == resource.data.caseNumber
+          && request.resource.data.patientName == resource.data.patientName
+        )
+        || (
+          // Admin override: cancel an in-flight request from any status.
+          isAdmin()
+          && request.resource.data.status == "canceled"
+          && request.resource.data.requestedById == resource.data.requestedById
+          && request.resource.data.caseNumber == resource.data.caseNumber
+          && request.resource.data.patientName == resource.data.patientName
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /userNotifications/{notificationId} {
+      allow read: if signedIn()
+        && (
+          resource.data.targetUserId == request.auth.uid
+          || (isActiveStaff() && resource.data.targetRole == "medicalRecords")
+        );
+      allow create: if isActiveSystemUser()
+        && request.resource.data.sourceUserId == request.auth.uid
+        && (
+          request.resource.data.targetUserId is string
+          || request.resource.data.targetRole == "medicalRecords"
+        );
+      allow update, delete: if false;
     }
 
     match /departments/{departmentId} {
       allow read: if isActiveStaff();
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /physicians/{physicianId} {
+      allow read: if isActiveStaff();
+      allow create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /nurses/{nurseId} {
+      allow read: if isActiveStaff();
+      allow create, update: if isActiveStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /medicalDocumentRequests/{requestId} {
+      allow read: if isActiveStaff();
+      allow create: if isActiveStaff() && validProcessDates();
+      allow update: if (isActiveStaff()
+          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync())
+          && validProcessDates())
+        || isAdminSoftDelete();
+      allow delete: if isAdmin();
+    }
+
+    match /labResultRequests/{requestId} {
+      allow read: if isActiveStaff();
+      allow create: if isActiveStaff() && validProcessDates();
+      allow update: if (isActiveStaff()
+          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync())
+          && validProcessDates())
+        || isAdminSoftDelete();
+      allow delete: if isAdmin();
+    }
+
+    // Shared date guards. "Not future" ceiling is tomorrow's UTC date (~1-day
+    // buffer for clients ahead of UTC); ordering compares local date strings.
+    function dateStringOf(ts) {
+      return string(ts.year()) + '-'
+        + (ts.month() < 10 ? '0' + string(ts.month()) : string(ts.month())) + '-'
+        + (ts.day() < 10 ? '0' + string(ts.day()) : string(ts.day()));
+    }
+    function maxDateAllowed() {
+      return dateStringOf(request.time + duration.value(1, 'd'));
+    }
+    function dateFieldStr(field) {
+      return (field in request.resource.data && request.resource.data[field] is string)
+        ? request.resource.data[field] : '';
+    }
+    function notFutureField(field) {
+      return dateFieldStr(field) == '' || dateFieldStr(field).split('T')[0] <= maxDateAllowed();
+    }
+    // 'later' must not precede 'earlier' when both are present.
+    function orderedFields(earlier, later) {
+      return dateFieldStr(earlier) == '' || dateFieldStr(later) == ''
+        || dateFieldStr(later) >= dateFieldStr(earlier);
+    }
+    // Civil documents: no future birthday/death, and death not before birthday.
+    function validCivilDates() {
+      return notFutureField('birthday')
+        && notFutureField('dateOfDeath')
+        && orderedFields('birthday', 'dateOfDeath');
+    }
+    // Tracking timestamps must not be in the future. Ordering is enforced on the
+    // client form; reviewed/released are system-set in UTC while requestedAt is
+    // local, so cross-field string ordering is unreliable here.
+    function validProcessDates() {
+      return notFutureField('requestedAt')
+        && notFutureField('reviewedAt')
+        && notFutureField('releasedAt');
+    }
+    // Patients: no future admission/discharge, and discharge not before admission.
+    function validPatientDates() {
+      return notFutureField('admissionDate')
+        && notFutureField('dischargeDate')
+        && orderedFields('admissionDate', 'dischargeDate');
+    }
+
+    match /vitalCertificateRequests/{requestId} {
+      allow read: if isActiveStaff();
+      allow create: if isActiveStaff() && validCivilDates() && validProcessDates();
+      allow update: if (isActiveStaff()
+          && (!isTerminalReleaseStatus(resource.data.releaseStatus) || isPatientIdentitySync())
+          && validCivilDates() && validProcessDates())
+        || isAdminSoftDelete();
+      allow delete: if isAdmin();
+    }
+
+    function validAuditLogShape() {
+      return request.resource.data.createdAt == request.time
+        && (!("userId" in request.resource.data) || validShortString(request.resource.data.userId, 128))
+        && (!("type" in request.resource.data) || validShortString(request.resource.data.type, 30))
+        && (!("title" in request.resource.data) || validShortString(request.resource.data.title, 120))
+        && (!("message" in request.resource.data) || validShortString(request.resource.data.message, 500))
+        && (!("action" in request.resource.data) || validShortString(request.resource.data.action, 120))
+        && (!("patientName" in request.resource.data) || validShortString(request.resource.data.patientName, 160))
+        && (!("caseNumber" in request.resource.data) || validShortString(request.resource.data.caseNumber, 60))
+        && (!("userName" in request.resource.data) || validShortString(request.resource.data.userName, 160))
+        && (!("userEmail" in request.resource.data) || validShortString(request.resource.data.userEmail, 254));
     }
 
     match /auditLogs/{logId} {
-      allow create: if isActiveStaff() && request.resource.data.userId == request.auth.uid;
+      // createdAt is pinned to request.time; non-admins can only log their own uid.
+      allow create: if validAuditLogShape()
+        && (
+          isAdmin()
+          || (isActiveSystemUser() && request.resource.data.userId == request.auth.uid)
+        );
       allow read, delete: if isAdmin();
       allow update: if false;
     }

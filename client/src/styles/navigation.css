@@ -1,0 +1,37 @@
+@layer components {
+  .mrs-nav-list {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .mrs-nav-pill {
+    align-items: center;
+    border: 1px solid transparent;
+    border-radius: 0.625rem;
+    color: #020617;
+    display: inline-flex;
+    font-weight: 700;
+    min-height: 2.25rem;
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      color 160ms ease,
+      transform 160ms ease;
+  }
+
+  .mrs-nav-pill:hover {
+    background: rgba(255, 255, 255, 0.76);
+    border-color: #dbe5ef;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+    transform: translateY(-1px);
+  }
+
+  .mrs-nav-pill-active {
+    background: #ffffff;
+    border-color: #dbe5ef;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    color: #020617;
+  }
+
+}

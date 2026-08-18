@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
-import { useAuth } from "../context/useAuth";
-import { auth } from "../firebaseClient";
-import { cancelAutoLogout, scheduleAutoLogout } from "../services/sessionService";
-import { readSystemSettings } from "../utils/systemSettings";
+import { LoaderCircle } from "lucide-react";
+import { useAuth } from "@features/auth/context/useAuth";
+import FirstLoginPasswordSetup from "@features/auth/components/FirstLoginPasswordSetup";
+import { auth } from "@/firebaseClient";
+import { cancelAutoLogout, clearPersistentSignIn, scheduleAutoLogout } from "@services/sessionService";
+import { readSystemSettings } from "@shared/utils/systemSettings";
 
 export default function ProtectedRoute({ children, requireAdmin = false, roles = [] }) {
   const location = useLocation();
@@ -12,12 +14,19 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
   const lastActivityRef = useRef(0);
   const [sessionWarning, setSessionWarning] = useState(false);
   const [privacyAcknowledged, setPrivacyAcknowledged] = useState(() => {
-    return localStorage.getItem("mrs-confidentiality-ack") === "true";
+    try {
+      return localStorage.getItem("mrs-confidentiality-ack") === "true";
+    } catch {
+      return false;
+    }
   });
-  const { authLoading, isAuthenticated, isAccountDisabled, isAdmin, userRole } = useAuth();
+  const { authLoading, isAuthenticated, isAccountDisabled, isAdmin, userRole, mustChangePassword } = useAuth();
 
   useEffect(() => {
-    // Locks the session after the fixed security timeout inside protected pages.
+    // Locks inactive protected routes using the workstation timeout from Settings.
+    // The idle lock is enforced even when "Keep signed in" is on: that option only
+    // persists the credential across browser restarts, it must not leave patient
+    // data exposed on an unattended shared workstation.
     if (!isAuthenticated || !auth) return undefined;
 
     const settings = readSystemSettings();
@@ -26,7 +35,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
     const warningMs = Math.min(60 * 1000, timeoutMs / 2);
     const resetActivity = () => {
       lastActivityRef.current = Date.now();
-      setSessionWarning(false);
+      setSessionWarning((isVisible) => (isVisible ? false : isVisible));
     };
     // Checks inactivity on an interval so passive users are signed out.
     const checkActivity = async () => {
@@ -60,8 +69,14 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
   }, [isAuthenticated, navigate]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      cancelAutoLogout();
+      return undefined;
+    }
+
+    // Keeps legacy backend-token sessions from outliving their JWT expiry.
     scheduleAutoLogout(() => {
-      if (auth) signOut(auth).catch(console.error);
+      if (auth) signOut(auth).catch(() => {});
       navigate("/", {
         replace: true,
         state: {
@@ -71,14 +86,17 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
     });
 
     return () => cancelAutoLogout();
-  }, [navigate]);
+  }, [isAuthenticated, navigate]);
 
   if (authLoading) {
     return (
       <div className="mrs-shell min-h-screen flex items-center justify-center font-sans">
-        <div className="mrs-surface rounded-2xl px-6 py-5">
-          <p className="text-sm font-black uppercase text-slate-800">Checking Access</p>
-          <p className="text-xs font-bold text-slate-400 mt-1">Please wait...</p>
+        <div className="mrs-surface flex items-center gap-3 rounded-2xl px-6 py-5">
+          <LoaderCircle className="size-5 animate-spin text-green-700" />
+          <div>
+            <p className="text-sm font-black uppercase text-slate-800">Checking Access</p>
+            <p className="text-xs font-bold text-slate-400 mt-1">Please wait...</p>
+          </div>
         </div>
       </div>
     );
@@ -98,7 +116,10 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
           </p>
           <button
             type="button"
-            onClick={() => auth && signOut(auth)}
+            onClick={() => {
+              clearPersistentSignIn();
+              if (auth) signOut(auth);
+            }}
             className="mrs-primary-button mt-6 rounded-xl px-5 py-3 text-xs font-black uppercase"
           >
             Return to Login
@@ -106,6 +127,10 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
         </div>
       </div>
     );
+  }
+
+  if (mustChangePassword) {
+    return <FirstLoginPasswordSetup />;
   }
 
   const isMissingRequiredRole = roles.length > 0 && !roles.includes(userRole);
@@ -130,7 +155,11 @@ export default function ProtectedRoute({ children, requireAdmin = false, roles =
             <button
               type="button"
               onClick={() => {
-                localStorage.setItem("mrs-confidentiality-ack", "true");
+                try {
+                  localStorage.setItem("mrs-confidentiality-ack", "true");
+                } catch {
+                  // Browser storage policy may block persistence; acknowledge for this session.
+                }
                 setPrivacyAcknowledged(true);
               }}
               className="mrs-primary-button mt-5 w-full rounded-xl px-4 py-3 text-xs font-black uppercase"

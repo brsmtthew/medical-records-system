@@ -1,19 +1,29 @@
 import React, { useState } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
-import Sidebar from "../components/Sidebar";
-import Navbar from "../components/Navbar";
+import Sidebar from "./Sidebar";
+import Navbar from "./Navbar";
+import { useChartRequestBadgeCount } from "@features/charts/hooks/useChartRequestBadgeCount";
 
 export default function DashboardLayout({ children }) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const chartRequestCount = useChartRequestBadgeCount();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    return localStorage.getItem("mrs-sidebar-collapsed") === "true";
+    try {
+      return localStorage.getItem("mrs-sidebar-collapsed") === "true";
+    } catch {
+      return false;
+    }
   });
 
   // Persists the desktop sidebar width preference between page loads.
   const toggleSidebarCollapsed = () => {
     setIsSidebarCollapsed((value) => {
       const nextValue = !value;
-      localStorage.setItem("mrs-sidebar-collapsed", String(nextValue));
+      try {
+        localStorage.setItem("mrs-sidebar-collapsed", String(nextValue));
+      } catch {
+        // Workstation browser policy can block localStorage; keep the UI state in memory.
+      }
       return nextValue;
     });
   };
@@ -21,10 +31,11 @@ export default function DashboardLayout({ children }) {
   return (
     <div className="mrs-shell mrs-deploy-fit relative flex h-dvh overflow-hidden font-sans">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-[60] h-1 bg-[linear-gradient(90deg,#166534,#2563eb,#f59e0b)]" />
-      <aside className="hidden lg:block shrink-0">
+      <aside className="hidden h-full shrink-0 lg:block">
         <Sidebar
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={toggleSidebarCollapsed}
+          chartRequestCount={chartRequestCount}
         />
       </aside>
 
@@ -49,6 +60,7 @@ export default function DashboardLayout({ children }) {
                 showCloseButton
                 onClose={() => setIsMobileSidebarOpen(false)}
                 onNavigate={() => setIsMobileSidebarOpen(false)}
+                chartRequestCount={chartRequestCount}
               />
             </Motion.aside>
           </div>
@@ -63,7 +75,7 @@ export default function DashboardLayout({ children }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            className="flex h-full min-h-0 flex-col overflow-hidden p-3 md:p-4 2xl:p-5"
+            className="mrs-main-content flex h-full min-h-0 flex-col overflow-hidden p-2.5 sm:p-3 md:p-4 2xl:p-5"
           >
             <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
           </Motion.div>

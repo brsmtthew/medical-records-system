@@ -1,0 +1,251 @@
+import React, { useState } from "react";
+import { motion as Motion } from "framer-motion";
+import { useNavigate, useLocation } from "react-router-dom";
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  FileSearch,
+  BarChart3,
+  BadgeCheck,
+  ClipboardList,
+  Files,
+  FlaskConical,
+  PrinterCheck,
+  Settings,
+  UserCog,
+  ChevronLeft,
+  ChevronRight,
+  X,
+} from "lucide-react";
+import logo from "@assets/TGMCI_LOGO.png";
+import fallbackLogo from "@assets/tgmci_logo.jpg";
+import { useAuth } from "@features/auth/context/useAuth";
+import { roleLabel } from "@shared/constants/userRoles";
+
+export default function Sidebar({
+  isCollapsed = false,
+  onToggleCollapse,
+  onNavigate,
+  onClose,
+  showCloseButton = false,
+  chartRequestCount = 0,
+}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isAdmin, isMedicalRecordsUser, userRole } = useAuth();
+  const [logoSrc, setLogoSrc] = useState(logo);
+  const [logoFailed, setLogoFailed] = useState(false);
+  // Defines the app sections used by both desktop and mobile navigation.
+  const recordsNavSections = [
+    {
+      label: "Workspace",
+      items: [
+        { name: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+        { name: "Patients", icon: Users, path: "/patients" },
+      ],
+    },
+    {
+      label: "Charts",
+      items: [
+        { name: "Chart Requests", icon: ClipboardList, path: "/chart-requests", badge: chartRequestCount },
+        { name: "Chart Circulation", icon: FileText, path: "/charts" },
+        { name: "Chart Viewing", icon: FileSearch, path: "/chart-viewing" },
+      ],
+    },
+    {
+      label: "Documents",
+      items: [
+        { name: "Medical Documents", icon: Files, path: "/medical-documents" },
+        { name: "Laboratory Results", icon: FlaskConical, path: "/lab-results" },
+        { name: "Civil Documents", icon: BadgeCheck, path: "/vital-certificates" },
+      ],
+    },
+    {
+      label: "Reports",
+      items: [
+        { name: "Chart Reports", icon: BarChart3, path: "/reports" },
+        { name: "Medical Reports", icon: ClipboardList, path: "/tracking-reports" },
+        { name: "Print Reports", icon: PrinterCheck, path: "/print-reports" },
+      ],
+    },
+    {
+      label: "Administration",
+      items: [
+        ...(isAdmin ? [{ name: "Users", icon: UserCog, path: "/users" }] : []),
+        { name: "Settings", icon: Settings, path: "/settings" },
+      ],
+    },
+  ];
+  const clinicalNavSections = [
+    {
+      label: roleLabel(userRole),
+      items: [
+        { name: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+      ],
+    },
+    {
+      label: "Chart Requests",
+      items: [
+        { name: "Chart Requests", icon: ClipboardList, path: "/chart-requests" },
+        { name: "Transactions", icon: Files, path: "/chart-transactions", badge: chartRequestCount },
+        { name: "Return Charts", icon: FileText, path: "/chart-return" },
+      ],
+    },
+    {
+      label: "Reports",
+      items: [
+        { name: "Chart Reports", icon: BarChart3, path: "/reports" },
+      ],
+    },
+    {
+      label: "Preferences",
+      items: [
+        { name: "Settings", icon: Settings, path: "/clinical-settings" },
+      ],
+    },
+  ];
+  const navSections = isMedicalRecordsUser ? recordsNavSections : clinicalNavSections;
+
+  const renderNavItem = (item, options = {}) => {
+    const isActive = location.pathname === item.path;
+    const Icon = item.icon;
+    const collapsed = options.collapsed ?? isCollapsed;
+    const badgeCount = Number(item.badge) || 0;
+    const badgeLabel = badgeCount > 9 ? "9+" : String(badgeCount);
+
+    return (
+      <Motion.button
+        type="button"
+        key={item.name}
+        onClick={() => {
+          navigate(item.path);
+          onNavigate?.();
+        }}
+        whileHover={{ x: 4 }}
+        whileTap={{ scale: 0.98 }}
+        title={collapsed ? item.name : undefined}
+        className={`
+          mrs-sidebar-link group relative flex w-full cursor-pointer items-center rounded-xl border text-left transition-all duration-300 ease-out
+          ${collapsed ? "justify-center px-0 py-1 2xl:py-1.5" : "gap-2.5 px-2.5 py-1.5 2xl:gap-3 2xl:px-3 2xl:py-2"}
+          ${isActive ? "mrs-sidebar-link-active" : ""}
+        `}
+      >
+        <span className={`mrs-sidebar-icon-frame relative flex shrink-0 items-center justify-center rounded-lg transition-all ${
+          collapsed ? "size-8 2xl:size-9" : "size-7 2xl:size-8"
+        }`}>
+          <Icon
+            size={collapsed ? 18 : 17}
+            strokeWidth={2.2}
+          />
+          {collapsed && badgeCount > 0 && (
+            <span className="absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[9px] font-black leading-3 text-white shadow-sm">
+              {badgeLabel}
+            </span>
+          )}
+        </span>
+
+        {!collapsed && (
+          <span className="min-w-0 flex-1 whitespace-nowrap text-xs font-bold tracking-wide 2xl:text-sm">
+            {item.name}
+          </span>
+        )}
+
+        {!collapsed && badgeCount > 0 && (
+          <span className="ml-auto flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-sm">
+            {badgeLabel}
+          </span>
+        )}
+
+        {isActive && !collapsed && badgeCount === 0 && (
+          <Motion.div
+            layoutId="activeIndicator"
+            className="ml-auto h-1.5 w-1.5 rounded-full bg-green-600"
+          />
+        )}
+      </Motion.button>
+    );
+  };
+
+  return (
+    <div
+      className={`mrs-sidebar relative flex h-full min-h-0 select-none flex-col overflow-hidden border-r text-slate-100 shadow-xl transition-all duration-300 ease-out ${
+        isCollapsed ? "w-20 p-2.5 2xl:w-24" : "w-64 p-3 2xl:w-72"
+      }`}
+    >
+
+      <div className={`mb-2.5 flex shrink-0 gap-3 ${isCollapsed ? "flex-col items-center" : "items-center"}`}>
+        <div className={`flex items-center min-w-0 ${isCollapsed ? "justify-center" : "w-full"}`}>
+          <div
+            className={`mrs-logo-frame shrink-0 rounded-xl border border-white/15 flex items-center justify-center shadow-xl shadow-slate-950/20 overflow-hidden transition-all duration-300 ${
+              isCollapsed ? "h-10 w-10 p-1.5 2xl:h-11 2xl:w-11" : "h-12 w-full p-1.5 2xl:h-[3.1rem]"
+            }`}
+          >
+            {logoFailed ? (
+              <span className="text-sm font-black uppercase tracking-wide text-cyan-800">
+                TGMCI
+              </span>
+            ) : (
+              <img
+                src={logoSrc}
+                alt="TGMCI"
+                className="h-full w-full object-contain"
+                onError={() => {
+                  if (logoSrc !== fallbackLogo) {
+                    setLogoSrc(fallbackLogo);
+                    return;
+                  }
+                  setLogoFailed(true);
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        {showCloseButton && (
+          <Motion.button
+            whileHover={{ rotate: 90, scale: 1.03 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={onClose}
+            className="mrs-icon-button mrs-mobile-close-button ml-auto shrink-0"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </Motion.button>
+        )}
+      </div>
+
+      <nav className={`mrs-sidebar-nav min-h-0 flex-1 overflow-y-auto pr-0.5 ${isCollapsed ? "space-y-1" : "space-y-1.5 2xl:space-y-2"}`}>
+        {navSections.map((section) => (
+          section.items.length > 0 && (
+            <div key={section.label} className="space-y-1">
+              {!isCollapsed && (
+                <div className="mrs-sidebar-section-header flex items-center gap-2 px-2.5 py-0.5">
+                  <p className="text-[8px] font-black uppercase tracking-[0.26em]">
+                    {section.label}
+                  </p>
+                </div>
+              )}
+              {section.items.map((item) => renderNavItem(item))}
+            </div>
+          )
+        ))}
+      </nav>
+
+      <div className="mrs-sidebar-footer mt-2 shrink-0 border-t pt-2">
+        {!showCloseButton && onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className={`mrs-sidebar-toggle hidden lg:flex items-center rounded-lg border text-slate-300 transition-all duration-300 ${
+              isCollapsed ? "mx-auto size-9 justify-center 2xl:size-10" : "w-full justify-between px-3 py-2"
+            }`}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {!isCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">Panel</span>}
+            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

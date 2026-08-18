@@ -7,14 +7,17 @@ import {
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
   writeBatch,
 } from "firebase/firestore";
-import { auth, db } from "../firebaseClient";
-import { sortNewestFirst } from "../utils/recordSorting";
-import { sanitizeRecordPayload, sanitizeText } from "../utils/security";
+import { auth, db } from "@/firebaseClient";
+import { sortNewestFirst } from "@shared/utils/recordSorting";
+import { sanitizeRecordPayload, sanitizeText } from "@shared/utils/security";
+import { allUserRoles, medicalRecordsRoles, normalizeUserRole, userRoles } from "@shared/constants/userRoles";
+import { assertChartRequestTransition } from "@shared/utils/workflowGuards";
 
 export const recordsUnavailableMessage = "Firebase database is not configured.";
 export const fallbackDepartments = [
@@ -43,12 +46,28 @@ export const duplicateCaseNumberMessage = "A patient with this case number alrea
 export const duplicatePatientStayMessage = "This inpatient record overlaps a previous inpatient admission period.";
 export const patientBeforeFirstRecordMessage = "Readmission date cannot be earlier than this patient's first hospital record.";
 
+const patientSnapshotCollections = [
+  "chartLogs",
+  "chartRequests",
+  "medicalDocumentRequests",
+  "labResultRequests",
+  "vitalCertificateRequests",
+];
+
 let activeUserProfile = null;
 
 // AuthProvider keeps this profile live; CRUD calls reuse it so each write does not
 // first wait on an extra user-document read.
 export function syncActiveUserProfile(profile) {
   activeUserProfile = profile?.uid ? profile : null;
+}
+
+export function getActiveUserProfile(userId) {
+  return activeUserProfile?.uid === userId ? activeUserProfile : null;
+}
+
+function isActiveProfile(profile = {}) {
+  return !["disabled", "deleted", "missing"].includes(profile.accountStatus || "active");
 }
 
 // Returns the configured Firestore instance or fails fast with a user-facing setup message.
@@ -59,7 +78,7 @@ function requireDb() {
   return db;
 }
 
-async function requireActiveRole({ adminOnly = false } = {}) {
+export async function requireActiveRole({ adminOnly = false, roles = medicalRecordsRoles } = {}) {
   const database = requireDb();
   const user = auth?.currentUser;
   if (!user) {
@@ -71,14 +90,17 @@ async function requireActiveRole({ adminOnly = false } = {}) {
     const profileSnapshot = await getDoc(doc(database, "users", user.uid));
     profile = profileSnapshot.exists() ? { uid: user.uid, ...profileSnapshot.data() } : {};
   }
-  const isActive = profile.accountStatus !== "disabled";
-  const role = profile.role === "admin" ? "admin" : "staff";
+  const isActive = isActiveProfile(profile);
+  const role = normalizeUserRole(profile.role);
 
   if (!isActive) {
-    throw new Error("This account is disabled.");
+    throw new Error("This account is not active.");
   }
-  if (adminOnly && role !== "admin") {
+  if (adminOnly && role !== userRoles.admin) {
     throw new Error("Administrator access is required for this action.");
+  }
+  if (!adminOnly && roles.length > 0 && !roles.includes(role)) {
+    throw new Error("Medical Records access is required for this action.");
   }
 
   return { user, profile, role };
@@ -130,6 +152,9 @@ function sanitizePatientPayload(patient) {
     type: { maxLength: 30 },
     recordType: { maxLength: 30 },
     department: { maxLength: 120, uppercase: true },
+    attendingDoctorId: { maxLength: 120 },
+    attendingDoctorName: { maxLength: 160 },
+    attendingDoctorClinic: { maxLength: 120 },
     admissionDate: { maxLength: 20 },
     dischargeDate: { maxLength: 20 },
   });
@@ -141,9 +166,16 @@ function sanitizeChartPayload(chart) {
     caseNumber: { maxLength: 60, uppercase: true },
     patientName: { maxLength: 160, uppercase: true },
     patientDepartment: { maxLength: 120, uppercase: true },
+    attendingDoctorId: { maxLength: 120 },
+    attendingDoctorName: { maxLength: 160 },
+    attendingDoctorClinic: { maxLength: 120 },
     recordType: { maxLength: 30 },
+    patientType: { maxLength: 30 },
+    admissionDate: { maxLength: 20 },
+    dischargeDate: { maxLength: 20 },
     status: { maxLength: 30 },
     borrower: { maxLength: 160 },
+    borrowerId: { maxLength: 120 },
     department: { maxLength: 120, uppercase: true },
     borrowedAt: { maxLength: 40 },
     dueDate: { maxLength: 40 },
@@ -157,6 +189,7 @@ function sanitizeChartLogPayload(log) {
     caseNumber: { maxLength: 60, uppercase: true },
     patientName: { maxLength: 160, uppercase: true },
     borrowedBy: { maxLength: 160 },
+    requestedById: { maxLength: 120 },
     returnedBy: { maxLength: 160 },
     department: { maxLength: 120, uppercase: true },
     action: { maxLength: 30 },
@@ -187,14 +220,64 @@ function sanitizeUserAccessPayload(updates) {
   const safeUpdates = sanitizeRecordPayload(updates, {
     role: { maxLength: 30 },
     accountStatus: { maxLength: 30 },
+    department: { maxLength: 120, uppercase: true },
+    clinic: { maxLength: 120 },
+    specialty: { maxLength: 120 },
+    licenseNumber: { maxLength: 80, uppercase: true },
+    position: { maxLength: 120 },
     restrictionReason: { maxLength: 300 },
   });
 
-  if (safeUpdates.role && !["admin", "staff"].includes(safeUpdates.role)) {
-    throw new Error("Role must be admin or staff.");
+  if (safeUpdates.role && !allUserRoles.includes(safeUpdates.role)) {
+    throw new Error("Role must be admin, staff, nurse, or doctor.");
   }
 
   return safeUpdates;
+}
+
+// Cleans targeted bell notifications exchanged between clinical users and Records staff.
+function sanitizeUserNotificationPayload(notification) {
+  return sanitizeRecordPayload(notification, {
+    type: { maxLength: 30 },
+    title: { maxLength: 120 },
+    message: { maxLength: 500 },
+    patientName: { maxLength: 160, uppercase: true },
+    caseNumber: { maxLength: 60, uppercase: true },
+    action: { maxLength: 120 },
+    sourceUserId: { maxLength: 120 },
+    sourceUserName: { maxLength: 160 },
+    targetUserId: { maxLength: 120 },
+    targetRole: { maxLength: 60 },
+    targetPath: { maxLength: 200 },
+  });
+}
+
+// Cleans online chart request rows from clinical users and Records staff.
+function sanitizeChartRequestPayload(request) {
+  return sanitizeRecordPayload(request, {
+    caseNumber: { maxLength: 60, uppercase: true },
+    patientName: { maxLength: 160, uppercase: true },
+    requestedBy: { maxLength: 160 },
+    requestedByEmail: { maxLength: 254 },
+    requestedByRole: { maxLength: 30 },
+    requestedByDepartment: { maxLength: 120, uppercase: true },
+    requestedByClinic: { maxLength: 120 },
+    purpose: { maxLength: 300 },
+    priority: { maxLength: 30 },
+    status: { maxLength: 30 },
+    reviewedAt: { maxLength: 40 },
+    preparedBy: { maxLength: 160 },
+    preparedAt: { maxLength: 40 },
+    readyAt: { maxLength: 40 },
+    receivedAt: { maxLength: 40 },
+    borrowedAt: { maxLength: 40 },
+    returnedAt: { maxLength: 40 },
+    returnReceivedAt: { maxLength: 40 },
+    completedAt: { maxLength: 40 },
+    canceledAt: { maxLength: 40 },
+    activeLogId: { maxLength: 120 },
+    remarks: { maxLength: 500 },
+  });
 }
 
 // Converts date inputs into comparable timestamps.
@@ -219,46 +302,104 @@ function patientStayOverlaps(firstPatient, secondPatient) {
 
   if (!firstAdmission || !firstDischarge || !secondAdmission || !secondDischarge) return false;
 
-  return firstAdmission < secondDischarge && secondAdmission < firstDischarge;
+  return firstAdmission <= secondDischarge && secondAdmission <= firstDischarge;
 }
 
 // Prevents new or edited readmission dates from predating the first known record.
-async function patientAdmissionBeforeFirstRecordExists(database, patient, ignoredCaseNumber = "") {
+function patientAdmissionBeforeFirstRecordExistsInRows(patientRows, patient, ignoredCaseNumber = "") {
   const candidate = normalizePatientStay(patient);
   const candidateAdmission = dateValue(candidate.admissionDate);
   if (!candidate.name || !candidateAdmission) return false;
 
-  const patientRows = await getDocs(
-    query(collection(database, "patients"), where("name", "==", candidate.name)),
-  );
-
-  const firstExistingAdmission = patientRows.docs
-    .filter((patientSnapshot) => !ignoredCaseNumber || patientSnapshot.id !== ignoredCaseNumber)
-    .map((patientSnapshot) => dateValue(patientSnapshot.data().admissionDate))
+  const firstExistingAdmission = patientRows
+    .filter((row) => !ignoredCaseNumber || row.id !== ignoredCaseNumber)
+    .map((row) => dateValue(row.admissionDate))
     .filter(Boolean)
     .sort((first, second) => first - second)[0];
 
   return Boolean(firstExistingAdmission && candidateAdmission < firstExistingAdmission);
 }
 
-// Checks Firestore for an existing inpatient stay that overlaps the candidate row.
-async function overlappingPatientStayExists(database, patient, ignoredCaseNumber = "") {
+async function matchingPatientRows(database, patient) {
   const candidate = normalizePatientStay(patient);
-  if (!candidate.name || !candidate.admissionDate) return false;
+  if (!candidate.name) return [];
 
   const patientRows = await getDocs(
     query(collection(database, "patients"), where("name", "==", candidate.name)),
   );
 
-  return patientRows.docs.some((patientSnapshot) => {
-    if (ignoredCaseNumber && patientSnapshot.id === ignoredCaseNumber) return false;
+  return snapshotRows(patientRows);
+}
 
-    const row = normalizePatientStay(patientSnapshot.data());
+async function patientAdmissionBeforeFirstRecordExists(database, patient, ignoredCaseNumber = "") {
+  return patientAdmissionBeforeFirstRecordExistsInRows(
+    await matchingPatientRows(database, patient),
+    patient,
+    ignoredCaseNumber,
+  );
+}
+
+async function commitBatchedUpdates(database, updates) {
+  for (let index = 0; index < updates.length; index += 450) {
+    const batch = writeBatch(database);
+    updates.slice(index, index + 450).forEach(({ ref, payload }) => {
+      batch.update(ref, payload);
+    });
+    await batch.commit();
+  }
+}
+
+async function syncPatientSnapshotRows(database, previousCaseNumber, safePatient) {
+  const nextCaseNumber = safePatient.caseNumber;
+  const nextPatientName = safePatient.name;
+  const snapshots = await Promise.all(
+    patientSnapshotCollections.map((collectionName) => (
+      getDocs(query(collection(database, collectionName), where("caseNumber", "==", previousCaseNumber)))
+    )),
+  );
+  const updates = [];
+
+  snapshots.forEach((snapshot) => {
+    snapshot.docs.forEach((rowSnapshot) => {
+      const row = rowSnapshot.data();
+      if (row.caseNumber === nextCaseNumber && row.patientName === nextPatientName) return;
+
+      updates.push({
+        ref: rowSnapshot.ref,
+        payload: {
+          caseNumber: nextCaseNumber,
+          patientName: nextPatientName,
+          updatedAt: serverTimestamp(),
+        },
+      });
+    });
+  });
+
+  await commitBatchedUpdates(database, updates);
+}
+
+// Checks Firestore for an existing inpatient stay that overlaps the candidate row.
+function overlappingPatientStayExistsInRows(patientRows, patient, ignoredCaseNumber = "") {
+  const candidate = normalizePatientStay(patient);
+  if (!candidate.name || !candidate.admissionDate) return false;
+
+  return patientRows.some((patientRow) => {
+    if (ignoredCaseNumber && patientRow.id === ignoredCaseNumber) return false;
+
+    const row = normalizePatientStay(patientRow);
     return (
       row.name === candidate.name &&
       patientStayOverlaps(row, candidate)
     );
   });
+}
+
+async function overlappingPatientStayExists(database, patient, ignoredCaseNumber = "") {
+  return overlappingPatientStayExistsInRows(
+    await matchingPatientRows(database, patient),
+    patient,
+    ignoredCaseNumber,
+  );
 }
 
 // Streams patient rows sorted by most recent activity.
@@ -293,6 +434,24 @@ export function subscribeToChartLogs(onRows, onError) {
   }
 
   return onSnapshot(collection(db, "chartLogs"), (snapshot) => {
+    onRows(sortNewestFirst(snapshotRows(snapshot)));
+  }, onError);
+}
+
+// Streams chart requests for clinical users and Medical Records staff.
+export function subscribeToChartRequests(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  const user = auth?.currentUser;
+  const role = normalizeUserRole(activeUserProfile?.role);
+  const requestQuery = user && !medicalRecordsRoles.includes(role)
+    ? query(collection(db, "chartRequests"), where("requestedById", "==", user.uid))
+    : collection(db, "chartRequests");
+
+  return onSnapshot(requestQuery, (snapshot) => {
     onRows(sortNewestFirst(snapshotRows(snapshot)));
   }, onError);
 }
@@ -345,6 +504,157 @@ export function subscribeToUsers(onRows, onError) {
   }, onError);
 }
 
+// Streams active doctor profiles for attending-physician dropdowns.
+export function subscribeToDoctors(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  return onSnapshot(query(collection(db, "users"), where("role", "==", userRoles.doctor)), (snapshot) => {
+    onRows(sortByUserName(snapshotRows(snapshot).filter((row) => row.accountStatus !== "disabled")));
+  }, onError);
+}
+
+// Physician directory: every attending doctor lives here (with or without a hospital
+// login), so the patient registration dropdown is not limited to user accounts.
+// Visiting/affiliated/no-clinic doctors are registered here and optionally linked to
+// a login account later.
+function sanitizePhysicianPayload(physician) {
+  return sanitizeRecordPayload(physician, {
+    name: { maxLength: 160, uppercase: true },
+    clinic: { maxLength: 120, uppercase: true },
+    specialty: { maxLength: 120 },
+    licenseNumber: { maxLength: 80 },
+    doctorType: { maxLength: 30 },
+    status: { maxLength: 20 },
+    linkedUserId: { maxLength: 128 },
+    linkedUserEmail: { maxLength: 254 },
+  });
+}
+
+export function subscribeToPhysicians(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  return onSnapshot(collection(db, "physicians"), (snapshot) => {
+    onRows(sortByUserName(snapshotRows(snapshot)));
+  }, onError);
+}
+
+export async function addPhysician(physician) {
+  const database = requireDb();
+  const { user } = await requireActiveRole();
+  const payload = sanitizePhysicianPayload(physician);
+  if (!payload.name) {
+    throw new Error("Enter the doctor's name.");
+  }
+
+  await addDoc(collection(database, "physicians"), {
+    name: payload.name,
+    clinic: payload.clinic || "",
+    specialty: payload.specialty || "",
+    licenseNumber: payload.licenseNumber || "",
+    doctorType: payload.doctorType || "clinic",
+    status: payload.status || "active",
+    linkedUserId: payload.linkedUserId || "",
+    linkedUserEmail: payload.linkedUserEmail || "",
+    createdBy: user.uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updatePhysician(id, physician) {
+  const database = requireDb();
+  await requireActiveRole();
+  const payload = sanitizePhysicianPayload(physician);
+  if ("name" in payload && !payload.name) {
+    throw new Error("Enter the doctor's name.");
+  }
+
+  await updateDoc(doc(database, "physicians", id), {
+    ...payload,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deletePhysician(id) {
+  const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
+  await deleteDoc(doc(database, "physicians", id));
+}
+
+// Nurse directory: mirrors the physician directory. Nurses are registered here as
+// the source of truth, and an admin can create + link a hospital login directly
+// from the directory. Inactive nurses stay for history but are flagged.
+function sanitizeNursePayload(nurse) {
+  return sanitizeRecordPayload(nurse, {
+    name: { maxLength: 160, uppercase: true },
+    department: { maxLength: 120, uppercase: true },
+    departmentType: { maxLength: 20 },
+    licenseNumber: { maxLength: 80 },
+    status: { maxLength: 20 },
+    linkedUserId: { maxLength: 128 },
+    linkedUserEmail: { maxLength: 254 },
+  });
+}
+
+export function subscribeToNurses(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  return onSnapshot(collection(db, "nurses"), (snapshot) => {
+    onRows(sortByUserName(snapshotRows(snapshot)));
+  }, onError);
+}
+
+export async function addNurse(nurse) {
+  const database = requireDb();
+  const { user } = await requireActiveRole();
+  const payload = sanitizeNursePayload(nurse);
+  if (!payload.name) {
+    throw new Error("Enter the nurse's name.");
+  }
+
+  await addDoc(collection(database, "nurses"), {
+    name: payload.name,
+    department: payload.department || "",
+    departmentType: payload.departmentType || "admission",
+    licenseNumber: payload.licenseNumber || "",
+    status: payload.status || "active",
+    linkedUserId: payload.linkedUserId || "",
+    linkedUserEmail: payload.linkedUserEmail || "",
+    createdBy: user.uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateNurse(id, nurse) {
+  const database = requireDb();
+  await requireActiveRole();
+  const payload = sanitizeNursePayload(nurse);
+  if ("name" in payload && !payload.name) {
+    throw new Error("Enter the nurse's name.");
+  }
+
+  await updateDoc(doc(database, "nurses", id), {
+    ...payload,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteNurse(id) {
+  const database = requireDb();
+  await requireActiveRole({ adminOnly: true });
+  await deleteDoc(doc(database, "nurses", id));
+}
+
 // Streams centralized audit actions so admins can review staff activity across workstations.
 export function subscribeToAuditLogs(onRows, onError) {
   if (!db) {
@@ -360,7 +670,7 @@ export function subscribeToAuditLogs(onRows, onError) {
 // Adds a chart borrowing department.
 export async function addDepartment(name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const departmentName = sanitizeDepartmentName(name);
   await addDoc(collection(database, "departments"), {
     name: departmentName,
@@ -373,7 +683,7 @@ export async function addDepartment(name) {
 // Renames a chart borrowing department.
 export async function updateDepartment(id, name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const departmentName = sanitizeDepartmentName(name);
   await updateDoc(doc(database, "departments", id), {
     name: departmentName,
@@ -391,7 +701,7 @@ export async function deleteDepartment(id) {
 // Adds an inpatient admission location.
 export async function addAdmissionLocation(name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const locationName = sanitizeDepartmentName(name);
   await addDoc(collection(database, "departments"), {
     name: locationName,
@@ -404,7 +714,7 @@ export async function addAdmissionLocation(name) {
 // Renames an inpatient admission location.
 export async function updateAdmissionLocation(id, name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const locationName = sanitizeDepartmentName(name);
   await updateDoc(doc(database, "departments", id), {
     name: locationName,
@@ -423,7 +733,7 @@ export async function deleteAdmissionLocation(id) {
 // Adds an outpatient department.
 export async function addOutpatientDepartment(name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const departmentName = sanitizeDepartmentName(name);
   await addDoc(collection(database, "departments"), {
     name: departmentName,
@@ -436,7 +746,7 @@ export async function addOutpatientDepartment(name) {
 // Renames an outpatient department.
 export async function updateOutpatientDepartment(id, name) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  await requireActiveRole();
   const departmentName = sanitizeDepartmentName(name);
   await updateDoc(doc(database, "departments", id), {
     name: departmentName,
@@ -462,6 +772,35 @@ export async function updateUserAccess(userId, updates) {
   });
 }
 
+// Removes a user profile from the admin user list. The matching Firebase Auth
+// account can no longer enter because sign-in now requires an existing profile.
+// Clears the account link on any physician/nurse directory entry that pointed at a
+// now-deleted login, so the directory no longer shows a stale "Account" badge. The
+// directory record itself is kept because patient/chart history may reference it;
+// an admin can later issue a fresh login from the directory.
+async function unlinkDirectoryAccounts(database, userId) {
+  await Promise.all(["physicians", "nurses"].map(async (collectionName) => {
+    const snapshot = await getDocs(
+      query(collection(database, collectionName), where("linkedUserId", "==", userId)),
+    );
+    await Promise.all(snapshot.docs.map((entry) => updateDoc(
+      doc(database, collectionName, entry.id),
+      { linkedUserId: "", linkedUserEmail: "", updatedAt: serverTimestamp() },
+    )));
+  }));
+}
+
+export async function deleteUserProfile(userId) {
+  const database = requireDb();
+  const { user } = await requireActiveRole({ adminOnly: true });
+  if (user.uid === userId) {
+    throw new Error("You cannot delete your own signed-in account.");
+  }
+
+  await deleteDoc(doc(database, "users", userId));
+  await unlinkDirectoryAccounts(database, userId);
+}
+
 // Creates a patient and its matching available chart document.
 export async function createPatient(patient) {
   const database = requireDb();
@@ -470,19 +809,20 @@ export async function createPatient(patient) {
   const patientRef = doc(database, "patients", safePatient.caseNumber);
   const chartRef = doc(database, "charts", safePatient.caseNumber);
   const now = serverTimestamp();
-  const [patientSnapshot, chartSnapshot] = await Promise.all([
+  const [patientSnapshot, chartSnapshot, matchingRows] = await Promise.all([
     getDoc(patientRef),
     getDoc(chartRef),
+    matchingPatientRows(database, safePatient),
   ]);
 
   if (patientSnapshot.exists() || chartSnapshot.exists()) {
     throw new Error(duplicateCaseNumberMessage);
   }
 
-  if (await overlappingPatientStayExists(database, safePatient)) {
+  if (overlappingPatientStayExistsInRows(matchingRows, safePatient)) {
     throw new Error(duplicatePatientStayMessage);
   }
-  if (await patientAdmissionBeforeFirstRecordExists(database, safePatient)) {
+  if (patientAdmissionBeforeFirstRecordExistsInRows(matchingRows, safePatient)) {
     throw new Error(patientBeforeFirstRecordMessage);
   }
 
@@ -497,7 +837,13 @@ export async function createPatient(patient) {
     caseNumber: safePatient.caseNumber,
     patientName: safePatient.name,
     patientDepartment: safePatient.department || "",
+    attendingDoctorId: safePatient.attendingDoctorId || "",
+    attendingDoctorName: safePatient.attendingDoctorName || "",
+    attendingDoctorClinic: safePatient.attendingDoctorClinic || "",
     recordType: safePatient.recordType || "new",
+    patientType: safePatient.type || "outpatient",
+    admissionDate: safePatient.admissionDate || "",
+    dischargeDate: safePatient.dischargeDate || "",
     status: "available",
     borrower: "",
     department: "",
@@ -563,7 +909,13 @@ export async function updatePatient(previousCaseNumber, patient) {
       renamePendingBy: user.uid,
       patientName: safePatient.name,
       patientDepartment: safePatient.department || "",
+      attendingDoctorId: safePatient.attendingDoctorId || "",
+      attendingDoctorName: safePatient.attendingDoctorName || "",
+      attendingDoctorClinic: safePatient.attendingDoctorClinic || "",
       recordType: safePatient.recordType || "new",
+      patientType: safePatient.type || "outpatient",
+      admissionDate: safePatient.admissionDate || "",
+      dischargeDate: safePatient.dischargeDate || "",
       status: previousChart.status || "available",
       borrower: previousChart.borrower || "",
       department: previousChart.department || "",
@@ -589,6 +941,8 @@ export async function updatePatient(previousCaseNumber, patient) {
         caseNumber: safePatient.caseNumber,
       });
     }
+
+    await syncPatientSnapshotRows(database, previousCaseNumber, safePatient);
 
     const markRenameBatch = writeBatch(database);
     markRenameBatch.update(doc(database, "patients", previousCaseNumber), {
@@ -626,20 +980,79 @@ export async function updatePatient(previousCaseNumber, patient) {
   batch.update(doc(database, "charts", safePatient.caseNumber), {
     patientName: safePatient.name,
     patientDepartment: safePatient.department || "",
+    attendingDoctorId: safePatient.attendingDoctorId || "",
+    attendingDoctorName: safePatient.attendingDoctorName || "",
+    attendingDoctorClinic: safePatient.attendingDoctorClinic || "",
     recordType: safePatient.recordType || "new",
+    patientType: safePatient.type || "outpatient",
+    admissionDate: safePatient.admissionDate || "",
+    dischargeDate: safePatient.dischargeDate || "",
     updatedAt: now,
   });
   await batch.commit();
+  await syncPatientSnapshotRows(database, safePatient.caseNumber, safePatient);
 }
 
 // Deletes a patient and cancels active borrow logs tied to its chart.
 export async function deletePatient(caseNumber) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
+  const { user, profile } = await requireActiveRole({ adminOnly: true });
   const chartRef = doc(database, "charts", caseNumber);
   const chartSnapshot = await getDoc(chartRef);
   const chart = chartSnapshot.exists() ? chartSnapshot.data() : null;
   const cancellationTime = new Date().toISOString();
+  // Linked transactions are soft-deleted (not voided): they leave the working
+  // views but stay in Print Reports as "Deleted" rows noting they went with the
+  // patient record, matching the system-wide delete behavior.
+  const deletedTransactionUpdate = buildSoftDeleteFields({
+    sourceLabel: "Patient deletion",
+    actorName: actorDisplayName(profile, user),
+  });
+  const trackingCollections = [
+    "medicalDocumentRequests",
+    "labResultRequests",
+    "vitalCertificateRequests",
+  ];
+  const trackingSnapshots = await Promise.all(
+    trackingCollections.map((collectionName) => (
+      getDocs(query(collection(database, collectionName), where("caseNumber", "==", caseNumber)))
+    )),
+  );
+
+  // Rows already soft-deleted are skipped: firestore.rules rejects re-deleting a
+  // record (isAdminSoftDelete requires it was not already deleted), and a single
+  // rejected update would abort the whole atomic batch and block the delete.
+  const addDeletedTrackingUpdates = (batch) => {
+    trackingCollections.forEach((collectionName, index) => {
+      trackingSnapshots[index].docs.forEach((trackingSnapshot) => {
+        if (trackingSnapshot.data().deleted === true) return;
+        batch.update(doc(database, collectionName, trackingSnapshot.id), deletedTransactionUpdate);
+      });
+    });
+  };
+
+  // Any in-flight chart request for this case (requested, prepared, picked up, in
+  // review, or returned but not yet received) is canceled so it never gets stuck
+  // waiting on a chart/patient record that no longer exists.
+  const ongoingRequestStatuses = new Set([
+    "pending", "reviewing", "preparing", "ready", "received", "inReview", "returned", "returnReceived",
+  ]);
+  const chartRequestsSnapshot = await getDocs(
+    query(collection(database, "chartRequests"), where("caseNumber", "==", caseNumber)),
+  );
+  const canceledRequestUpdate = {
+    status: "canceled",
+    canceledAt: cancellationTime,
+    canceledBy: actorDisplayName(profile, user),
+    remarks: "Patient record was deleted. Chart request canceled.",
+    updatedAt: serverTimestamp(),
+  };
+  const addCanceledRequestUpdates = (batch) => {
+    chartRequestsSnapshot.docs.forEach((requestSnapshot) => {
+      if (!ongoingRequestStatuses.has(requestSnapshot.data().status)) return;
+      batch.update(doc(database, "chartRequests", requestSnapshot.id), canceledRequestUpdate);
+    });
+  };
 
   if (chart?.status === "borrowed") {
     const cancelledLogUpdate = {
@@ -662,6 +1075,8 @@ export async function deletePatient(caseNumber) {
     borrowedLogsSnapshot.docs.forEach((logSnapshot) => {
       batch.update(doc(database, "chartLogs", logSnapshot.id), cancelledLogUpdate);
     });
+    addDeletedTrackingUpdates(batch);
+    addCanceledRequestUpdates(batch);
     batch.delete(doc(database, "patients", caseNumber));
     batch.delete(chartRef);
 
@@ -674,6 +1089,8 @@ export async function deletePatient(caseNumber) {
   }
 
   const batch = writeBatch(database);
+  addDeletedTrackingUpdates(batch);
+  addCanceledRequestUpdates(batch);
   batch.delete(doc(database, "patients", caseNumber));
   batch.delete(chartRef);
   await batch.commit();
@@ -686,6 +1103,107 @@ export async function updateChart(caseNumber, updates) {
   await updateDoc(doc(database, "charts", caseNumber), {
     ...sanitizeChartPayload(updates),
     updatedAt: serverTimestamp(),
+  });
+}
+
+// Atomically checks out a chart so two workstations cannot borrow the same folder.
+export async function checkoutChart(caseNumber, log, updates) {
+  const database = requireDb();
+  await requireActiveRole();
+  const safeCaseNumber = sanitizeText(caseNumber, { maxLength: 60, uppercase: true });
+  const chartRef = doc(database, "charts", safeCaseNumber);
+  const logRef = doc(collection(database, "chartLogs"));
+  const safeLog = sanitizeChartLogPayload(log);
+  const safeUpdates = sanitizeChartPayload(updates);
+
+  await runTransaction(database, async (transaction) => {
+    const chartSnapshot = await transaction.get(chartRef);
+    if (!chartSnapshot.exists()) {
+      throw new Error("No chart found for that case number.");
+    }
+
+    const chart = chartSnapshot.data();
+    if (chart.status === "borrowed") {
+      throw new Error("This chart is already borrowed.");
+    }
+
+    transaction.set(logRef, {
+      ...safeLog,
+      caseNumber: safeCaseNumber,
+      createdAt: serverTimestamp(),
+    });
+    transaction.update(chartRef, {
+      ...safeUpdates,
+      caseNumber: safeCaseNumber,
+      status: "borrowed",
+      activeLogId: logRef.id,
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  return logRef.id;
+}
+
+// Atomically checks in a chart and closes or recreates the matching borrow log.
+export async function returnChart(caseNumber, returnedLog, updates) {
+  const database = requireDb();
+  await requireActiveRole();
+  const safeCaseNumber = sanitizeText(caseNumber, { maxLength: 60, uppercase: true });
+  const chartRef = doc(database, "charts", safeCaseNumber);
+  const safeReturnedLog = sanitizeChartLogPayload(returnedLog);
+  const safeUpdates = sanitizeChartPayload(updates);
+
+  return runTransaction(database, async (transaction) => {
+    const chartSnapshot = await transaction.get(chartRef);
+    if (!chartSnapshot.exists()) {
+      throw new Error("No chart found for that case number.");
+    }
+
+    const chart = chartSnapshot.data();
+    if (chart.status !== "borrowed") {
+      throw new Error("This chart is already available.");
+    }
+
+    let recreatedReturnLog = false;
+    if (chart.activeLogId) {
+      const logRef = doc(database, "chartLogs", chart.activeLogId);
+      const logSnapshot = await transaction.get(logRef);
+
+      if (logSnapshot.exists()) {
+        transaction.update(logRef, {
+          ...safeReturnedLog,
+          caseNumber: safeCaseNumber,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const replacementLogRef = doc(collection(database, "chartLogs"));
+        transaction.set(replacementLogRef, {
+          ...safeReturnedLog,
+          caseNumber: safeCaseNumber,
+          remarks: safeReturnedLog.remarks || "Chart returned after borrowed report row was deleted",
+          createdAt: serverTimestamp(),
+        });
+        recreatedReturnLog = true;
+      }
+    } else {
+      const logRef = doc(collection(database, "chartLogs"));
+      transaction.set(logRef, {
+        ...safeReturnedLog,
+        caseNumber: safeCaseNumber,
+        createdAt: serverTimestamp(),
+      });
+      recreatedReturnLog = true;
+    }
+
+    transaction.update(chartRef, {
+      ...safeUpdates,
+      caseNumber: safeCaseNumber,
+      status: "available",
+      activeLogId: "",
+      updatedAt: serverTimestamp(),
+    });
+
+    return { recreatedReturnLog };
   });
 }
 
@@ -725,17 +1243,509 @@ export async function updateChartLogIfExists(id, log) {
   return true;
 }
 
-// Deletes a chart audit log by id.
-export async function deleteChartLog(id) {
+// Streams bell notifications targeted to the signed-in user or Medical Records group.
+export function subscribeToUserNotifications(onRows, onError) {
+  if (!db) {
+    onRows([]);
+    return () => {};
+  }
+
+  const user = auth?.currentUser;
+  if (!user) {
+    onRows([]);
+    return () => {};
+  }
+
+  const role = normalizeUserRole(activeUserProfile?.role);
+
+  // Clinical users only receive notifications addressed to them.
+  if (!medicalRecordsRoles.includes(role)) {
+    return onSnapshot(
+      query(collection(db, "userNotifications"), where("targetUserId", "==", user.uid)),
+      (snapshot) => onRows(sortNewestFirst(snapshotRows(snapshot))),
+      onError,
+    );
+  }
+
+  // Medical Records users receive role-wide notifications (targetRole) AND any sent
+  // directly to them (e.g. when they are the requester). Firestore can't OR two
+  // fields in one query, so run two listeners and merge — only emitting once both
+  // have delivered their first snapshot so the navbar's first-load read-state holds.
+  let roleRows = [];
+  let mineRows = [];
+  let roleReady = false;
+  let mineReady = false;
+  const emit = () => {
+    if (!roleReady || !mineReady) return;
+    const byId = new Map();
+    [...roleRows, ...mineRows].forEach((row) => byId.set(row.id, row));
+    onRows(sortNewestFirst([...byId.values()]));
+  };
+  const unsubscribeRole = onSnapshot(
+    query(collection(db, "userNotifications"), where("targetRole", "==", "medicalRecords")),
+    (snapshot) => { roleRows = snapshotRows(snapshot); roleReady = true; emit(); },
+    onError,
+  );
+  const unsubscribeMine = onSnapshot(
+    query(collection(db, "userNotifications"), where("targetUserId", "==", user.uid)),
+    (snapshot) => { mineRows = snapshotRows(snapshot); mineReady = true; emit(); },
+    onError,
+  );
+  return () => {
+    unsubscribeRole();
+    unsubscribeMine();
+  };
+}
+
+async function addUserNotification(notification) {
   const database = requireDb();
-  await requireActiveRole({ adminOnly: true });
-  await deleteDoc(doc(database, "chartLogs", id));
+  const user = auth?.currentUser;
+  if (!user) return;
+
+  await addDoc(collection(database, "userNotifications"), {
+    ...sanitizeUserNotificationPayload({
+      type: "info",
+      sourceUserId: user.uid,
+      ...notification,
+    }),
+    createdAt: serverTimestamp(),
+  });
+}
+
+function requesterDisplayName(name, role) {
+  const safeName = String(name || "").trim();
+  if (role === userRoles.doctor && safeName && !safeName.toUpperCase().startsWith("DR.")) {
+    return `DR. ${safeName}`;
+  }
+  return safeName;
+}
+
+// Adds a clinical chart request without releasing the physical chart until Records marks it ready.
+export async function addChartRequest(request) {
+  const database = requireDb();
+  const { user, profile, role } = await requireActiveRole({ roles: allUserRoles });
+  const safeRequest = sanitizeChartRequestPayload(request);
+  const safeCaseNumber = sanitizeText(safeRequest.caseNumber, { maxLength: 60, uppercase: true });
+  const requestedBy = requesterDisplayName(
+    safeRequest.requestedBy || profile.fullName || profile.displayName || user.displayName || user.email || "",
+    role,
+  );
+  const requestRef = doc(collection(database, "chartRequests"));
+  const chartRef = doc(database, "charts", safeCaseNumber);
+  const requestChecks = medicalRecordsRoles.includes(role)
+    ? [where("caseNumber", "==", safeCaseNumber)]
+    : [where("requestedById", "==", user.uid), where("caseNumber", "==", safeCaseNumber)];
+  const activeRequestSnapshot = await getDocs(query(collection(database, "chartRequests"), ...requestChecks));
+  const hasActiveRequest = activeRequestSnapshot.docs.some((requestSnapshot) => {
+    const status = requestSnapshot.data().status || "pending";
+    return !["completed", "canceled"].includes(status);
+  });
+
+  if (hasActiveRequest) {
+    throw new Error(medicalRecordsRoles.includes(role)
+      ? "This chart already has an active request in process."
+      : "You already have an active request for this chart.");
+  }
+
+  await runTransaction(database, async (transaction) => {
+    const chartSnapshot = await transaction.get(chartRef);
+    if (!chartSnapshot.exists()) {
+      throw new Error("No chart found for that case number.");
+    }
+
+    const chart = chartSnapshot.data();
+    if (chart.status === "borrowed") {
+      throw new Error("This chart is already borrowed.");
+    }
+
+    transaction.set(requestRef, {
+      ...safeRequest,
+      caseNumber: safeCaseNumber,
+      requestedById: user.uid,
+      requestedBy,
+      requestedByEmail: safeRequest.requestedByEmail || profile.email || user.email || "",
+      requestedByRole: role,
+      requestedByDepartment: safeRequest.requestedByDepartment || profile.department || "",
+      requestedByClinic: safeRequest.requestedByClinic || profile.clinic || "",
+      status: "pending",
+      activeLogId: "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  await addUserNotification({
+    type: "info",
+    title: "Chart Request Submitted",
+    message: `${requestedBy || "Clinical user"} requested chart ${safeCaseNumber}.`,
+    patientName: safeRequest.patientName,
+    caseNumber: safeCaseNumber,
+    action: "Chart Request Submitted",
+    sourceUserName: requestedBy,
+    targetRole: "medicalRecords",
+    targetPath: `/chart-requests?search=${encodeURIComponent(safeCaseNumber)}`,
+  });
+  return requestRef.id;
+}
+
+// Updates chart request status while preserving the handoff sequence:
+// Records prepares the chart, the requester returns it, Records receives the return, then completes it.
+export async function updateChartRequest(id, updates) {
+  const database = requireDb();
+  const { user, profile, role } = await requireActiveRole({ roles: allUserRoles });
+  const requestRef = doc(database, "chartRequests", id);
+  const requestSnapshot = await getDoc(requestRef);
+  if (!requestSnapshot.exists()) {
+    throw new Error("This chart request no longer exists.");
+  }
+
+  const currentRequest = requestSnapshot.data();
+  const isRecordsUser = medicalRecordsRoles.includes(role);
+  const safeUpdates = sanitizeChartRequestPayload(updates);
+  const nextStatus = safeUpdates.status || currentRequest.status;
+  assertChartRequestTransition(currentRequest.status, nextStatus);
+
+  if (isRecordsUser && (nextStatus === "received" || nextStatus === "inReview")) {
+    throw new Error("The requesting clinician must confirm chart receipt.");
+  }
+
+  if (!isRecordsUser) {
+    const canCancelOwnRequest =
+      currentRequest.requestedById === user.uid &&
+      currentRequest.status === "pending" &&
+      nextStatus === "canceled";
+    // Picking up the chart moves it straight into review for the requester.
+    const canPickUpForReview =
+      currentRequest.requestedById === user.uid &&
+      currentRequest.status === "ready" &&
+      ["received", "inReview"].includes(nextStatus);
+    const canStartOwnReview =
+      currentRequest.requestedById === user.uid &&
+      currentRequest.status === "received" &&
+      nextStatus === "inReview";
+    const canReturnOwnBorrowedChart =
+      currentRequest.requestedById === user.uid &&
+      ["received", "inReview"].includes(currentRequest.status) &&
+      nextStatus === "returned";
+
+    if (!canCancelOwnRequest && !canPickUpForReview && !canStartOwnReview && !canReturnOwnBorrowedChart) {
+      throw new Error("Only Medical Records can update chart request status.");
+    }
+  }
+
+  const staffStamp = isRecordsUser
+    ? {
+        preparedBy: safeUpdates.preparedBy || profile.fullName || profile.displayName || user.displayName || user.email || "",
+      }
+    : {};
+
+  if (nextStatus === "ready") {
+    const safeCaseNumber = sanitizeText(currentRequest.caseNumber, { maxLength: 60, uppercase: true });
+    const chartRef = doc(database, "charts", safeCaseNumber);
+    const logRef = doc(collection(database, "chartLogs"));
+    const readyAt = safeUpdates.readyAt || new Date().toISOString();
+    const borrowerDepartment = currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "Clinic / Nurse Station";
+    const preparedBy = staffStamp.preparedBy || "";
+
+    await runTransaction(database, async (transaction) => {
+      const chartSnapshot = await transaction.get(chartRef);
+      if (!chartSnapshot.exists()) {
+        throw new Error("No chart found for that case number.");
+      }
+
+      const chart = chartSnapshot.data();
+      if (chart.status === "borrowed") {
+        throw new Error("This chart is already borrowed.");
+      }
+
+      transaction.set(logRef, {
+        action: "borrowed",
+        patientName: currentRequest.patientName || chart.patientName || "",
+        caseNumber: safeCaseNumber,
+        borrowedBy: currentRequest.requestedBy || "Clinical requester",
+        requestedById: currentRequest.requestedById || "",
+        returnedBy: "",
+        department: borrowerDepartment,
+        timestamp: readyAt,
+        borrowedAt: readyAt,
+        returnedAt: "",
+        dueDate: "",
+        remarks: safeUpdates.remarks || currentRequest.purpose || "Chart prepared and locked for pickup",
+        createdAt: serverTimestamp(),
+      });
+
+      transaction.update(chartRef, {
+        caseNumber: safeCaseNumber,
+        status: "borrowed",
+        borrower: currentRequest.requestedBy || "Clinical requester",
+        borrowerId: currentRequest.requestedById || "",
+        department: borrowerDepartment,
+        borrowedAt: readyAt,
+        dueDate: "",
+        activeLogId: logRef.id,
+        history: [
+          {
+            action: "checkout",
+            borrower: currentRequest.requestedBy || "Clinical requester",
+            returnedBy: "",
+            department: borrowerDepartment,
+            date: readyAt,
+          },
+          ...(chart.history || []),
+        ],
+        updatedAt: serverTimestamp(),
+      });
+
+      transaction.update(requestRef, {
+        ...safeUpdates,
+        preparedBy,
+        status: "ready",
+        readyAt,
+        borrowedAt: readyAt,
+        activeLogId: logRef.id,
+        updatedAt: serverTimestamp(),
+      });
+    });
+  } else if (nextStatus === "returned") {
+    const returnedAt = safeUpdates.returnedAt || new Date().toISOString();
+
+    await updateDoc(requestRef, {
+      ...safeUpdates,
+      status: "returned",
+      returnedAt,
+      updatedAt: serverTimestamp(),
+    });
+  } else if (nextStatus === "returnReceived") {
+    const safeCaseNumber = sanitizeText(currentRequest.caseNumber, { maxLength: 60, uppercase: true });
+    const chartRef = doc(database, "charts", safeCaseNumber);
+    const returnReceivedAt = safeUpdates.returnReceivedAt || new Date().toISOString();
+    const returnedAt = currentRequest.returnedAt || safeUpdates.returnedAt || returnReceivedAt;
+    const returner = currentRequest.requestedBy || "Clinical requester";
+    const receivedBy = staffStamp.preparedBy || profile.fullName || profile.displayName || user.displayName || user.email || "";
+
+    await runTransaction(database, async (transaction) => {
+      // Reads first (transaction rule): the chart may be gone if the patient record
+      // was deleted while the chart was still out — that must not block the return.
+      const chartSnapshot = await transaction.get(chartRef);
+      const chartExists = chartSnapshot.exists();
+      const chart = chartExists ? chartSnapshot.data() : {};
+
+      if (chartExists && !["borrowed", "available"].includes(chart.status)) {
+        throw new Error("This chart cannot be received right now.");
+      }
+
+      const activeLogId = (chartExists ? chart.activeLogId : "") || currentRequest.activeLogId;
+      const logRef = activeLogId ? doc(database, "chartLogs", activeLogId) : null;
+      const logSnapshot = logRef ? await transaction.get(logRef) : null;
+
+      const returnedLog = {
+        action: "returned",
+        patientName: currentRequest.patientName || chart.patientName || "",
+        caseNumber: safeCaseNumber,
+        borrowedBy: chart.borrower || currentRequest.requestedBy || "N/A",
+        requestedById: currentRequest.requestedById || user.uid,
+        returnedBy: returner,
+        department: chart.department || currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "N/A",
+        timestamp: chart.borrowedAt || currentRequest.borrowedAt || returnedAt,
+        borrowedAt: chart.borrowedAt || currentRequest.borrowedAt || returnedAt,
+        returnedAt,
+        dueDate: "",
+        remarks: safeUpdates.remarks || (chartExists
+          ? `Returned by requester and received by ${receivedBy}`
+          : `Chart received after the patient record was deleted (received by ${receivedBy}).`),
+        updatedAt: serverTimestamp(),
+      };
+
+      if (logSnapshot && logSnapshot.exists()) {
+        // Always close out the existing borrow log, even if the chart doc is gone.
+        transaction.update(logRef, returnedLog);
+      } else if (chartExists && chart.status === "borrowed") {
+        transaction.set(doc(collection(database, "chartLogs")), {
+          ...returnedLog,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      if (chartExists && chart.status === "borrowed") {
+        transaction.update(chartRef, {
+          caseNumber: safeCaseNumber,
+          status: "available",
+          borrower: "",
+          borrowerId: "",
+          department: "",
+          borrowedAt: "",
+          dueDate: "",
+          activeLogId: "",
+          history: [
+            {
+              action: "checkin",
+              date: returnReceivedAt,
+              borrower: chart.borrower || currentRequest.requestedBy || "N/A",
+              returnedBy: returner,
+              department: chart.department || currentRequest.requestedByClinic || currentRequest.requestedByDepartment || "N/A",
+            },
+            ...(chart.history || []),
+          ],
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      transaction.update(requestRef, {
+        ...safeUpdates,
+        ...staffStamp,
+        status: "returnReceived",
+        returnedAt,
+        returnReceivedAt,
+        updatedAt: serverTimestamp(),
+      });
+    });
+  } else {
+    await updateDoc(requestRef, {
+      ...safeUpdates,
+      ...staffStamp,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  if (isRecordsUser && currentRequest.requestedById && currentRequest.requestedById !== user.uid) {
+    await addUserNotification({
+      type: nextStatus === "ready" || nextStatus === "completed" ? "success" : nextStatus === "canceled" ? "error" : "info",
+      title: "Chart Request Updated",
+      message: `${currentRequest.caseNumber} is now ${nextStatus}.`,
+      patientName: currentRequest.patientName || "",
+      caseNumber: currentRequest.caseNumber || "",
+      action: "Chart Request Status Updated",
+      sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
+      targetUserId: currentRequest.requestedById,
+      targetPath: `/chart-transactions?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
+    });
+  } else if (!isRecordsUser && nextStatus === "canceled") {
+    await addUserNotification({
+      type: "error",
+      title: "Chart Request Canceled",
+      message: `${currentRequest.caseNumber} was canceled by the requester.`,
+      patientName: currentRequest.patientName || "",
+      caseNumber: currentRequest.caseNumber || "",
+      action: "Chart Request Canceled",
+      sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
+      targetRole: "medicalRecords",
+      targetPath: `/chart-requests?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
+    });
+  } else if (!isRecordsUser && (nextStatus === "received" || nextStatus === "inReview")) {
+    await addUserNotification({
+      type: "info",
+      title: "Chart Picked Up",
+      message: `${currentRequest.caseNumber} was picked up by the requester.`,
+      patientName: currentRequest.patientName || "",
+      caseNumber: currentRequest.caseNumber || "",
+      action: "Chart Request Received",
+      sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
+      targetRole: "medicalRecords",
+      targetPath: `/chart-requests?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
+    });
+  } else if (!isRecordsUser && nextStatus === "returned") {
+    await addUserNotification({
+      type: "success",
+      title: "Chart Returned",
+      message: `${currentRequest.caseNumber} was returned by the requester.`,
+      patientName: currentRequest.patientName || "",
+      caseNumber: currentRequest.caseNumber || "",
+      action: "Chart Request Returned",
+      sourceUserName: profile.fullName || profile.displayName || user.displayName || user.email || "",
+      targetRole: "medicalRecords",
+      targetPath: `/chart-requests?search=${encodeURIComponent(currentRequest.caseNumber || "")}`,
+    });
+  }
+}
+
+// Builds the soft-delete marker stamped onto a record when an admin deletes it.
+// The document is never physically removed: working views (root pages and their
+// wired reports) hide rows carrying `deleted`, while Print Reports keeps showing
+// them with a "Deleted" status, so every deletion stays auditable forever.
+export function buildSoftDeleteFields({ sourceLabel, actorName, originalRemarks } = {}) {
+  const deletedAt = new Date().toISOString();
+  const deletedFrom = sourceLabel || "the system";
+  const who = actorName || "an admin";
+  const note = `DELETED from ${deletedFrom} on ${new Date(deletedAt).toLocaleString()} by ${who}.`;
+  const trimmedOriginal = String(originalRemarks || "").trim();
+  return {
+    deleted: true,
+    deletedAt,
+    deletedBy: who,
+    deletedFrom,
+    remarks: trimmedOriginal ? `${trimmedOriginal} | ${note}` : note,
+    updatedAt: serverTimestamp(),
+  };
+}
+
+function actorDisplayName(profile, user) {
+  return profile?.fullName || profile?.displayName || user?.displayName || user?.email || "Admin";
+}
+
+// Soft-deletes a chart audit log by id. The log is kept in Firestore (so Print
+// Reports retains it as a "Deleted" row) but is hidden from the Chart Reports
+// working view. Only admins may delete.
+export async function deleteChartLog(id, sourceLabel = "Chart Reports") {
+  const database = requireDb();
+  const { user, profile } = await requireActiveRole({ adminOnly: true });
+  const logRef = doc(database, "chartLogs", id);
+  const logSnapshot = await getDoc(logRef);
+  const log = logSnapshot.exists() ? logSnapshot.data() : {};
+
+  await updateDoc(logRef, buildSoftDeleteFields({
+    sourceLabel,
+    actorName: actorDisplayName(profile, user),
+    originalRemarks: log.remarks,
+  }));
+  return "deleted";
+}
+
+// Soft-deletes a clinical chart request and its linked chart movement logs. The
+// records stay in Firestore for Print Reports but disappear from Chart Requests
+// and Chart Reports. Only admins may delete.
+export async function deleteChartRequestReport(id, sourceLabel = "Chart Requests") {
+  const database = requireDb();
+  const { user, profile } = await requireActiveRole({ adminOnly: true });
+  const requestRef = doc(database, "chartRequests", id);
+  const requestSnapshot = await getDoc(requestRef);
+
+  if (!requestSnapshot.exists()) {
+    throw new Error("This report row no longer exists.");
+  }
+
+  const request = requestSnapshot.data();
+  const actorName = actorDisplayName(profile, user);
+
+  const linkedLogIds = new Set();
+  if (request.activeLogId) linkedLogIds.add(request.activeLogId);
+
+  const linkedLogsSnapshot = await getDocs(
+    query(collection(database, "chartLogs"), where("requestId", "==", id)),
+  );
+  linkedLogsSnapshot.docs.forEach((logSnapshot) => linkedLogIds.add(logSnapshot.id));
+
+  if (linkedLogIds.size > 0) {
+    const batch = writeBatch(database);
+    linkedLogIds.forEach((logId) => {
+      batch.update(doc(database, "chartLogs", logId), buildSoftDeleteFields({
+        sourceLabel,
+        actorName,
+      }));
+    });
+    await batch.commit();
+  }
+
+  await updateDoc(requestRef, buildSoftDeleteFields({
+    sourceLabel,
+    actorName,
+    originalRemarks: request.remarks,
+  }));
 }
 
 // Adds a centralized audit action for important CRUD and account events.
 export async function addAuditLog(log) {
   const database = requireDb();
-  await requireActiveRole();
+  await requireActiveRole({ roles: allUserRoles });
   await addDoc(collection(database, "auditLogs"), {
     ...sanitizeAuditLogPayload(log),
     createdAt: serverTimestamp(),

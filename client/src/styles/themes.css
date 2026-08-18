@@ -1,0 +1,682 @@
+@layer utilities {
+  html.soft-light body {
+    background: rgb(235 241 248);
+    color: rgb(15 23 42);
+  }
+
+  html.soft-light .mrs-shell {
+    background:
+      linear-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+      radial-gradient(circle at top left, rgba(37, 99, 235, 0.10), transparent 34rem),
+      radial-gradient(circle at bottom right, rgba(22, 163, 74, 0.08), transparent 30rem),
+      linear-gradient(135deg, rgb(241 245 249), rgb(226 232 240));
+    background-size: 38px 38px, 38px 38px, auto, auto, auto;
+  }
+
+  html.soft-light .mrs-surface,
+  html.soft-light .mrs-panel,
+  html.soft-light .mrs-card,
+  html.soft-light .bg-white {
+    border-color: rgb(186 200 216);
+    background-color: rgba(248, 250, 252, 0.96);
+  }
+
+  html.soft-light .bg-slate-50,
+  html.soft-light .bg-slate-100,
+  html.soft-light .bg-gray-50 {
+    background-color: rgb(238 244 250);
+  }
+
+  html.soft-light .border-slate-100,
+  html.soft-light .border-slate-200,
+  html.soft-light .border-blue-100 {
+    border-color: rgb(186 200 216);
+  }
+
+  html.soft-light .mrs-logo-frame {
+    background-color: rgb(255 255 255) !important;
+  }
+
+  /* Tell the browser to render native controls (date pickers, selects, scrollbars,
+     calendar/spinner icons) in dark styling so they stay legible in dark mode. */
+  html.dark {
+    color-scheme: dark;
+  }
+
+  html.dark body {
+    background: rgb(15 23 42);
+    color: rgb(226 232 240);
+  }
+
+  html.dark .mrs-shell {
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 34rem),
+      radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.12), transparent 30rem),
+      linear-gradient(135deg, rgb(15 23 42), rgb(20 31 49));
+    background-size: 38px 38px, 38px 38px, auto, auto, auto;
+  }
+
+  html.dark .mrs-surface,
+  html.dark .mrs-panel,
+  html.dark .mrs-card,
+  html.dark .bg-white {
+    border-color: rgb(51 65 85);
+    background-color: rgba(15, 23, 42, 0.94);
+    color: rgb(226 232 240);
+  }
+
+  html.dark .mrs-navbar {
+    border-color: rgba(71, 85, 105, 0.8);
+    background:
+      linear-gradient(90deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9)),
+      radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 22rem);
+    box-shadow: 0 12px 30px rgba(2, 6, 23, 0.34);
+  }
+
+  html.dark .mrs-topbar-tray,
+  html.dark .mrs-topbar-chip,
+  html.dark .mrs-topbar-action,
+  html.dark .mrs-profile-button {
+    background: rgba(15, 23, 42, 0.72);
+    border-color: rgba(71, 85, 105, 0.9);
+    color: rgb(203 213 225);
+  }
+
+  html.dark .mrs-topbar-tray {
+    background:
+      linear-gradient(135deg, rgba(15, 23, 42, 0.72), rgba(30, 41, 59, 0.58));
+  }
+
+  html.dark .mrs-topbar-action:hover,
+  html.dark .mrs-profile-button:hover {
+    background: rgba(22, 101, 52, 0.22);
+    border-color: rgba(74, 222, 128, 0.34);
+    color: rgb(134 239 172);
+  }
+
+  html.dark .mrs-sidebar {
+    border-color: rgba(148, 163, 184, 0.2);
+    background:
+      radial-gradient(circle at 20% 0%, rgba(34, 197, 94, 0.18), transparent 14rem),
+      linear-gradient(180deg, #111c2f 0%, #17243a 46%, #10192a 100%);
+  }
+
+  html.dark .mrs-nav-pill {
+    color: rgb(226 232 240);
+  }
+
+  html.dark .mrs-nav-pill:hover,
+  html.dark .mrs-nav-pill-active {
+    border-color: rgb(51 65 85);
+    background: rgb(30 41 59);
+    box-shadow: 0 8px 18px rgba(2, 6, 23, 0.24);
+    color: rgb(241 245 249);
+  }
+
+  html.dark .mrs-logo-frame {
+    border-color: rgb(71 85 105);
+    background-color: rgb(255 255 255) !important;
+  }
+
+  html.dark .mrs-sidebar-icon-frame {
+    background: rgba(255, 255, 255, 0.09) !important;
+    border-color: rgba(203, 213, 225, 0.18);
+    color: rgb(191 219 254);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  html.dark .fixed.inset-0 .mrs-panel {
+    border-color: rgba(125, 211, 252, 0.26);
+    background:
+      radial-gradient(circle at top left, rgba(14, 165, 233, 0.14), transparent 17rem),
+      linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.99));
+    box-shadow:
+      0 28px 70px rgba(0, 0, 0, 0.56),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  html.dark .fixed.inset-0 .mrs-panel .mrs-field,
+  html.dark .fixed.inset-0 .mrs-panel input,
+  html.dark .fixed.inset-0 .mrs-panel select,
+  html.dark .fixed.inset-0 .mrs-panel textarea {
+    border-color: rgb(71 85 105);
+    background: rgb(30 41 59);
+    color: rgb(226 232 240);
+  }
+
+  html.dark .fixed.inset-0 .mrs-panel .mrs-field::placeholder,
+  html.dark .fixed.inset-0 .mrs-panel input::placeholder,
+  html.dark .fixed.inset-0 .mrs-panel textarea::placeholder {
+    color: rgb(148 163 184);
+    opacity: 1;
+  }
+
+  html.dark .fixed.inset-0 .mrs-panel .mrs-field:disabled,
+  html.dark .fixed.inset-0 .mrs-panel input:disabled,
+  html.dark .fixed.inset-0 .mrs-panel select:disabled,
+  html.dark .fixed.inset-0 .mrs-panel textarea:disabled {
+    border-color: rgb(51 65 85);
+    background: rgb(15 23 42);
+    color: rgb(100 116 139);
+    opacity: 1;
+  }
+
+  html.dark .mrs-panel thead th {
+    background: rgb(30 41 59);
+    border-bottom-color: rgb(51 65 85);
+    color: rgb(203 213 225);
+  }
+
+  html.dark .mrs-panel tbody td {
+    color: rgb(226 232 240);
+  }
+
+  html.dark .mrs-panel tbody tr:hover > td {
+    background: rgb(30 41 59);
+  }
+
+  html.dark .mrs-value-stack {
+    color: rgb(203 213 225);
+  }
+
+  html.dark .mrs-value-main {
+    color: rgb(241 245 249);
+  }
+
+  html.dark .mrs-account-header {
+    background:
+      radial-gradient(circle at top left, rgba(34, 197, 94, 0.16), transparent 16rem),
+      linear-gradient(135deg, rgb(30 41 59), rgb(15 23 42));
+    border-bottom-color: rgb(51 65 85);
+  }
+
+  html.dark .mrs-status-success,
+  html.dark .mrs-status-available,
+  html.dark .mrs-status-inpatient {
+    border-color: rgba(74, 222, 128, 0.45);
+    background: rgba(22, 101, 52, 0.38);
+    color: rgb(167 243 208);
+  }
+
+  html.dark .mrs-status-info,
+  html.dark .mrs-status-borrowed,
+  html.dark .mrs-status-outpatient {
+    border-color: rgba(96, 165, 250, 0.5);
+    background: rgba(30, 64, 175, 0.38);
+    color: rgb(191 219 254);
+  }
+
+  html.dark .mrs-status-warning {
+    border-color: rgba(251, 191, 36, 0.5);
+    background: rgba(146, 64, 14, 0.42);
+    color: rgb(253 230 138);
+  }
+
+  html.dark .mrs-status-danger {
+    border-color: rgba(248, 113, 113, 0.5);
+    background: rgba(127, 29, 29, 0.42);
+    color: rgb(254 202 202);
+  }
+
+  html.dark .mrs-status-voided {
+    border-color: rgba(167, 139, 250, 0.5);
+    background: rgba(91, 33, 182, 0.4);
+    color: rgb(221 214 254);
+  }
+
+  html.dark .mrs-status-neutral {
+    border-color: rgb(51 65 85);
+    background: rgb(30 41 59);
+    color: rgb(203 213 225);
+  }
+
+  html.dark .mrs-status-text-borrowed {
+    color: rgb(147 197 253);
+  }
+
+  html.dark .mrs-status-text-success {
+    color: rgb(134 239 172);
+  }
+
+  html.dark .mrs-status-text-warning {
+    color: rgb(252 211 77);
+  }
+
+  html.dark .mrs-status-text-danger {
+    color: rgb(252 165 165);
+  }
+
+  html.dark .mrs-status-text-reviewed {
+    color: rgb(103 232 249);
+  }
+
+  html.dark .mrs-status-text-voided {
+    color: rgb(196 181 253);
+  }
+
+  html.dark .mrs-status-text-neutral {
+    color: rgb(203 213 225);
+  }
+
+  html.dark.soft-light body {
+    background: rgb(22 31 47);
+    color: rgb(226 232 240);
+  }
+
+  html.dark.soft-light .mrs-shell {
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 34rem),
+      radial-gradient(circle at bottom right, rgba(20, 184, 166, 0.10), transparent 30rem),
+      linear-gradient(135deg, rgb(23 33 51), rgb(31 43 62));
+    background-size: 38px 38px, 38px 38px, auto, auto, auto;
+  }
+
+  html.dark.soft-light .mrs-surface,
+  html.dark.soft-light .mrs-panel,
+  html.dark.soft-light .mrs-card,
+  html.dark.soft-light .bg-white {
+    border-color: rgb(71 85 105);
+    background-color: rgba(30, 41, 59, 0.92);
+    color: rgb(226 232 240);
+  }
+
+  html.dark.soft-light .mrs-navbar {
+    border-color: rgb(71 85 105);
+    background:
+      linear-gradient(90deg, rgba(30, 41, 59, 0.92), rgba(39, 52, 72, 0.9)),
+      radial-gradient(circle at top left, rgba(20, 184, 166, 0.11), transparent 22rem);
+    box-shadow: 0 12px 26px rgba(2, 6, 23, 0.24);
+  }
+
+  html.dark.soft-light .mrs-sidebar {
+    border-color: rgba(148, 163, 184, 0.22);
+    background:
+      radial-gradient(circle at 20% 0%, rgba(20, 184, 166, 0.16), transparent 14rem),
+      linear-gradient(180deg, rgb(22 31 47), rgb(37 49 69), rgb(22 31 47));
+  }
+
+  html.dark.soft-light .bg-slate-50,
+  html.dark.soft-light .bg-slate-100,
+  html.dark.soft-light .bg-gray-50 {
+    background-color: rgb(39 52 72);
+  }
+
+  html.dark.soft-light .mrs-field,
+  html.dark.soft-light input,
+  html.dark.soft-light select,
+  html.dark.soft-light textarea {
+    border-color: rgb(71 85 105);
+    background-color: rgb(30 41 59);
+    color: rgb(226 232 240);
+  }
+
+  html.dark .bg-slate-50,
+  html.dark .bg-slate-100,
+  html.dark .bg-gray-50 {
+    background-color: rgb(30 41 59);
+  }
+
+  html.dark .bg-white\/90,
+  html.dark .bg-white\/95 {
+    background-color: rgba(15, 23, 42, 0.92);
+  }
+
+  html.dark .bg-blue-50,
+  html.dark .bg-blue-100 {
+    background-color: rgba(30, 64, 175, 0.22);
+  }
+
+  html.dark .bg-green-50,
+  html.dark .bg-green-100,
+  html.dark .bg-emerald-100 {
+    background-color: rgba(22, 101, 52, 0.22);
+  }
+
+  html.dark .bg-red-50,
+  html.dark .bg-red-100 {
+    background-color: rgba(127, 29, 29, 0.24);
+  }
+
+  html.dark .bg-amber-50,
+  html.dark .bg-amber-100 {
+    background-color: rgba(146, 64, 14, 0.24);
+  }
+
+  html.dark .text-slate-950,
+  html.dark .text-slate-900,
+  html.dark .text-slate-800,
+  html.dark .text-gray-900,
+  html.dark .text-slate-700,
+  html.dark .text-black {
+    color: rgb(241 245 249);
+  }
+
+  html.dark .text-slate-600,
+  html.dark .text-slate-500,
+  html.dark .text-gray-500 {
+    color: rgb(148 163 184);
+  }
+
+  html.dark .text-slate-400,
+  html.dark .text-gray-400 {
+    color: rgb(148 163 184);
+  }
+
+  html.dark .text-green-900,
+  html.dark .text-green-800,
+  html.dark .text-green-700,
+  html.dark .text-green-600,
+  html.dark .text-emerald-700 {
+    color: rgb(134 239 172);
+  }
+
+  html.dark .text-blue-900,
+  html.dark .text-blue-800,
+  html.dark .text-blue-700,
+  html.dark .text-blue-600,
+  html.dark .text-blue-500 {
+    color: rgb(147 197 253);
+  }
+
+  html.dark .text-violet-900,
+  html.dark .text-violet-800,
+  html.dark .text-violet-700,
+  html.dark .text-violet-600,
+  html.dark .text-violet-500 {
+    color: rgb(196 181 253);
+  }
+
+  html.dark .text-red-900,
+  html.dark .text-red-800,
+  html.dark .text-red-700,
+  html.dark .text-red-600,
+  html.dark .text-red-500 {
+    color: rgb(252 165 165);
+  }
+
+  html.dark .text-amber-900,
+  html.dark .text-amber-800,
+  html.dark .text-amber-700,
+  html.dark .text-amber-600,
+  html.dark .text-amber-500 {
+    color: rgb(252 211 77);
+  }
+
+  html.dark .border-slate-100,
+  html.dark .border-slate-200,
+  html.dark .border-blue-100 {
+    border-color: rgb(51 65 85);
+  }
+
+  html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+  html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgb(51 65 85);
+  }
+
+  html.dark .border-blue-100,
+  html.dark .border-blue-200 {
+    border-color: rgba(96, 165, 250, 0.3);
+  }
+
+  html.dark .border-green-100,
+  html.dark .border-green-200,
+  html.dark .border-emerald-100,
+  html.dark .border-emerald-200 {
+    border-color: rgba(74, 222, 128, 0.28);
+  }
+
+  html.dark .border-red-100,
+  html.dark .border-red-200 {
+    border-color: rgba(248, 113, 113, 0.3);
+  }
+
+  html.dark .border-amber-100,
+  html.dark .border-amber-200 {
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+
+  html.dark .placeholder\:text-slate-300::placeholder {
+    color: rgb(100 116 139);
+  }
+
+  html.dark .hover\:bg-slate-50:hover,
+  html.dark .hover\:bg-slate-100:hover {
+    background-color: rgb(30 41 59);
+  }
+
+  html.dark .hover\:bg-blue-50:hover {
+    background-color: rgba(30, 64, 175, 0.24);
+  }
+
+  html.dark .hover\:bg-green-50:hover,
+  html.dark .hover\:bg-green-50\/50:hover {
+    background-color: rgba(22, 101, 52, 0.24);
+  }
+
+  .mrs-notification-row:hover,
+  .mrs-notification-row:focus-visible {
+    background-color: rgb(248 250 252);
+  }
+
+  .mrs-notification-row-unread {
+    background-color: rgba(240, 253, 244, 0.68);
+  }
+
+  html.dark .mrs-notification-row:hover,
+  html.dark .mrs-notification-row:focus-visible {
+    background-color: rgb(15 23 42);
+  }
+
+  html.dark .mrs-notification-row-unread {
+    background-color: rgba(20, 83, 45, 0.24);
+  }
+
+  html.dark .mrs-notification-row-unread:hover,
+  html.dark .mrs-notification-row-unread:focus-visible {
+    background-color: rgba(20, 83, 45, 0.36);
+  }
+
+  html.dark .hover\:bg-red-50:hover {
+    background-color: rgba(127, 29, 29, 0.24);
+  }
+
+  html.dark .hover\:text-black:hover,
+  html.dark .hover\:text-slate-900:hover,
+  html.dark .group:focus-within .group-focus-within\:text-black {
+    color: rgb(241 245 249);
+  }
+
+  html.dark .hover\:border-black:hover {
+    border-color: rgb(96 165 250);
+  }
+
+  html.dark .mrs-field,
+  html.dark input,
+  html.dark select,
+  html.dark textarea {
+    border-color: rgb(51 65 85);
+    background-color: rgb(15 23 42);
+    color: rgb(226 232 240);
+  }
+
+  html.dark .login-auth-area {
+    background: transparent !important;
+  }
+
+  html.dark .login-shell-panel,
+  html.dark .login-form-side {
+    background: #ffffff !important;
+  }
+
+  html.dark .login-auth-panel,
+  html.dark .login-auth-panel.bg-white {
+    border-color: #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  html.dark .login-auth-panel .bg-white {
+    background-color: #ffffff !important;
+  }
+
+  html.dark .login-auth-panel .bg-slate-50 {
+    background-color: #f8fafc !important;
+  }
+
+  html.dark .login-auth-panel .bg-slate-100 {
+    background-color: #f1f5f9 !important;
+  }
+
+  html.dark .login-auth-panel .bg-blue-50 {
+    background-color: #eff6ff !important;
+  }
+
+  html.dark .login-auth-panel .bg-green-100 {
+    background-color: #dcfce7 !important;
+  }
+
+  html.dark .login-auth-panel .text-slate-950,
+  html.dark .login-auth-panel .text-slate-900 {
+    color: #0f172a !important;
+  }
+
+  html.dark .login-auth-panel .text-slate-600,
+  html.dark .login-auth-panel .text-slate-500 {
+    color: #475569 !important;
+  }
+
+  html.dark .login-auth-panel .text-slate-400 {
+    color: #64748b !important;
+  }
+
+  html.dark .login-auth-panel .text-blue-700 {
+    color: #1d4ed8 !important;
+  }
+
+  html.dark .login-auth-panel .text-green-700 {
+    color: #15803d !important;
+  }
+
+  html.dark .login-auth-panel .login-field {
+    border-color: #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a !important;
+  }
+
+  html.dark .login-auth-panel .login-field::placeholder {
+    color: #64748b !important;
+    -webkit-text-fill-color: #64748b !important;
+  }
+
+  html.dark .login-auth-panel .login-field:-webkit-autofill,
+  html.dark .login-auth-panel .login-field:-webkit-autofill:hover,
+  html.dark .login-auth-panel .login-field:-webkit-autofill:focus {
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a !important;
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+    box-shadow: 0 0 0 1000px #ffffff inset !important;
+  }
+
+  html.dark .mrs-soft-button {
+    border-color: rgb(51 65 85);
+    background-color: rgb(15 23 42);
+    color: rgb(203 213 225);
+  }
+
+  html.dark .mrs-soft-button:hover {
+    border-color: rgb(59 130 246);
+    background-color: rgba(30, 64, 175, 0.22);
+    color: rgb(191 219 254);
+  }
+
+  html.dark .mrs-mobile-menu-button {
+    border-color: rgb(71 85 105);
+    background: rgb(248 250 252);
+    color: rgb(15 23 42);
+  }
+
+  html.dark .mrs-mobile-close-button {
+    border-color: rgb(71 85 105);
+    background: rgb(15 23 42);
+    color: rgb(241 245 249);
+  }
+
+  html.dark .mrs-table-row:hover,
+  html.dark .mrs-table-row:hover > td {
+    background-color: rgb(30 41 59);
+  }
+
+  html.dark .mrs-table-row > td {
+    border-bottom-color: rgba(51, 65, 85, 0.9);
+  }
+
+  html.dark .mrs-filter-strip {
+    background:
+      linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.82));
+  }
+
+  html.dark .mrs-section-band {
+    background:
+      linear-gradient(90deg, rgba(51, 65, 85, 0.62), rgba(30, 41, 59, 0.36));
+  }
+
+  html.dark .mrs-table-row-selected,
+  html.dark .mrs-table-row-selected:hover,
+  html.dark .mrs-table-row-selected > td,
+  html.dark .mrs-table-row-selected:hover > td {
+    background-color: rgba(37, 99, 235, 0.22);
+  }
+
+  body .border-2.border-black,
+  body .border-4.border-black,
+  body .border-y-2.border-l-2.border-black {
+    border-width: 1px;
+    border-color: rgb(203 213 225);
+  }
+
+  body [class*="shadow-["] {
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  }
+
+  body .bg-black\/40,
+  body .bg-black\/50,
+  body .bg-black\/60,
+  body .bg-slate-950\/45 {
+    background-color: rgba(2, 6, 23, 0.68);
+  }
+
+  html.dark body .bg-black\/40,
+  html.dark body .bg-black\/50,
+  html.dark body .bg-black\/60,
+  html.dark body .bg-slate-950\/45 {
+    background-color: rgba(2, 6, 23, 0.84);
+  }
+
+  body :is(input, select, textarea).border-black {
+    border-color: rgb(203 213 225);
+    background-color: rgb(255 255 255);
+  }
+
+  html.dark body :is(input, select, textarea).border-black {
+    border-color: rgb(51 65 85);
+    background-color: rgb(15 23 42);
+    color: rgb(226 232 240);
+  }
+
+  body :is(input, select, textarea).border-black:focus {
+    border-color: rgb(37 99 235);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+  }
+
+  body :is(button).border-black {
+    border-color: rgb(203 213 225);
+  }
+
+}

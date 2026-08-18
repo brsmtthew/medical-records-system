@@ -1,20 +1,53 @@
-import React, { useLayoutEffect } from "react";
+import React, { Component, useLayoutEffect } from "react";
 import { BrowserRouter as Router } from "react-router-dom";
 
-import { AuthProvider } from "./context/AuthProvider";
+import { AuthProvider } from "@features/auth/context/AuthProvider";
 import AppRoutes from "./routes/AppRoutes";
-import { readSystemSettings } from "./utils/systemSettings";
+import { applySystemTheme } from "@shared/utils/systemSettings";
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("Unhandled render error:", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="mrs-shell min-h-screen flex items-center justify-center p-4 font-sans">
+          <div className="mrs-panel max-w-sm rounded-2xl p-6 text-center">
+            <p className="text-xl font-black uppercase text-slate-800">Something Went Wrong</p>
+            <p className="mt-2 text-sm font-semibold text-slate-500">
+              An unexpected error occurred. Refresh the page to continue.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mrs-primary-button mt-6 rounded-xl px-5 py-3 text-xs font-black uppercase"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   useLayoutEffect(() => {
     // Applies saved theme classes before routes paint so pages do not flash the wrong mode.
     const applyTheme = () => {
-      const { appearanceMode, lightComfortMode } = readSystemSettings();
-      document.documentElement.classList.toggle("dark", appearanceMode === "dark");
-      document.documentElement.classList.toggle(
-        "soft-light",
-        appearanceMode !== "dark" && lightComfortMode === "soft",
-      );
+      applySystemTheme();
     };
 
     applyTheme();
@@ -28,10 +61,12 @@ export default function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <Router>
-        <AppRoutes />
-      </Router>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <AppRoutes />
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

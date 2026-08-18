@@ -1,0 +1,15 @@
+export {
+  createPatient,
+  deletePatient,
+  duplicateCaseNumberMessage,
+  duplicatePatientStayMessage,
+  fallbackAdmissionLocations,
+  fallbackOutpatientDepartments,
+  patientBeforeFirstRecordMessage,
+  subscribeToAdmissionLocations,
+  subscribeToOutpatientDepartments,
+  subscribeToPatients,
+  subscribeToDoctors,
+  subscribeToPhysicians,
+  updatePatient,
+} from "@services/recordsService";

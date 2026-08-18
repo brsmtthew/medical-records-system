@@ -1,6 +1,35 @@
 const accessTokenKey = "mrs-access-token";
 const userKey = "mrs-auth-user";
+const persistentSignInKey = "mrs-keep-signed-in";
 let expiryTimer = null;
+let memorySession = {
+  accessToken: "",
+  user: null,
+};
+
+function readSessionValue(key) {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionValue(key, value) {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // Some privacy-mode or embedded browser profiles disable sessionStorage.
+  }
+}
+
+function removeSessionValue(key) {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // Keep the in-memory session usable when browser storage is unavailable.
+  }
+}
 
 function parseJwtPayload(token) {
   try {
@@ -12,28 +41,63 @@ function parseJwtPayload(token) {
 }
 
 export function getAccessToken() {
-  return sessionStorage.getItem(accessTokenKey);
+  return readSessionValue(accessTokenKey) || memorySession.accessToken || null;
 }
 
 export function getSessionUser() {
-  const value = sessionStorage.getItem(userKey);
-  return value ? JSON.parse(value) : null;
+  const value = readSessionValue(userKey);
+  if (!value) return memorySession.user;
+  try {
+    return JSON.parse(value);
+  } catch {
+    clearSession();
+    return null;
+  }
 }
 
 export function clearSession() {
-  sessionStorage.removeItem(accessTokenKey);
-  sessionStorage.removeItem(userKey);
-  if (expiryTimer) window.clearTimeout(expiryTimer);
+  memorySession = { accessToken: "", user: null };
+  removeSessionValue(accessTokenKey);
+  removeSessionValue(userKey);
+  if (expiryTimer) globalThis.clearTimeout(expiryTimer);
   expiryTimer = null;
 }
 
+export function savePersistentSignIn(remember) {
+  try {
+    if (remember) {
+      localStorage.setItem(persistentSignInKey, "true");
+    } else {
+      localStorage.removeItem(persistentSignInKey);
+    }
+  } catch {
+    // Restricted browser profiles can block localStorage.
+  }
+}
+
+export function readPersistentSignIn() {
+  try {
+    return localStorage.getItem(persistentSignInKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function clearPersistentSignIn() {
+  try {
+    localStorage.removeItem(persistentSignInKey);
+  } catch {
+    // Restricted browser profiles can block localStorage.
+  }
+}
+
 export function cancelAutoLogout() {
-  if (expiryTimer) window.clearTimeout(expiryTimer);
+  if (expiryTimer) globalThis.clearTimeout(expiryTimer);
   expiryTimer = null;
 }
 
 export function scheduleAutoLogout(onExpired = () => {}) {
-  if (expiryTimer) window.clearTimeout(expiryTimer);
+  if (expiryTimer) globalThis.clearTimeout(expiryTimer);
 
   const token = getAccessToken();
   const payload = token ? parseJwtPayload(token) : null;
@@ -46,14 +110,18 @@ export function scheduleAutoLogout(onExpired = () => {}) {
     return;
   }
 
-  expiryTimer = window.setTimeout(() => {
+  expiryTimer = globalThis.setTimeout(() => {
     clearSession();
     onExpired();
   }, expiresInMs);
 }
 
 export function saveSession({ accessToken, user }, onExpired) {
-  sessionStorage.setItem(accessTokenKey, accessToken);
-  sessionStorage.setItem(userKey, JSON.stringify(user || {}));
+  memorySession = {
+    accessToken: accessToken || "",
+    user: user || {},
+  };
+  writeSessionValue(accessTokenKey, accessToken || "");
+  writeSessionValue(userKey, JSON.stringify(user || {}));
   scheduleAutoLogout(onExpired);
 }
