@@ -15,7 +15,7 @@ export async function updateUserRole(req, res) {
     res.status(200).json({ id: req.params.id, role: updated.role });
   } catch (error) {
     if (error.code === "INVALID_ROLE") {
-      throw httpError(400, "Role must be admin or staff.");
+      throw httpError(400, "Role must be admin, staff, nurse, or doctor.");
     }
     throw error;
   }

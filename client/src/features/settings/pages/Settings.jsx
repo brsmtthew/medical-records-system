@@ -1416,7 +1416,7 @@ export default function Settings({ initialTab = "rules" }) {
                         </div>
                         <div>
                           <p className="text-sm font-black uppercase text-blue-800">Developer</p>
-                          <p className="mt-1 text-lg font-black uppercase text-slate-900">UMTC INTERNS</p>
+                          <p className="mt-1 text-lg font-black uppercase text-slate-900">BORIS DAIRO</p>
                           <p className="mt-1 text-[10px] font-semibold uppercase leading-relaxed text-blue-700">
                             Designed and developed for the TGMCI Medical Records workflow.
                           </p>

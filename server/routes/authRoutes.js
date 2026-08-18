@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { login, logout, me, refresh, register } from "../controllers/authController.js";
-import { requireAuth } from "../middleware/authenticate.js";
+import { optionalAuth, requireAuth } from "../middleware/authenticate.js";
 import { requireRole } from "../middleware/authorizeRoles.js";
 import { loginRateLimiter, sensitiveApiRateLimiter } from "../middleware/rateLimiters.js";
 import { validateRequest } from "../middleware/validateRequest.js";
@@ -24,7 +24,10 @@ router.post(
   asyncHandler(register),
 );
 router.post("/refresh", sensitiveApiRateLimiter, asyncHandler(refresh));
-router.post("/logout", requireAuth, asyncHandler(logout));
+// Logout must remain available after the short-lived access token expires so the
+// refresh cookie can still be revoked. The controller safely handles requests
+// with or without an authenticated access token.
+router.post("/logout", sensitiveApiRateLimiter, optionalAuth, asyncHandler(logout));
 router.get("/me", requireAuth, asyncHandler(me));
 
 export default router;

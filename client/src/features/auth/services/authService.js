@@ -12,6 +12,7 @@ import {
   signOut,
   updatePassword,
   updateProfile,
+  deleteUser,
 } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
@@ -196,11 +197,14 @@ export async function createManagedUserAccount({ email, fullName, role, departme
     licenseNumber,
   });
   const initialPassword = buildTemporaryPassword(safeProfile.role, safeProfile.email);
-  const secondaryApp = initializeApp(firebaseConfig, `mrs-managed-user-${Date.now()}`);
+  const secondaryApp = initializeApp(firebaseConfig, `mrs-managed-user-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const secondaryAuth = getAuth(secondaryApp);
+  let createdUser = null;
+  let profileSaved = false;
 
   try {
     const userCredential = await createUserWithEmailAndPassword(secondaryAuth, safeProfile.email, initialPassword);
+    createdUser = userCredential.user;
     await updateProfile(userCredential.user, { displayName: safeProfile.fullName });
     await setDoc(doc(db, "users", userCredential.user.uid), {
       uid: userCredential.user.uid,
@@ -215,6 +219,7 @@ export async function createManagedUserAccount({ email, fullName, role, departme
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    profileSaved = true;
 
     await addAuditLog({
       type: "user",
@@ -228,6 +233,11 @@ export async function createManagedUserAccount({ email, fullName, role, departme
 
     return { uid: userCredential.user.uid, temporaryPassword: initialPassword };
   } finally {
+    // If the Firestore profile could not be created, remove the secondary Auth
+    // account as well so a failed attempt does not permanently reserve the email.
+    if (createdUser && !profileSaved) {
+      await deleteUser(createdUser).catch(() => {});
+    }
     if (secondaryAuth.currentUser) {
       await signOut(secondaryAuth).catch(() => {});
     }

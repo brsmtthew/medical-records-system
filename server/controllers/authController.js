@@ -116,7 +116,9 @@ export async function logout(req, res) {
   const token = req.cookies?.refreshToken;
   if (token) revokeRefreshToken(token);
   res.clearCookie("refreshToken");
-  await writeAuditLog("logout", req, { email: req.user?.email, role: req.user?.role });
+  if (req.user) {
+    await writeAuditLog("logout", req, { email: req.user.email, role: req.user.role });
+  }
   res.status(200).json({ message: "Logged out." });
 }
 
